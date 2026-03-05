@@ -2,65 +2,86 @@
 <html lang="ja">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR 床検知サンプル</title>
-    <!-- A-Frameライブラリ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebAR - 床検知カメラ</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <style>
+        /* カメラ起動前の画面レイアウト */
+        body { margin: 0; font-family: sans-serif; }
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 9999; color: white;
+        }
+        button {
+            padding: 15px 30px; font-size: 1.2rem; border: none;
+            border-radius: 50px; background: #007bff; color: white;
+            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        button:active { background: #0056b3; }
+        p { margin-top: 20px; font-size: 0.9rem; color: #ccc; }
+    </style>
 </head>
-<body style="margin: 0; overflow: hidden;">
+<body>
+
+    <!-- 起動画面：このボタンでカメラをONにする -->
+    <div id="overlay">
+        <h1>WebAR Demo</h1>
+        <button id="start-ar">カメラをONにして開始</button>
+        <p>※Android/Chrome推奨。HTTPS環境が必要です。</p>
+    </div>
 
     <!-- 
-        webxr: hit-test（床検知）を有効にする
-        ar-hit-test: レティクル（照準）を床に表示させる設定
+        webxr="optionalFeatures: hit-test;" で床検知を有効化 
+        ar-hit-test="target: #reticle;" で床にガイドを表示
     -->
     <a-scene 
-        webxr="optionalFeatures: hit-test;" 
+        webxr="optionalFeatures: hit-test; overlayElement: #overlay;" 
         ar-hit-test="target: #reticle;"
         renderer="colorManagement: true;">
-
-        <!-- 3Dモデルなどのアセット（今回は使いませんが必要な場合に） -->
-        <a-assets></a-assets>
-
-        <!-- カメラの視点 -->
+        
         <a-entity camera></a-entity>
 
-        <!-- 
-            床が見つかった時に表示される「リング（照準）」
-            カメラを動かして床を認識すると、このリングが床に張り付きます。
-        -->
+        <!-- 床に張り付くターゲット（レティクル） -->
         <a-entity id="reticle" visible="false">
-            <a-ring color="#00FF00" radius-inner="0.08" radius-outer="0.1" rotation="-90 0 0"></a-ring>
+            <a-ring color="#00FF00" radius-inner="0.05" radius-outer="0.08" rotation="-90 0 0"></a-ring>
+            <a-sphere radius="0.01" position="0 0 0" color="#00FF00"></a-sphere>
         </a-entity>
-
-        <!-- 
-            タップした時に生成される「箱」のテンプレート
-            初期状態では非表示（visible="false"）
-        -->
-        <a-box id="placed-object" scale="0.2 0.2 0.2" material="color: #FF4B2B;" visible="false"></a-box>
 
     </a-scene>
 
     <script>
         const sceneEl = document.querySelector('a-scene');
+        const overlay = document.querySelector('#overlay');
+        const startBtn = document.querySelector('#start-ar');
         const reticle = document.querySelector('#reticle');
-        const template = document.querySelector('#placed-object');
 
-        // 画面がタップされた時の処理
+        // ボタンをクリックしたらARモード（カメラ）を開始
+        startBtn.addEventListener('click', function() {
+            // A-Frameのシーンに対して、ARモード（VR/AR）への移行を命令する
+            // これによりブラウザがカメラの使用許可を求めます
+            sceneEl.enterVR();
+        });
+
+        // ARモードに入ったときの処理
+        sceneEl.addEventListener('enter-vr', function () {
+            if (sceneEl.is('ar-mode')) {
+                overlay.style.display = 'none'; // UIを隠す
+                console.log("カメラがONになりました");
+            }
+        });
+
+        // 画面タップで、レティクルの位置に立方体を置く
         sceneEl.addEventListener('click', function () {
-            // レティクル（照準）が表示されている＝床が認識されている場合のみ実行
             if (reticle.getAttribute('visible')) {
-                // 新しい箱を作成
                 const newBox = document.createElement('a-box');
-                
-                // 現在のレティクルの位置を取得してコピー
                 const pos = reticle.getAttribute('position');
                 newBox.setAttribute('position', pos);
-                
-                // 見た目を設定
-                newBox.setAttribute('scale', '0.2 0.2 0.2');
+                newBox.setAttribute('scale', '0.1 0.1 0.1');
                 newBox.setAttribute('material', 'color: #4CC3D9');
-                
-                // シーンに追加
                 sceneEl.appendChild(newBox);
             }
         });
