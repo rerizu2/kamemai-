@@ -2,157 +2,125 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Motion Sync VR</title>
+    <title>TSUKUYOMI - 6DoF Motion Sync</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!-- A-FrameとWebXRの拡張ライブラリ -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <!-- 顔認識AIライブラリ -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
-    
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
-        /* カメラ映像（デバッグ用：左上に小さく表示） */
-        #webcam-container {
-            position: fixed; top: 10px; left: 10px; z-index: 2000;
-            width: 160px; height: 120px; border: 2px solid #0ff; border-radius: 8px;
-            overflow: hidden; opacity: 0.7;
+        #overlay {
+            position: fixed; top: 10px; left: 10px; z-index: 1000;
+            color: #0ff; font-family: monospace; pointer-events: none;
+            background: rgba(0,0,0,0.5); padding: 10px; border: 1px solid #0ff;
         }
-        video { transform: scaleX(-1); width: 100%; height: 100%; }
-        
-        .ui-panel {
-            position: fixed; bottom: 20px; right: 20px; z-index: 1000;
-            color: #0ff; font-family: sans-serif; text-align: right;
-            pointer-events: none; text-shadow: 0 0 10px #0ff;
-        }
-        .loading-overlay {
-            position: fixed; inset: 0; background: #000; z-index: 3000;
-            display: flex; justify-content: center; align-items: center;
-            color: #0ff; font-family: monospace; transition: opacity 1s;
+        .start-btn {
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+            z-index: 2000; padding: 20px 40px; background: #000; color: #0ff;
+            border: 2px solid #0ff; font-weight: bold; font-size: 1.2rem; cursor: pointer;
+            box-shadow: 0 0 15px #0ff;
         }
     </style>
 </head>
 <body>
 
-    <div id="loading" class="loading-overlay">
-        <h2>TSUKUYOMI SYSTEM INITIALIZING...<br>Face Tracking Loading...</h2>
+    <div id="overlay">
+        SYSTEM: TSUKUYOMI_LINK_v2<br>
+        TRACKING: <span id="track-status">WAITING...</span><br>
+        POS: <span id="pos-data">0, 0, 0</span>
     </div>
 
-    <div id="webcam-container">
-        <video id="webcam" autoplay playsinline></video>
-    </div>
+    <button class="start-btn" id="startBtn">SYNC START (AR/VR)</button>
 
-    <div class="ui-panel">
-        <div>STATUS: SYNCED</div>
-        <div id="pos-display">X: 0, Y: 0</div>
-    </div>
-
-    <a-scene>
-        <!-- ツクヨミの背景：宇宙と深海の融合 -->
-        <a-sky color="#020010"></a-sky>
+    <!-- 
+      webxr="optionalFeatures: hit-test, local-floor" により、
+      背面カメラによる空間把握（移動検知）を有効にします。
+    -->
+    <a-scene webxr="optionalFeatures: hit-test, local-floor; overlayElement: #overlay" renderer="antialias: true; alpha: true">
         
-        <!-- 中央の巨大な月 -->
-        <a-entity id="tsukuyomi-moon" position="0 5 -20">
-            <a-sphere radius="5" color="#fff" material="emissive: #fff; emissiveIntensity: 1"></a-sphere>
-            <a-ring color="#0ff" radius-inner="6" radius-outer="6.1" rotation="90 0 0"></a-ring>
-            <!-- 周囲を回る光の粒 -->
-            <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
-                <a-sphere position="8 0 0" radius="0.2" color="#ff00ff" material="emissive: #ff00ff; emissiveIntensity: 2"></a-sphere>
+        <!-- アセットの定義 -->
+        <a-assets>
+            <img id="grid" src="https://cdn.glitch.global/36394fd5-65ef-400d-965d-31952e9f6c0d/grid.png?1629821332014">
+        </a-assets>
+
+        <!-- ツクヨミ空間の構成要素 -->
+        <a-entity id="world">
+            <!-- 巨大な月 -->
+            <a-entity position="0 20 -100">
+                <a-sphere radius="15" color="#fff" material="emissive: #fff; emissiveIntensity: 1"></a-sphere>
+                <a-ring color="#0ff" radius-inner="18" radius-outer="18.5" rotation="90 0 0"></a-ring>
             </a-entity>
+
+            <!-- 地面のサイバーグリッド（自分が動いているか確認しやすくするため） -->
+            <a-plane rotation="-90 0 0" width="1000" height="1000" src="#grid" repeat="1000 1000" material="transparent: true; opacity: 0.5"></a-plane>
+
+            <!-- ネオン竹林を動的に生成（JSで実行） -->
+            <a-entity id="bamboo-container"></a-entity>
         </a-entity>
 
-        <!-- サイバー竹林（多めに配置） -->
-        <a-entity id="bamboo-forest"></a-entity>
-
-        <!-- 配信パネル（ホログラム） -->
-        <a-plane position="0 2 -5" width="3" height="1.8" material="color: #000; opacity: 0.6; side: double">
-            <a-text value="LIVE: KAGUYA" align="center" color="#0ff" position="0 0.5 0.1"></a-text>
-            <a-text value="SYNCING USER MOTION..." align="center" color="#0ff" width="2" position="0 -0.2 0.1"></a-text>
-        </a-plane>
-
-        <!-- ★カメラリグ：ここが自分の動きと連動する -->
-        <a-entity id="camera-rig" position="0 1.6 0">
-            <a-camera id="main-camera" look-controls="enabled: true" wasd-controls="enabled: true">
-                <a-cursor color="#0ff"></a-cursor>
+        <!-- 
+           メインカメラ: 
+           WebXRが有効になると、スマホの物理移動が自動的にこのカメラに反映されます。
+        -->
+        <a-entity id="rig">
+            <a-camera id="camera" wasd-controls-enabled="false" look-controls="enabled: true">
+                <!-- 視界に浮かぶUI（スマコン風） -->
+                <a-entity position="0 0 -1">
+                    <a-ring radius-inner="0.02" radius-outer="0.03" color="#0ff" opacity="0.5"></a-ring>
+                </a-entity>
             </a-camera>
         </a-entity>
 
         <!-- ライティング -->
-        <a-light type="ambient" color="#333"></a-light>
-        <a-light type="point" position="0 5 -5" intensity="1" color="#0ff"></a-light>
+        <a-light type="ambient" color="#222"></a-light>
+        <a-light type="point" position="0 10 0" intensity="1" color="#0ff"></a-light>
     </a-scene>
 
     <script>
-        const video = document.getElementById('webcam');
-        const cameraRig = document.getElementById('camera-rig');
-        const posDisplay = document.getElementById('pos-display');
-        const loading = document.getElementById('loading');
-        
-        // 1. 竹林を自動生成
-        const forest = document.getElementById('bamboo-forest');
-        for (let i = 0; i < 60; i++) {
+        const startBtn = document.getElementById('startBtn');
+        const trackStatus = document.getElementById('track-status');
+        const posData = document.getElementById('pos-data');
+        const camera = document.getElementById('camera');
+        const bambooContainer = document.getElementById('bamboo-container');
+
+        // 1. 竹林の生成
+        for (let i = 0; i < 100; i++) {
             const b = document.createElement('a-cylinder');
-            const x = (Math.random() - 0.5) * 40;
-            const z = (Math.random() - 0.5) * 40 - 15;
-            if (Math.abs(x) < 3 && Math.abs(z) < 10) continue;
-            const h = Math.random() * 10 + 5;
-            const color = Math.random() > 0.5 ? '#00ffcc' : '#7000ff';
+            const x = (Math.random() - 0.5) * 200;
+            const z = (Math.random() - 0.5) * 200;
+            const h = 5 + Math.random() * 15;
+            const color = Math.random() > 0.5 ? '#00ffcc' : '#ff00ff';
             b.setAttribute('position', `${x} ${h/2} ${z}`);
-            b.setAttribute('radius', '0.1');
+            b.setAttribute('radius', '0.15');
             b.setAttribute('height', h);
             b.setAttribute('color', color);
-            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
-            forest.appendChild(b);
+            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1.5`);
+            bambooContainer.appendChild(b);
         }
 
-        // 2. モーショントラッキング（顔認識）の設定
-        async function setupTracking() {
-            const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-            const detectorConfig = { runtime: 'tfjs', refineLandmarks: false };
-            const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
-
-            video.onloadeddata = () => {
-                loading.style.opacity = '0';
-                setTimeout(() => loading.remove(), 1000);
-                detectFace(detector);
-            };
-        }
-
-        async function detectFace(detector) {
-            const faces = await detector.estimateFaces(video);
-
-            if (faces.length > 0) {
-                const face = faces[0].keypoints;
-                // 鼻の頭（1番目のキーポイント）の位置を取得
-                const nose = face[1];
-                
-                // 画面内の顔の位置を -1.0 ～ 1.0 の範囲に変換
-                const rawX = (nose.x / video.videoWidth) - 0.5;
-                const rawY = (nose.y / video.videoHeight) - 0.5;
-
-                // 動きを滑らかにする（感度調整）
-                const targetX = -rawX * 5; // 左右の動き
-                const targetY = -rawY * 3 + 1.6; // 上下の動き + 身長分
-
-                // カメラリグの位置を更新（VRでの6DoF擬似体験）
-                const currentPos = cameraRig.getAttribute('position');
-                cameraRig.setAttribute('position', {
-                    x: targetX * 0.5 + currentPos.x * 0.5, // 簡易的なスムージング
-                    y: targetY * 0.5 + currentPos.y * 0.5,
-                    z: currentPos.z
-                });
-
-                posDisplay.innerText = `X: ${targetX.toFixed(2)}, Y: ${targetY.toFixed(2)}`;
+        // 2. AR/VRモードの開始処理
+        startBtn.addEventListener('click', () => {
+            // WebXRのARモード（背面カメラ＋空間把握）を要求
+            const scene = document.querySelector('a-scene');
+            if (scene.enterAR) {
+                scene.enterAR();
+                startBtn.style.display = 'none';
+                trackStatus.innerText = "ACTIVE (6DoF SYNC)";
+                trackStatus.style.color = "#0f0";
+            } else {
+                alert("WebXR ARがサポートされていないブラウザです。最新のChrome(Android)等でお試しください。");
             }
-
-            requestAnimationFrame(() => detectFace(detector));
-        }
-
-        setupTracking().catch(err => {
-            console.error(err);
-            alert("カメラが必要です。カメラを許可して再読み込みしてください。");
         });
+
+        // 3. 移動データの表示更新ループ
+        setInterval(() => {
+            const pos = camera.object3D.position;
+            const rot = camera.object3D.rotation;
+            posData.innerText = `X:${pos.x.toFixed(2)} Y:${pos.y.toFixed(2)} Z:${pos.z.toFixed(2)}`;
+            
+            // ログ: 向いている方向をコンソールに出力（入力値として利用可能）
+            // console.log("Current Orientation:", rot.y); 
+        }, 100);
+
     </script>
 </body>
 </html>
