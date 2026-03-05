@@ -1,90 +1,68 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
+<html>
+  <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebAR - 床検知カメラ</title>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <title>ARで壁を作る</title>
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    
     <style>
-        /* カメラ起動前の画面レイアウト */
-        body { margin: 0; font-family: sans-serif; }
-        #overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            z-index: 9999; color: white;
-        }
-        button {
-            padding: 15px 30px; font-size: 1.2rem; border: none;
-            border-radius: 50px; background: #007bff; color: white;
-            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        }
-        button:active { background: #0056b3; }
-        p { margin-top: 20px; font-size: 0.9rem; color: #ccc; }
+      #ui {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 10px 20px;
+        font-family: sans-serif;
+        border-radius: 5px;
+        pointer-events: none;
+        text-align: center;
+      }
     </style>
-</head>
-<body>
+  </head>
 
-    <!-- 起動画面：このボタンでカメラをONにする -->
-    <div id="overlay">
-        <h1>WebAR Demo</h1>
-        <button id="start-ar">カメラをONにして開始</button>
-        <p>※Android/Chrome推奨。HTTPS環境が必要です。</p>
-    </div>
+  <body style="margin: 0; overflow: hidden;">
+    <div id="ui">「HIRO」マーカーを写すと<br>そこに「壁」が出現します</div>
 
-    <!-- 
-        webxr="optionalFeatures: hit-test;" で床検知を有効化 
-        ar-hit-test="target: #reticle;" で床にガイドを表示
-    -->
-    <a-scene 
-        webxr="optionalFeatures: hit-test; overlayElement: #overlay;" 
-        ar-hit-test="target: #reticle;"
-        renderer="colorManagement: true;">
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+      
+      <!-- HIROマーカー -->
+      <a-marker preset="hiro">
         
-        <a-entity camera></a-entity>
+        <!-- 
+          「壁」の設定
+          width: 横幅 (2m分)
+          height: 高さ (1.5m分)
+          depth: 厚み (0.1m = 10cm)
+          position: "0 0.75 0" (高さ1.5mの半分をY座標に設定することで、地面に接して立ちます)
+        -->
+        <a-box 
+          position="0 0.75 0" 
+          width="2" 
+          height="1.5" 
+          depth="0.1"
+          color="#808080" 
+          material="roughness: 1; metalness: 0;"
+          shadow="cast: true">
+        </a-box>
+        
+        <!-- 壁の上のテキスト -->
+        <!-- 画像を壁に貼る例 -->
+<a-box 
+  position="0 0.75 0" 
+  width="2" 
+  height="1.5" 
+  depth="0.1"
+  src="https://raw.githubusercontent.com/aframevr/sample-assets/master/assets/images/bricks/brick_diffuse.jpg">
+</a-box>
 
-        <!-- 床に張り付くターゲット（レティクル） -->
-        <a-entity id="reticle" visible="false">
-            <a-ring color="#00FF00" radius-inner="0.05" radius-outer="0.08" rotation="-90 0 0"></a-ring>
-            <a-sphere radius="0.01" position="0 0 0" color="#00FF00"></a-sphere>
-        </a-entity>
+      </a-marker>
 
+      <a-entity camera></a-entity>
     </a-scene>
-
-    <script>
-        const sceneEl = document.querySelector('a-scene');
-        const overlay = document.querySelector('#overlay');
-        const startBtn = document.querySelector('#start-ar');
-        const reticle = document.querySelector('#reticle');
-
-        // ボタンをクリックしたらARモード（カメラ）を開始
-        startBtn.addEventListener('click', function() {
-            // A-Frameのシーンに対して、ARモード（VR/AR）への移行を命令する
-            // これによりブラウザがカメラの使用許可を求めます
-            sceneEl.enterVR();
-        });
-
-        // ARモードに入ったときの処理
-        sceneEl.addEventListener('enter-vr', function () {
-            if (sceneEl.is('ar-mode')) {
-                overlay.style.display = 'none'; // UIを隠す
-                console.log("カメラがONになりました");
-            }
-        });
-
-        // 画面タップで、レティクルの位置に立方体を置く
-        sceneEl.addEventListener('click', function () {
-            if (reticle.getAttribute('visible')) {
-                const newBox = document.createElement('a-box');
-                const pos = reticle.getAttribute('position');
-                newBox.setAttribute('position', pos);
-                newBox.setAttribute('scale', '0.1 0.1 0.1');
-                newBox.setAttribute('material', 'color: #4CC3D9');
-                sceneEl.appendChild(newBox);
-            }
-        });
-    </script>
-</body>
+  </body>
 </html>
+
