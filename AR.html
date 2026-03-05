@@ -1,102 +1,158 @@
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
     <meta charset="utf-8">
-    <title>Super Kaguya-hime: TSUKUYOMI VR</title>
-    <meta name="description" content="Virtual World Tsukuyomi">
-    <!-- A-Frame ライブラリの読み込み -->
+    <title>TSUKUYOMI - Motion Sync VR</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <!-- 環境作成用コンポーネント -->
-    <script src="https://unpkg.com/aframe-environment-component@1.3.2/dist/aframe-environment-component.min.js"></script>
+    <!-- 顔認識AIライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
     
     <style>
-      body { margin: 0; overflow: hidden; background-color: #000; }
-      .ui-overlay {
-        position: fixed; bottom: 20px; left: 20px; z-index: 1000;
-        color: #0ff; font-family: 'Courier New', monospace;
-        text-shadow: 0 0 5px #0ff; pointer-events: none;
-      }
+        body { margin: 0; overflow: hidden; background: #000; }
+        /* カメラ映像（デバッグ用：左上に小さく表示） */
+        #webcam-container {
+            position: fixed; top: 10px; left: 10px; z-index: 2000;
+            width: 160px; height: 120px; border: 2px solid #0ff; border-radius: 8px;
+            overflow: hidden; opacity: 0.7;
+        }
+        video { transform: scaleX(-1); width: 100%; height: 100%; }
+        
+        .ui-panel {
+            position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+            color: #0ff; font-family: sans-serif; text-align: right;
+            pointer-events: none; text-shadow: 0 0 10px #0ff;
+        }
+        .loading-overlay {
+            position: fixed; inset: 0; background: #000; z-index: 3000;
+            display: flex; justify-content: center; align-items: center;
+            color: #0ff; font-family: monospace; transition: opacity 1s;
+        }
     </style>
-  </head>
-  <body>
+</head>
+<body>
 
-    <div class="ui-overlay">
-      <h1>SYSTEM: TSUKUYOMI_LINK_START</h1>
-      <p>Status: Synchronized with KAGUYA</p>
+    <div id="loading" class="loading-overlay">
+        <h2>TSUKUYOMI SYSTEM INITIALIZING...<br>Face Tracking Loading...</h2>
+    </div>
+
+    <div id="webcam-container">
+        <video id="webcam" autoplay playsinline></video>
+    </div>
+
+    <div class="ui-panel">
+        <div>STATUS: SYNCED</div>
+        <div id="pos-display">X: 0, Y: 0</div>
     </div>
 
     <a-scene>
-      <!-- 資産（アセット）の定義 -->
-      <a-assets>
-        <img id="grid" src="https://cdn.glitch.global/36394fd5-65ef-400d-965d-31952e9f6c0d/grid.png?1629821332014">
-      </a-assets>
+        <!-- ツクヨミの背景：宇宙と深海の融合 -->
+        <a-sky color="#020010"></a-sky>
+        
+        <!-- 中央の巨大な月 -->
+        <a-entity id="tsukuyomi-moon" position="0 5 -20">
+            <a-sphere radius="5" color="#fff" material="emissive: #fff; emissiveIntensity: 1"></a-sphere>
+            <a-ring color="#0ff" radius-inner="6" radius-outer="6.1" rotation="90 0 0"></a-ring>
+            <!-- 周囲を回る光の粒 -->
+            <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
+                <a-sphere position="8 0 0" radius="0.2" color="#ff00ff" material="emissive: #ff00ff; emissiveIntensity: 2"></a-sphere>
+            </a-entity>
+        </a-entity>
 
-      <!-- 1. 環境設定：深海と宇宙の融合したような暗い空 -->
-      <a-sky color="#050015"></a-sky>
-      <a-entity environment="preset: logicpro; groundColor: #0a0020; grid: dots; gridColor: #2b0054; dressingAmount: 0"></a-entity>
+        <!-- サイバー竹林（多めに配置） -->
+        <a-entity id="bamboo-forest"></a-entity>
 
-      <!-- 2. 巨大な月（ツクヨミのコア） -->
-      <a-sphere position="0 40 -100" radius="15" color="#fff" 
-                material="shader: flat; emissive: #ffffff; emissiveIntensity: 2"
-                animation="property: position; dir: alternate; dur: 5000; easing: easeInOutSine; loop: true; to: 0 42 -100">
-        <!-- 月の周りのリング -->
-        <a-ring color="#0ff" radius-inner="18" radius-outer="18.2" rotation="90 0 0"></a-ring>
-      </a-sphere>
+        <!-- 配信パネル（ホログラム） -->
+        <a-plane position="0 2 -5" width="3" height="1.8" material="color: #000; opacity: 0.6; side: double">
+            <a-text value="LIVE: KAGUYA" align="center" color="#0ff" position="0 0.5 0.1"></a-text>
+            <a-text value="SYNCING USER MOTION..." align="center" color="#0ff" width="2" position="0 -0.2 0.1"></a-text>
+        </a-plane>
 
-      <!-- 3. ネオン竹林（プロシージャル配置） -->
-      <!-- 中央の竹 -->
-      <a-cylinder position="-5 5 -15" radius="0.2" height="10" color="#00ffcc" material="emissive: #00ffcc; emissiveIntensity: 2"></a-cylinder>
-      <a-cylinder position="5 6 -12" radius="0.2" height="12" color="#ff00ff" material="emissive: #ff00ff; emissiveIntensity: 2"></a-cylinder>
-      <a-cylinder position="10 4 -20" radius="0.2" height="8" color="#00ffff" material="emissive: #00ffff; emissiveIntensity: 2"></a-cylinder>
+        <!-- ★カメラリグ：ここが自分の動きと連動する -->
+        <a-entity id="camera-rig" position="0 1.6 0">
+            <a-camera id="main-camera" look-controls="enabled: true" wasd-controls="enabled: true">
+                <a-cursor color="#0ff"></a-cursor>
+            </a-camera>
+        </a-entity>
 
-      <!-- 4. 浮遊するホログラムパネル（配信画面のイメージ） -->
-      <a-plane position="0 3 -8" width="4" height="2.2" color="#000" opacity="0.7" material="side: double">
-        <a-text value="LIVE: KAGUYA_CH" align="center" color="#0ff" position="0 0.8 0.1" width="4"></a-text>
-        <a-text value="Connecting..." align="center" color="#0ff" position="0 0 0.1" width="3"
-                animation="property: opacity; from: 1; to: 0.2; dir: alternate; dur: 1000; loop: true"></a-text>
-        <!-- 下部のバー -->
-        <a-rect width="4" height="0.1" position="0 -1 0.1" color="#0ff"></a-rect>
-      </a-plane>
-
-      <!-- 5. パーティクル（光の粉 / 深海生物の残光） -->
-      <a-entity position="0 5 -10">
-        <a-sphere position="2 1 1" radius="0.05" color="#fff" animation="property: position; to: 2 3 1; dur: 3000; loop: true"></a-sphere>
-        <a-sphere position="-3 2 -2" radius="0.05" color="#0ff" animation="property: position; to: -3 0 -2; dur: 4000; loop: true"></a-sphere>
-        <a-sphere position="4 0 -5" radius="0.05" color="#f0f" animation="property: position; to: 4 2 -5; dur: 5000; loop: true"></a-sphere>
-      </a-entity>
-
-      <!-- 6. カメラと操作系 -->
-      <a-entity id="rig" position="0 1.6 0">
-        <a-camera look-controls wasd-controls>
-          <!-- レティクル（視線カーソル） -->
-          <a-cursor color="#0ff" radius-inner="0.02" radius-outer="0.03"></a-cursor>
-        </a-camera>
-      </a-entity>
-
-      <!-- ライティング -->
-      <a-light type="ambient" color="#222"></a-light>
-      <a-light type="point" position="0 10 -10" intensity="0.5" color="#0ff"></a-light>
+        <!-- ライティング -->
+        <a-light type="ambient" color="#333"></a-light>
+        <a-light type="point" position="0 5 -5" intensity="1" color="#0ff"></a-light>
     </a-scene>
 
     <script>
-      // 動的に竹を増やす簡単なスクリプト
-      const scene = document.querySelector('a-scene');
-      for (let i = 0; i < 40; i++) {
-        let bamboo = document.createElement('a-cylinder');
-        let x = (Math.random() - 0.5) * 100;
-        let z = (Math.random() - 0.5) * 100;
-        if (Math.abs(x) < 10 && Math.abs(z) < 10) continue; // 中央は空ける
+        const video = document.getElementById('webcam');
+        const cameraRig = document.getElementById('camera-rig');
+        const posDisplay = document.getElementById('pos-display');
+        const loading = document.getElementById('loading');
         
-        let h = Math.random() * 15 + 5;
-        let color = Math.random() > 0.5 ? '#00ffcc' : '#7000ff';
-        
-        bamboo.setAttribute('position', `${x} ${h/2} ${z}`);
-        bamboo.setAttribute('radius', '0.15');
-        bamboo.setAttribute('height', h);
-        bamboo.setAttribute('color', color);
-        bamboo.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
-        scene.appendChild(bamboo);
-      }
+        // 1. 竹林を自動生成
+        const forest = document.getElementById('bamboo-forest');
+        for (let i = 0; i < 60; i++) {
+            const b = document.createElement('a-cylinder');
+            const x = (Math.random() - 0.5) * 40;
+            const z = (Math.random() - 0.5) * 40 - 15;
+            if (Math.abs(x) < 3 && Math.abs(z) < 10) continue;
+            const h = Math.random() * 10 + 5;
+            const color = Math.random() > 0.5 ? '#00ffcc' : '#7000ff';
+            b.setAttribute('position', `${x} ${h/2} ${z}`);
+            b.setAttribute('radius', '0.1');
+            b.setAttribute('height', h);
+            b.setAttribute('color', color);
+            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
+            forest.appendChild(b);
+        }
+
+        // 2. モーショントラッキング（顔認識）の設定
+        async function setupTracking() {
+            const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+            const detectorConfig = { runtime: 'tfjs', refineLandmarks: false };
+            const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
+
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+
+            video.onloadeddata = () => {
+                loading.style.opacity = '0';
+                setTimeout(() => loading.remove(), 1000);
+                detectFace(detector);
+            };
+        }
+
+        async function detectFace(detector) {
+            const faces = await detector.estimateFaces(video);
+
+            if (faces.length > 0) {
+                const face = faces[0].keypoints;
+                // 鼻の頭（1番目のキーポイント）の位置を取得
+                const nose = face[1];
+                
+                // 画面内の顔の位置を -1.0 ～ 1.0 の範囲に変換
+                const rawX = (nose.x / video.videoWidth) - 0.5;
+                const rawY = (nose.y / video.videoHeight) - 0.5;
+
+                // 動きを滑らかにする（感度調整）
+                const targetX = -rawX * 5; // 左右の動き
+                const targetY = -rawY * 3 + 1.6; // 上下の動き + 身長分
+
+                // カメラリグの位置を更新（VRでの6DoF擬似体験）
+                const currentPos = cameraRig.getAttribute('position');
+                cameraRig.setAttribute('position', {
+                    x: targetX * 0.5 + currentPos.x * 0.5, // 簡易的なスムージング
+                    y: targetY * 0.5 + currentPos.y * 0.5,
+                    z: currentPos.z
+                });
+
+                posDisplay.innerText = `X: ${targetX.toFixed(2)}, Y: ${targetY.toFixed(2)}`;
+            }
+
+            requestAnimationFrame(() => detectFace(detector));
+        }
+
+        setupTracking().catch(err => {
+            console.error(err);
+            alert("カメラが必要です。カメラを許可して再読み込みしてください。");
+        });
     </script>
-  </body>
+</body>
 </html>
