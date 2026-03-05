@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>和風 VR神社 - 鳥居</title>
+    <!-- A-Frame ライブラリ -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden;">
+
+    <a-scene>
+        <!-- アセット管理 -->
+        <a-assets>
+            <!-- 背景画像（オプション） -->
+        </a-assets>
+
+        <!-- 空（夕暮れ時のようなグラデーション） -->
+        <a-sky color="#fbc2eb"></a-sky>
+
+        <!-- 地面（砂利道や草地のような色） -->
+        <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#7BC8A4"></a-plane>
+
+        <!-- 鳥居本体（グループ化） -->
+        <a-entity id="torii" position="0 0 -8" scale="1.5 1.5 1.5">
+            
+            <!-- ① 2本の主柱（円柱） -->
+            <a-cylinder position="-2 2.5 0" radius="0.25" height="5" color="#EF2D5E"></a-cylinder>
+            <a-cylinder position="2 2.5 0" radius="0.25" height="5" color="#EF2D5E"></a-cylinder>
+
+            <!-- ② 貫（ぬき）：下の横棒 -->
+            <a-box position="0 3.8 0" width="5.5" height="0.3" depth="0.2" color="#EF2D5E"></a-box>
+
+            <!-- ③ 笠木（かさぎ）：一番上の横棒 -->
+            <a-box position="0 5 0" width="6.5" height="0.4" depth="0.4" color="#EF2D5E"></a-box>
+            <!-- 笠木の上に乗る黒い屋根（島木） -->
+            <a-box position="0 5.2 0" width="6.6" height="0.1" depth="0.5" color="#222"></a-box>
+
+            <!-- ④ 額束（がくづか）：真ん中の飾り板 -->
+            <a-box position="0 4.4 0.05" width="0.6" height="0.8" depth="0.1" color="#222"></a-box>
+
+            <!-- ⑤ 柱の土台（亀腹） -->
+            <a-cylinder position="-2 0.1 0" radius="0.4" height="0.2" color="#555"></a-cylinder>
+            <a-cylinder position="2 0.1 0" radius="0.4" height="0.2" color="#555"></a-cylinder>
+
+        </a-entity>
+
+        <!-- 神社へ続く灯籠（並べて配置） -->
+        <a-entity position="-3 0 -4">
+            <a-box position="0 0.5 0" width="0.3" height="1" depth="0.3" color="#666"></a-box>
+            <a-box position="0 1.2 0" width="0.5" height="0.4" depth="0.5" color="#eee"></a-box>
+        </a-entity>
+        <a-entity position="3 0 -4">
+            <a-box position="0 0.5 0" width="0.3" height="1" depth="0.3" color="#666"></a-box>
+            <a-box position="0 1.2 0" width="0.5" height="0.4" depth="0.5" color="#eee"></a-box>
+        </a-entity>
+
+        <!-- カメラとコントロール -->
+        <!-- WASDキーで移動、マウスで視点移動 -->
+        <a-entity position="0 1.6 4">
+            <a-camera look-controls wasd-controls="acceleration: 100">
+                <a-cursor color="#FF0000"></a-cursor>
+            </a-camera>
+        </a-entity>
+
+        <!-- 環境光 -->
+        <a-light type="ambient" color="#fff" intensity="0.5"></a-light>
+        <a-light type="directional" color="#fff" intensity="0.8" position="-1 4 3"></a-light>
+
+    </a-scene>
+
+</body>
+</html>
