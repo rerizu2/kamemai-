@@ -1,72 +1,119 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
     <meta charset="utf-8">
-    <title>和風 VR神社 - 鳥居</title>
-    <!-- A-Frame ライブラリ -->
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <title>TSUKUYOMI - Absolute Motion Sync</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #instructions {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0, 20, 40, 0.9); color: #0ff; padding: 30px;
+            border: 2px solid #0ff; text-align: center; z-index: 1000;
+            font-family: 'Courier New', monospace; box-shadow: 0 0 20px #0ff;
+        }
+        .btn {
+            background: #0ff; color: #000; border: none; padding: 15px 30px;
+            font-weight: bold; cursor: pointer; margin-top: 20px; font-size: 1.2rem;
+        }
+        #hud {
+            position: fixed; top: 10px; left: 10px; color: #0ff; 
+            font-family: monospace; z-index: 500; pointer-events: none;
+        }
+    </style>
 </head>
-<body style="margin: 0; overflow: hidden;">
+<body>
 
-    <a-scene>
-        <!-- アセット管理 -->
-        <a-assets>
-            <!-- 背景画像（オプション） -->
-        </a-assets>
+    <div id="hud">
+        TSUKUYOMI_OS v1.0<br>
+        6DoF_TRACKING: <span id="sync-status">INACTIVE</span>
+    </div>
 
-        <!-- 空（夕暮れ時のようなグラデーション） -->
-        <a-sky color="#fbc2eb"></a-sky>
+    <div id="instructions">
+        <h2>TSUKUYOMI LINK START</h2>
+        <p>現実で動くと、VRの世界でも移動します。<br>
+           広い場所で、スマホをしっかり持って操作してください。</p>
+        <button class="btn" onclick="enterWorld()">同期開始</button>
+    </div>
 
-        <!-- 地面（砂利道や草地のような色） -->
-        <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#7BC8A4"></a-plane>
+    <!-- WebXRを有効化 -->
+    <a-scene webxr="optionalFeatures: local-floor, bounded-floor; referenceSpaceType: local-floor">
+        
+        <!-- 空と背景 -->
+        <a-sky color="#010010"></a-sky>
 
-        <!-- 鳥居本体（グループ化） -->
-        <a-entity id="torii" position="0 0 -8" scale="1.5 1.5 1.5">
-            
-            <!-- ① 2本の主柱（円柱） -->
-            <a-cylinder position="-2 2.5 0" radius="0.25" height="5" color="#EF2D5E"></a-cylinder>
-            <a-cylinder position="2 2.5 0" radius="0.25" height="5" color="#EF2D5E"></a-cylinder>
+        <!-- 1. 地面のグリッド（移動を実感させるため） -->
+        <a-grid position="0 0 0" cell-size="1" section-size="5" color="#2b0054" section-color="#0ff" opacity="0.3"></a-grid>
 
-            <!-- ② 貫（ぬき）：下の横棒 -->
-            <a-box position="0 3.8 0" width="5.5" height="0.3" depth="0.2" color="#EF2D5E"></a-box>
-
-            <!-- ③ 笠木（かさぎ）：一番上の横棒 -->
-            <a-box position="0 5 0" width="6.5" height="0.4" depth="0.4" color="#EF2D5E"></a-box>
-            <!-- 笠木の上に乗る黒い屋根（島木） -->
-            <a-box position="0 5.2 0" width="6.6" height="0.1" depth="0.5" color="#222"></a-box>
-
-            <!-- ④ 額束（がくづか）：真ん中の飾り板 -->
-            <a-box position="0 4.4 0.05" width="0.6" height="0.8" depth="0.1" color="#222"></a-box>
-
-            <!-- ⑤ 柱の土台（亀腹） -->
-            <a-cylinder position="-2 0.1 0" radius="0.4" height="0.2" color="#555"></a-cylinder>
-            <a-cylinder position="2 0.1 0" radius="0.4" height="0.2" color="#555"></a-cylinder>
-
+        <!-- 2. ツクヨミの月 -->
+        <a-entity position="0 30 -100">
+            <a-sphere radius="15" color="#fff" material="shader: flat; emissive: #fff; emissiveIntensity: 1"></a-sphere>
+            <a-ring color="#0ff" radius-inner="18" radius-outer="18.3" rotation="90 0 0">
+                <a-animation attribute="rotation" to="90 360 0" dur="10000" repeat="indefinite" easing="linear"></a-animation>
+            </a-ring>
         </a-entity>
 
-        <!-- 神社へ続く灯籠（並べて配置） -->
-        <a-entity position="-3 0 -4">
-            <a-box position="0 0.5 0" width="0.3" height="1" depth="0.3" color="#666"></a-box>
-            <a-box position="0 1.2 0" width="0.5" height="0.4" depth="0.5" color="#eee"></a-box>
-        </a-entity>
-        <a-entity position="3 0 -4">
-            <a-box position="0 0.5 0" width="0.3" height="1" depth="0.3" color="#666"></a-box>
-            <a-box position="0 1.2 0" width="0.5" height="0.4" depth="0.5" color="#eee"></a-box>
+        <!-- 3. ネオン竹林（現実のスケール感で配置） -->
+        <a-entity id="bamboo-forest"></a-entity>
+
+        <!-- 4. 案内ホログラム（開始位置に表示） -->
+        <a-entity position="0 1.5 -2">
+            <a-text value="TSUKUYOMI CENTER" align="center" color="#0ff" width="3"></a-text>
+            <a-box width="0.5" height="0.05" depth="0.5" color="#0ff" position="0 -1 0" opacity="0.5"></a-box>
         </a-entity>
 
-        <!-- カメラとコントロール -->
-        <!-- WASDキーで移動、マウスで視点移動 -->
-        <a-entity position="0 1.6 4">
-            <a-camera look-controls wasd-controls="acceleration: 100">
-                <a-cursor color="#FF0000"></a-cursor>
+        <!-- 5. プレイヤー（自分）のカメラ -->
+        <!-- look-controlsが向きを、WebXRのポーズデータが位置(x,y,z)を同期します -->
+        <a-entity id="rig">
+            <a-camera id="main-camera" wasd-controls="enabled: false" look-controls>
+                <a-cursor color="#0ff"></a-cursor>
             </a-camera>
         </a-entity>
 
-        <!-- 環境光 -->
-        <a-light type="ambient" color="#fff" intensity="0.5"></a-light>
-        <a-light type="directional" color="#fff" intensity="0.8" position="-1 4 3"></a-light>
+        <a-light type="ambient" color="#333"></a-light>
+        <a-light type="point" position="0 5 -5" color="#0ff" intensity="1"></a-light>
 
     </a-scene>
 
+    <script>
+        // 竹林を大量に配置
+        const forest = document.getElementById('bamboo-forest');
+        for (let i = 0; i < 150; i++) {
+            const b = document.createElement('a-cylinder');
+            const x = (Math.random() - 0.5) * 100;
+            const z = (Math.random() - 0.5) * 100;
+            // プレイヤーの初期位置(0,0)付近には生やさない
+            if (Math.sqrt(x*x + z*z) < 3) continue;
+
+            const h = 5 + Math.random() * 10;
+            const color = Math.random() > 0.5 ? '#00ffcc' : '#ff00ff';
+            
+            b.setAttribute('position', `${x} ${h/2} ${z}`);
+            b.setAttribute('radius', '0.1');
+            b.setAttribute('height', h);
+            b.setAttribute('color', color);
+            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
+            forest.appendChild(b);
+        }
+
+        function enterWorld() {
+            const scene = document.querySelector('a-scene');
+            // VRモードに入る（WebXRの6DoFトラッキングを開始）
+            if (scene.enterVR) {
+                scene.enterVR();
+                document.getElementById('instructions').style.display = 'none';
+                document.getElementById('sync-status').innerText = "LINKED (6DoF)";
+                document.getElementById('sync-status').style.color = "#0f0";
+            }
+        }
+
+        // 定期的にカメラの座標をコンソールに出力（デバッグ用）
+        const cam = document.getElementById('main-camera');
+        setInterval(() => {
+            const p = cam.object3D.position;
+            console.log(`Current Pos: X:${p.x.toFixed(2)} Y:${p.y.toFixed(2)} Z:${p.z.toFixed(2)}`);
+        }, 1000);
+    </script>
 </body>
 </html>
