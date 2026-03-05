@@ -2,67 +2,101 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>ARで壁を作る</title>
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <title>Super Kaguya-hime: TSUKUYOMI VR</title>
+    <meta name="description" content="Virtual World Tsukuyomi">
+    <!-- A-Frame ライブラリの読み込み -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- 環境作成用コンポーネント -->
+    <script src="https://unpkg.com/aframe-environment-component@1.3.2/dist/aframe-environment-component.min.js"></script>
     
     <style>
-      #ui {
-        position: fixed;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 10;
-        background: rgba(0,0,0,0.7);
-        color: white;
-        padding: 10px 20px;
-        font-family: sans-serif;
-        border-radius: 5px;
-        pointer-events: none;
-        text-align: center;
+      body { margin: 0; overflow: hidden; background-color: #000; }
+      .ui-overlay {
+        position: fixed; bottom: 20px; left: 20px; z-index: 1000;
+        color: #0ff; font-family: 'Courier New', monospace;
+        text-shadow: 0 0 5px #0ff; pointer-events: none;
       }
     </style>
   </head>
+  <body>
 
-  <body style="margin: 0; overflow: hidden;">
-    <div id="ui">「HIRO」マーカーを写すと<br>そこに「壁」が出現します</div>
+    <div class="ui-overlay">
+      <h1>SYSTEM: TSUKUYOMI_LINK_START</h1>
+      <p>Status: Synchronized with KAGUYA</p>
+    </div>
 
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-      
-      <!-- HIROマーカー -->
-      <a-marker preset="hiro">
-        
-        <!-- 
-          「壁」の設定
-          width: 横幅 (2m分)
-          height: 高さ (1.5m分)
-          depth: 厚み (0.1m = 10cm)
-          position: "0 0.75 0" (高さ1.5mの半分をY座標に設定することで、地面に接して立ちます)
-        -->
-        <a-box 
-          position="0 0.75 0" 
-          width="2" 
-          height="1.5" 
-          depth="0.1"
-          color="#808080" 
-          material="roughness: 1; metalness: 0;"
-          shadow="cast: true">
-        </a-box>
-        
-        <!-- 壁の上のテキスト -->
-        <!-- 画像を壁に貼る例 -->
-<a-box 
-  position="0 0.75 0" 
-  width="2" 
-  height="1.5" 
-  depth="0.1"
-  src="https://raw.githubusercontent.com/aframevr/sample-assets/master/assets/images/bricks/brick_diffuse.jpg">
-</a-box>
+    <a-scene>
+      <!-- 資産（アセット）の定義 -->
+      <a-assets>
+        <img id="grid" src="https://cdn.glitch.global/36394fd5-65ef-400d-965d-31952e9f6c0d/grid.png?1629821332014">
+      </a-assets>
 
-      </a-marker>
+      <!-- 1. 環境設定：深海と宇宙の融合したような暗い空 -->
+      <a-sky color="#050015"></a-sky>
+      <a-entity environment="preset: logicpro; groundColor: #0a0020; grid: dots; gridColor: #2b0054; dressingAmount: 0"></a-entity>
 
-      <a-entity camera></a-entity>
+      <!-- 2. 巨大な月（ツクヨミのコア） -->
+      <a-sphere position="0 40 -100" radius="15" color="#fff" 
+                material="shader: flat; emissive: #ffffff; emissiveIntensity: 2"
+                animation="property: position; dir: alternate; dur: 5000; easing: easeInOutSine; loop: true; to: 0 42 -100">
+        <!-- 月の周りのリング -->
+        <a-ring color="#0ff" radius-inner="18" radius-outer="18.2" rotation="90 0 0"></a-ring>
+      </a-sphere>
+
+      <!-- 3. ネオン竹林（プロシージャル配置） -->
+      <!-- 中央の竹 -->
+      <a-cylinder position="-5 5 -15" radius="0.2" height="10" color="#00ffcc" material="emissive: #00ffcc; emissiveIntensity: 2"></a-cylinder>
+      <a-cylinder position="5 6 -12" radius="0.2" height="12" color="#ff00ff" material="emissive: #ff00ff; emissiveIntensity: 2"></a-cylinder>
+      <a-cylinder position="10 4 -20" radius="0.2" height="8" color="#00ffff" material="emissive: #00ffff; emissiveIntensity: 2"></a-cylinder>
+
+      <!-- 4. 浮遊するホログラムパネル（配信画面のイメージ） -->
+      <a-plane position="0 3 -8" width="4" height="2.2" color="#000" opacity="0.7" material="side: double">
+        <a-text value="LIVE: KAGUYA_CH" align="center" color="#0ff" position="0 0.8 0.1" width="4"></a-text>
+        <a-text value="Connecting..." align="center" color="#0ff" position="0 0 0.1" width="3"
+                animation="property: opacity; from: 1; to: 0.2; dir: alternate; dur: 1000; loop: true"></a-text>
+        <!-- 下部のバー -->
+        <a-rect width="4" height="0.1" position="0 -1 0.1" color="#0ff"></a-rect>
+      </a-plane>
+
+      <!-- 5. パーティクル（光の粉 / 深海生物の残光） -->
+      <a-entity position="0 5 -10">
+        <a-sphere position="2 1 1" radius="0.05" color="#fff" animation="property: position; to: 2 3 1; dur: 3000; loop: true"></a-sphere>
+        <a-sphere position="-3 2 -2" radius="0.05" color="#0ff" animation="property: position; to: -3 0 -2; dur: 4000; loop: true"></a-sphere>
+        <a-sphere position="4 0 -5" radius="0.05" color="#f0f" animation="property: position; to: 4 2 -5; dur: 5000; loop: true"></a-sphere>
+      </a-entity>
+
+      <!-- 6. カメラと操作系 -->
+      <a-entity id="rig" position="0 1.6 0">
+        <a-camera look-controls wasd-controls>
+          <!-- レティクル（視線カーソル） -->
+          <a-cursor color="#0ff" radius-inner="0.02" radius-outer="0.03"></a-cursor>
+        </a-camera>
+      </a-entity>
+
+      <!-- ライティング -->
+      <a-light type="ambient" color="#222"></a-light>
+      <a-light type="point" position="0 10 -10" intensity="0.5" color="#0ff"></a-light>
     </a-scene>
+
+    <script>
+      // 動的に竹を増やす簡単なスクリプト
+      const scene = document.querySelector('a-scene');
+      for (let i = 0; i < 40; i++) {
+        let bamboo = document.createElement('a-cylinder');
+        let x = (Math.random() - 0.5) * 100;
+        let z = (Math.random() - 0.5) * 100;
+        if (Math.abs(x) < 10 && Math.abs(z) < 10) continue; // 中央は空ける
+        
+        let h = Math.random() * 15 + 5;
+        let color = Math.random() > 0.5 ? '#00ffcc' : '#7000ff';
+        
+        bamboo.setAttribute('position', `${x} ${h/2} ${z}`);
+        bamboo.setAttribute('radius', '0.15');
+        bamboo.setAttribute('height', h);
+        bamboo.setAttribute('color', color);
+        bamboo.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
+        scene.appendChild(bamboo);
+      }
+    </script>
   </body>
 </html>
-
