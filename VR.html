@@ -2,136 +2,140 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Vivid Red Torii VR</title>
+    <title>TSUKUYOMI - Festival Night VR</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
     <script src="https://unpkg.com/networked-aframe@^0.11.0/dist/networked-aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-reflector-component/dist/aframe-reflector-component.min.js"></script>
-    
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: "Hiragino Mincho ProN", serif; }
-        #ui {
-            position: fixed; inset: 0; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 2000;
-            background: linear-gradient(to bottom, #1a1a2e, #ff6b6b); color: #fff;
-        }
-        .start-btn {
-            padding: 20px 60px; background: #e60012; color: #fff; border: 1px solid #fff;
-            font-size: 1.4rem; cursor: pointer; border-radius: 4px; letter-spacing: 0.3em;
-            box-shadow: 0 0 20px rgba(230, 0, 18, 0.5);
-        }
+        body { margin: 0; overflow: hidden; background: #000; font-family: serif; }
+        #ui { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; background: radial-gradient(circle, #001, #000); color: #fff; }
+        .start-btn { padding: 20px 60px; background: #ffaa00; color: #000; border: none; font-size: 1.5rem; cursor: pointer; font-weight: bold; border-radius: 5px; box-shadow: 0 0 30px #ffaa00; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <h1 style="font-weight: normal; font-size: 3rem; text-shadow: 0 0 10px #e60012;">月詠</h1>
-        <p>鮮やかな朱に染まる境界</p>
-        <button class="start-btn" onclick="startSystem()">LINK START</button>
+        <h1 style="font-size: 3rem; color: #ffaa00; text-shadow: 0 0 20px #ffaa00;">祝祭・月詠</h1>
+        <p>光輝く神域の夜へ</p>
+        <button class="start-btn" onclick="startVR()">LINK START</button>
     </div>
 
-    <a-scene 
-        networked-scene="room: tsukuyomi-red-v1; adapter: socketio; serverURL: https://naf-naver-signaling.glitch.me/;"
-        webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor">
+    <a-scene networked-scene="room: tsukuyomi-festival; adapter: socketio; serverURL: https://naf-naver-signaling.glitch.me/;" webxr="requiredFeatures: local-floor;">
         
         <a-assets>
-            <template id="avatar-template">
-                <a-entity class="avatar">
-                    <a-sphere radius="0.3" color="#ffcc00" material="emissive:#ffcc00; emissiveIntensity:2"></a-sphere>
-                </a-entity>
-            </template>
-            <!-- 質感を出すための木目テクスチャ -->
-            <img id="wood-tex" src="https://cdn.pixabay.com/photo/2016/12/17/20/11/wood-1914323_960_720.jpg">
+            <template id="avatar-template"><a-entity class="avatar"><a-sphere radius="0.3" color="#0ff" material="emissive:#0ff; emissiveIntensity:2"></a-sphere></a-entity></template>
         </a-assets>
 
-        <!-- 1. 夕暮れの空：より鮮やかなグラデーション -->
-        <a-sky material="shader: gradient; topColor: #1a1a2e; bottomColor: #ff7e5f"></a-sky>
+        <!-- 1. 夜空と星雲 -->
+        <a-sky color="#00030a"></a-sky>
+        <a-entity id="nebula-clouds"></a-entity> <!-- JSで生成 -->
+        
+        <!-- 2. 反射する水面 -->
+        <a-plane position="0 0.01 0" rotation="-90 0 0" width="1000" height="1000" reflector="color: #111; opacity: 1; resolution: 256;"></a-plane>
 
-        <!-- 2. 鏡面水面：鳥居の「赤」を綺麗に映す設定 -->
-        <a-plane id="water" position="0 0.01 0" rotation="-90 0 0" width="1000" height="1000"
-                 reflector="color: #2b2b2b; opacity: 1; resolution: 512;"></a-plane>
-
-        <!-- 3. 真紅の巨大鳥居（リアル構造） -->
-        <a-entity id="torii-group" position="0 0 -60" scale="1.5 1.5 1.5">
-            
-            <!-- 共通の朱色設定：#e60012 (伝統的な鳥居の赤) -->
-            
-            <!-- 笠木・島木（最上部） -->
-            <a-box width="48" height="2.2" depth="3.5" position="0 36 0" 
-                   material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#440000"></a-box>
-            <a-box width="50" height="0.8" depth="4.2" position="0 37.2 0" 
-                   material="color:#111; roughness:0.3; metalness:0.5"></a-box>
-            
-            <!-- 貫（二番目の横棒） -->
-            <a-box width="38" height="1.8" depth="2.8" position="0 26 0" 
-                   material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#440000"></a-box>
-            
-            <!-- 額束 -->
-            <a-box width="4" height="7.5" depth="2" position="0 31.5 0.2" 
-                   material="src:#wood-tex; color:#ff2200;"></a-box>
-
-            <!-- 柱（左：わずかに内側に傾斜） -->
-            <a-entity position="-14 0 0" rotation="0 0 -2">
-                <a-cylinder radius="1.8" height="36" position="0 18 0" 
-                            material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#330000"></a-cylinder>
-                <!-- 亀腹（石の台座） -->
-                <a-sphere radius="2.5" scale="1 0.6 1" position="0 0 0" color="#888"></a-sphere>
-            </a-entity>
-
-            <!-- 柱（右：わずかに内側に傾斜） -->
-            <a-entity position="14 0 0" rotation="0 0 2">
-                <a-cylinder radius="1.8" height="36" position="0 18 0" 
-                            material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#330000"></a-cylinder>
-                <a-sphere radius="2.5" scale="1 0.6 1" position="0 0 0" color="#888"></a-sphere>
-            </a-entity>
+        <!-- 3. 中央の橋（参道） -->
+        <a-entity id="bridge" position="0 0 0">
+            <a-box width="6" height="0.5" depth="200" position="0 -0.25 -50" color="#222"></a-box>
+            <!-- 欄干 -->
+            <a-entity id="railings"></a-entity>
         </a-entity>
 
-        <!-- 4. 黄色い灯籠（水面を照らす） -->
-        <a-entity id="lantern-field"></a-entity>
+        <!-- 4. 黄金に輝く鳥居と光柱 -->
+        <a-entity id="glowing-torii" position="0 0 -40" scale="1.2 1.2 1.2">
+            <!-- 鳥居本体（高輝度発光） -->
+            <a-cylinder radius="1.5" height="30" position="-12 15 0" material="color:#ffaa00; emissive:#ffaa00; emissiveIntensity:3"></a-cylinder>
+            <a-cylinder radius="1.5" height="30" position="12 15 0" material="color:#ffaa00; emissive:#ffaa00; emissiveIntensity:3"></a-cylinder>
+            <a-box width="35" height="2" depth="3" position="0 30 0" material="color:#ffaa00; emissive:#ffaa00; emissiveIntensity:3"></a-box>
+            <!-- 天突く光柱 -->
+            <a-cylinder radius="0.5" height="500" position="0 250 0" material="shader:flat; color:#fff; transparent:true; opacity:0.6"></a-cylinder>
+            <a-light type="point" intensity="3" distance="50" color="#ffaa00" position="0 15 0"></a-light>
+        </a-entity>
 
-        <!-- 5. プレイヤーリグ -->
+        <!-- 5. 宙に浮くネオン船 -->
+        <a-entity id="flying-ships"></a-entity>
+
+        <!-- 6. 祝祭のパーティクル -->
+        <a-entity id="particles"></a-entity>
+
+        <!-- プレイヤーリグ -->
         <a-entity id="rig" position="0 0 0" networked="template:#avatar-template;attachTemplateToLocal:false;">
             <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
-                <a-ring color="#ffcc00" radius-inner="0.01" radius-outer="0.015" position="0 0 -1" opacity="0.6"></a-ring>
+                <a-cursor color="#ffaa00"></a-cursor>
             </a-camera>
         </a-entity>
 
-        <!-- 光源設定：鳥居の赤を引き立てる -->
-        <a-light type="ambient" color="#ffccaa" intensity="0.5"></a-light>
-        <a-light type="directional" position="-1 5 1" intensity="0.9" color="#ffffff"></a-light>
+        <a-light type="ambient" color="#112" intensity="0.5"></a-light>
     </a-scene>
 
     <script>
-        // グラデーション空シェーダー
-        AFRAME.registerShader('gradient', {
-          schema: { topColor: {type: 'color', default: 'black'}, bottomColor: {type: 'color', default: 'white'} },
-          vertexShader: `varying vec3 vWorldPosition; void main() { vec4 worldPosition = modelMatrix * vec4(position, 1.0); vWorldPosition = worldPosition.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-          fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; varying vec3 vWorldPosition; void main() { float h = normalize(vWorldPosition).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0); }`
-        });
+        const nebula = document.getElementById('nebula-clouds');
+        const railings = document.getElementById('railings');
+        const ships = document.getElementById('flying-ships');
+        const particles = document.getElementById('particles');
+
+        // 青い星雲の生成
+        for(let i=0; i<30; i++){
+            let s = document.createElement('a-sphere');
+            let x = (Math.random()-0.5)*150;
+            let y = 20 + Math.random()*40;
+            let z = -50 - Math.random()*100;
+            s.setAttribute('position', `${x} ${y} ${z}`);
+            s.setAttribute('radius', 10 + Math.random()*20);
+            s.setAttribute('material', `color:#0055ff; opacity:0.15; transparent:true; shader:flat`);
+            nebula.appendChild(s);
+        }
+
+        // 橋の欄干
+        for(let i=0; i<40; i++){
+            let z = -i * 5;
+            let p1 = document.createElement('a-cylinder');
+            p1.setAttribute('position', `-3 0.5 ${z}`);
+            p1.setAttribute('radius', 0.2); p1.setAttribute('height', 1.5); p1.setAttribute('color', '#444');
+            railings.appendChild(p1);
+            let p2 = document.createElement('a-cylinder');
+            p2.setAttribute('position', `3 0.5 ${z}`);
+            p2.setAttribute('radius', 0.2); p2.setAttribute('height', 1.5); p2.setAttribute('color', '#444');
+            railings.appendChild(p2);
+        }
+
+        // ネオン船
+        for(let i=0; i<4; i++){
+            let ship = document.createElement('a-entity');
+            let x = i%2==0 ? -40 : 40;
+            let y = 30 + i*10;
+            let z = -60 - i*20;
+            ship.setAttribute('position', `${x} ${y} ${z}`);
+            ship.innerHTML = `
+                <a-box width="15" height="3" depth="5" color="#222">
+                    <a-box width="16" height="0.2" depth="0.2" position="0 1.5 2.5" material="color:#ff0055; emissive:#ff0055; emissiveIntensity:5"></a-box>
+                    <a-box width="16" height="0.2" depth="0.2" position="0 -1.5 2.5" material="color:#00ff55; emissive:#00ff55; emissiveIntensity:5"></a-box>
+                </a-box>
+            `;
+            ships.appendChild(ship);
+        }
+
+        // 光のパーティクル
+        for(let i=0; i<200; i++){
+            let p = document.createElement('a-sphere');
+            p.setAttribute('radius', 0.05);
+            let color = ['#ffaa00', '#00ffff', '#ff00ff'][i%3];
+            p.setAttribute('material', `color:${color}; emissive:${color}; emissiveIntensity:3; shader:flat`);
+            let x = (Math.random()-0.5)*60;
+            let y = Math.random()*30;
+            let z = (Math.random()-0.5)*100 - 40;
+            p.setAttribute('position', `${x} ${y} ${z}`);
+            p.setAttribute('animation', `property:position; to:${x} ${y+5} ${z}; dur:${3000+Math.random()*3000}; dir:alternate; loop:true; easing:easeInOutSine`);
+            particles.appendChild(p);
+        }
 
         const rig = document.getElementById('rig');
         const cam = document.getElementById('main-cam');
-        const AMPLIFIER = 6.0; 
+        const AMPLIFIER = 5.0;
         let lastPos = new THREE.Vector3();
 
-        // 灯籠生成
-        const field = document.getElementById('lantern-field');
-        for (let i = 0; i < 100; i++) {
-            const l = document.createElement('a-entity');
-            const x = (Math.random() - 0.5) * 400;
-            const z = (Math.random() - 0.5) * 400;
-            l.setAttribute('position', `${x} 0.2 ${z}`);
-            l.innerHTML = `
-                <a-box width="0.8" height="1.1" depth="0.8" color="#ffcc00" material="emissive:#ffcc00; emissiveIntensity:1.5">
-                    <a-light type="point" color="#ffcc00" intensity="0.5" distance="5"></a-light>
-                </a-box>
-            `;
-            field.appendChild(l);
-        }
-
-        function startSystem() {
+        function startVR() {
             const scene = document.querySelector('a-scene');
             if (scene.enterVR) {
                 scene.enterVR();
@@ -145,14 +149,9 @@
             const currentPos = new THREE.Vector3();
             currentPos.copy(cam.object3D.position);
             const delta = new THREE.Vector3().subVectors(currentPos, lastPos);
-
             if (delta.length() > 0.001) {
-                const myPos = rig.getAttribute('position');
-                rig.setAttribute('position', {
-                    x: myPos.x + (delta.x * (AMPLIFIER - 1)),
-                    y: 0,
-                    z: myPos.z + (delta.z * (AMPLIFIER - 1))
-                });
+                const rigPos = rig.getAttribute('position');
+                rig.setAttribute('position', { x: rigPos.x + (delta.x * (AMPLIFIER - 1)), y: 0, z: rigPos.z + (delta.z * (AMPLIFIER - 1)) });
             }
             lastPos.copy(currentPos);
             requestAnimationFrame(loop);
