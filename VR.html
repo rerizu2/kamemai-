@@ -2,135 +2,140 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - High Speed Sync</title>
+    <title>TSUKUYOMI - Torii Sea VR</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
-        #ui-overlay {
+        #ui {
             position: fixed; inset: 0; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 1000;
-            background: rgba(0, 5, 10, 0.8); color: #0ff; font-family: monospace;
+            justify-content: center; align-items: center; z-index: 2000;
+            background: linear-gradient(to bottom, #2b2c5c 0%, #f2a6a1 100%);
+            color: #fff; font-family: "serif"; text-align: center;
         }
         .start-btn {
-            padding: 20px 50px; border: 2px solid #0ff; background: transparent;
-            color: #0ff; font-size: 1.5rem; cursor: pointer; font-weight: bold;
-            box-shadow: 0 0 20px #0ff; border-radius: 50px;
+            margin-top: 20px; padding: 15px 40px; background: rgba(180, 0, 0, 0.8);
+            border: 2px solid #fff; color: #fff; font-size: 1.2rem;
+            cursor: pointer; border-radius: 5px; box-shadow: 0 0 15px #f2a6a1;
         }
-        #speed-vignette {
-            position: fixed; inset: 0; pointer-events: none; z-index: 500;
-            background: radial-gradient(circle, transparent 50%, rgba(0,255,255,0.2) 100%);
-            opacity: 0; transition: opacity 0.2s;
+        #hud {
+            position: fixed; top: 20px; left: 20px; color: #fff; z-index: 1000;
+            pointer-events: none; text-shadow: 0 0 5px #b40000; font-family: serif;
         }
     </style>
 </head>
 <body>
 
-    <div id="speed-vignette"></div>
-
-    <div id="ui-overlay">
-        <h1 style="text-shadow: 0 0 10px #0ff;">TSUKUYOMI SYNC: TURBO</h1>
-        <p>【高速移動モード有効】<br>現実の1歩がVRでは3歩分になります。</p>
-        <button class="start-btn" onclick="startTurbo()">LINK START</button>
+    <div id="ui">
+        <h1 style="font-size: 3rem; margin: 0;">月詠 - TSUKUYOMI</h1>
+        <p>静寂の海と巨大な鳥居の世界へ</p>
+        <button class="start-btn" onclick="bootSystem()">世界へ入る</button>
     </div>
 
-    <a-scene webxr="requiredFeatures: local-floor">
-        <a-sky color="#010210"></a-sky>
+    <div id="hud">
+        境界：ツクヨミ<br>
+        位置：<span id="pos-display">0.0, 0.0, 0.0</span>
+    </div>
+
+    <a-scene webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor">
         
-        <!-- 背景の巨大な月 -->
-        <a-entity position="0 50 -150">
-            <a-sphere radius="25" color="#fff" material="shader:flat; emissive:#fff"></a-sphere>
-            <a-ring color="#0ff" radius-inner="30" radius-outer="31" rotation="90 0 0"></a-ring>
+        <!-- 空：夕暮れのグラデーション -->
+        <a-sky material="shader: gradient; topColor: #2b2c5c; bottomColor: #f2a6a1"></a-sky>
+
+        <!-- 水面：反射をイメージした半透明の床 -->
+        <a-plane position="0 0 0" rotation="-90 0 0" width="1000" height="1000" 
+                 material="color: #1a1a3a; opacity: 0.8; metalness: 0.9; roughness: 0.1">
+        </a-plane>
+
+        <!-- 巨大な鳥居 (パーツ組み上げ) -->
+        <a-entity id="big-torii" position="0 0 -50" scale="2 2 2">
+            <!-- 柱 -->
+            <a-cylinder color="#b40000" radius="1.2" height="30" position="-12 15 0"></a-cylinder>
+            <a-cylinder color="#b40000" radius="1.2" height="30" position="12 15 0"></a-cylinder>
+            <!-- 笠木 (上の横棒) -->
+            <a-box color="#b40000" width="40" height="2.5" depth="3" position="0 30 0" rotation="0 0 2"></a-box>
+            <a-box color="#111" width="41" height="1" depth="3.5" position="0 31.5 0"></a-box>
+            <!-- 貫 (下の横棒) -->
+            <a-box color="#b40000" width="32" height="2" depth="2.5" position="0 23 0"></a-box>
+            <!-- 額束 -->
+            <a-box color="#b40000" width="4" height="6" depth="1.5" position="0 26.5 0"></a-box>
         </a-entity>
 
-        <!-- 無限に続くグリッド地面 -->
-        <a-grid position="0 0 0" cell-size="2" section-size="10" color="#2b0054" opacity="0.4"></a-grid>
+        <!-- 遠くの雲 (球体を組み合わせて入道雲を表現) -->
+        <a-entity position="0 -10 -150">
+            <a-sphere color="#fff" radius="40" position="80 20 0" opacity="0.6"></a-sphere>
+            <a-sphere color="#f2a6a1" radius="50" position="-100 30 -20" opacity="0.5"></a-sphere>
+            <a-sphere color="#fff" radius="30" position="0 10 -50" opacity="0.4"></a-sphere>
+        </a-entity>
 
-        <!-- ネオン竹林（広範囲に配置） -->
-        <a-entity id="bamboo-field"></a-entity>
+        <!-- 灯籠コンテナ (JSで生成) -->
+        <a-entity id="lantern-field"></a-entity>
 
-        <!-- プレイヤーリグ -->
-        <a-entity id="player-rig" position="0 0 0">
-            <!-- 実際のカメラ（この座標の変化を監視する） -->
-            <a-camera id="tracked-camera" look-controls wasd-controls-enabled="false">
-                <a-entity position="0 0 -0.5" 
-                          geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.015"
-                          material="color: #0ff; shader: flat"></a-entity>
+        <!-- プレイヤーリグ（インサイドアウト・トラッキング＋移動増幅） -->
+        <a-entity id="rig" position="0 0 0">
+            <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
+                <a-light type="point" intensity="0.5" distance="5" color="#fff"></a-light>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#333"></a-light>
-        <a-light type="point" position="0 5 0" color="#0ff" intensity="1"></a-light>
+        <a-light type="ambient" color="#f2a6a1" intensity="0.4"></a-light>
+        <a-light type="directional" position="-1 1 -1" intensity="0.6" color="#ffccaa"></a-light>
+
     </a-scene>
 
     <script>
-        const rig = document.getElementById('player-rig');
-        const cam = document.getElementById('tracked-camera');
-        const vignette = document.getElementById('speed-vignette');
-        
-        let lastCameraPos = new THREE.Vector3();
-        const MOVE_MULTIPLIER = 3.5; // ★ここを変えると速度が変わります（3.5倍速）
+        const rig = document.getElementById('rig');
+        const cam = document.getElementById('main-cam');
+        const posDisplay = document.getElementById('pos-display');
+        const AMPLIFIER = 4.0; // 移動倍率（4倍速）
+        let lastPos = new THREE.Vector3();
 
-        function startTurbo() {
+        // 灯籠を水面にばら撒く
+        const field = document.getElementById('lantern-field');
+        for (let i = 0; i < 200; i++) {
+            const l = document.createElement('a-entity');
+            const x = (Math.random() - 0.5) * 400;
+            const z = (Math.random() - 0.5) * 400;
+            const delay = Math.random() * 5000;
+            
+            l.setAttribute('position', `${x} 0.2 ${z}`);
+            l.innerHTML = `
+                <a-box width="0.6" height="0.8" depth="0.6" color="#fff" material="emissive: #ffaa00; emissiveIntensity: 1; opacity: 0.9">
+                    <a-light type="point" color="#ffaa00" intensity="0.3" distance="3"></a-light>
+                    <a-animation attribute="position" from="${x} 0.2 ${z}" to="${x} 0.4 ${z}" dur="3000" direction="alternate" repeat="indefinite" easing="easeInOutSine"></a-animation>
+                </a-box>
+                <a-box width="0.7" height="0.1" depth="0.7" color="#442200" position="0 -0.4 0"></a-box>
+            `;
+            field.appendChild(l);
+        }
+
+        function bootSystem() {
             const scene = document.querySelector('a-scene');
             if (scene.enterAR) {
                 scene.enterAR().then(() => {
-                    document.getElementById('ui-overlay').style.display = 'none';
-                    // 初期位置の記録
-                    lastCameraPos.copy(cam.object3D.position);
-                    animate();
+                    document.getElementById('ui').style.display = 'none';
+                    lastPos.copy(cam.object3D.position);
+                    loop();
                 });
             }
         }
 
-        function animate() {
-            // 現在のカメラの（リグ内での）ローカル位置を取得
-            const currentCamPos = new THREE.Vector3();
-            currentCamPos.copy(cam.object3D.position);
+        function loop() {
+            const currentPos = new THREE.Vector3();
+            currentPos.copy(cam.object3D.position);
+            const delta = new THREE.Vector3().subVectors(currentPos, lastPos);
 
-            // 前フレームからの移動量（デルタ）を計算
-            const delta = new THREE.Vector3().subVectors(currentCamPos, lastCameraPos);
-            
-            // Y軸（高さ）の移動はそのまま、X・Z軸（水平移動）だけを増幅
-            if (delta.length() > 0.001) { // 微小なノイズを無視
-                const boostX = delta.x * (MOVE_MULTIPLIER - 1);
-                const boostZ = delta.z * (MOVE_MULTIPLIER - 1);
-
-                // 親であるリグ（プレイヤーの全体位置）をずらすことで加速させる
+            if (delta.length() > 0.001) {
                 const rigPos = rig.getAttribute('position');
                 rig.setAttribute('position', {
-                    x: rigPos.x + boostX,
-                    y: rigPos.y,
-                    z: rigPos.z + boostZ
+                    x: rigPos.x + (delta.x * (AMPLIFIER - 1)),
+                    y: rigPos.y, 
+                    z: rigPos.z + (delta.z * (AMPLIFIER - 1))
                 });
-
-                // 視覚的エフェクト（速いほど青い枠が強く出る）
-                const speed = delta.length() * 50;
-                vignette.style.opacity = Math.min(speed, 0.8);
-            } else {
-                vignette.style.opacity = 0;
+                posDisplay.innerText = `${rigPos.x.toFixed(1)}, 0.0, ${rigPos.z.toFixed(1)}`;
             }
-
-            // 現在の位置を保存
-            lastCameraPos.copy(currentCamPos);
-            requestAnimationFrame(animate);
-        }
-
-        // 竹林の生成（広大に）
-        const field = document.getElementById('bamboo-field');
-        for (let i = 0; i < 300; i++) {
-            const b = document.createElement('a-cylinder');
-            const x = (Math.random() - 0.5) * 300;
-            const z = (Math.random() - 0.5) * 300;
-            if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
-            const h = 5 + Math.random() * 20;
-            const color = Math.random() > 0.5 ? '#00ffcc' : '#ff00ff';
-            b.setAttribute('position', `${x} ${h/2} ${z}`);
-            b.setAttribute('radius', '0.15');
-            b.setAttribute('height', h);
-            b.setAttribute('color', color);
-            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1.5`);
-            field.appendChild(b);
+            lastPos.copy(currentPos);
+            requestAnimationFrame(loop);
         }
     </script>
 </body>
