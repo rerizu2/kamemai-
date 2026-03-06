@@ -2,157 +2,195 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Bridge Only VR</title>
+    <title>TSUKUYOMI - Physical Motion Sync</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
-    <script src="https://unpkg.com/networked-aframe@^0.11.0/dist/networked-aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-reflector-component/dist/aframe-reflector-component.min.js"></script>
-    
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: "Hiragino Mincho ProN", serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: serif; }
         #ui { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; background: radial-gradient(circle, #001, #000); color: #fff; text-align: center; }
         .start-btn { padding: 20px 60px; background: #5D4037; color: #fff; border: 2px solid #fff9c4; font-size: 1.5rem; cursor: pointer; border-radius: 5px; box-shadow: 0 0 30px #fff9c4; }
-        #hud { position: fixed; top: 20px; left: 20px; color: #fff9c4; z-index: 1000; pointer-events: none; text-shadow: 2px 2px 4px #000; font-size: 14px; }
+        #hud { position: fixed; top: 10px; left: 10px; color: #fff9c4; z-index: 1000; pointer-events: none; font-size: 12px; }
     </style>
 </head>
 <body>
 
     <div id="ui">
         <h1 style="font-size: 2.5rem; color: #fff9c4;">月詠 - TSUKUYOMI</h1>
-        <p>【橋上移動制限システム稼働中】<br>茶色の橋の上のみを歩けます</p>
-        <button class="start-btn" onclick="startVR()">LINK START</button>
+        <p>【歩行同期システム】<br>スマホを持って実際に一歩踏み出すと前進します</p>
+        <button class="start-btn" onclick="initExperience()">同期開始</button>
     </div>
 
     <div id="hud">
-        STATUS: BRIDGE_RESTRICTED<br>
-        USERS: <span id="user-count">1</span>
+        STATUS: <span id="sync-status">WAITING</span><br>
+        STEPS: <span id="step-count">0</span>
     </div>
 
-    <a-scene networked-scene="room: tsukuyomi-final-bridge; adapter: socketio; serverURL: https://naf-naver-signaling.glitch.me/;" webxr="requiredFeatures: local-floor;">
+    <!-- WebXRのlocal-floorを有効化 -->
+    <a-scene webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor">
         
-        <a-assets>
-            <template id="avatar-template">
-                <a-entity class="avatar">
-                    <a-sphere radius="0.3" color="#fff9c4" material="emissive:#fff9c4; emissiveIntensity:3"></a-sphere>
-                </a-entity>
-            </template>
-        </a-assets>
-
-        <!-- 夜空と星雲 -->
+        <!-- 空と海 -->
         <a-sky color="#00020a"></a-sky>
         <a-entity id="nebula-clouds"></a-entity> 
 
-        <!-- 反射する海 (Y=0) -->
-        <a-plane position="0 0.01 0" rotation="-90 0 0" width="2000" height="2000" 
-                 reflector="color: #111; opacity: 1; resolution: 256;"></a-plane>
+        <!-- 反射する水面 -->
+        <a-plane position="0 0.01 0" rotation="-90 0 0" width="1000" height="1000" reflector="color: #111; opacity: 1; resolution: 256;"></a-plane>
 
-        <!-- 茶色の木の橋 (水面上 Y=0.2) -->
-        <a-entity id="bridge-container" position="0 0.2 0">
-            <!-- 橋の床板 -->
-            <a-box width="5.0" height="0.4" depth="400" position="0 -0.2 -150" color="#5D4037" material="roughness: 1;"></a-box>
-            <!-- 欄干 -->
+        <!-- 茶色の木製の橋 -->
+        <a-entity id="bridge-rig" position="0 0.2 0">
+            <a-box width="5.0" height="0.4" depth="500" position="0 -0.2 -200" color="#5D4037"></a-box>
             <a-entity id="railings"></a-entity>
         </a-entity>
 
-        <!-- 明るく光り輝く鳥居 -->
-        <a-entity id="glowing-torii" position="0 0 -50" scale="1.4 1.4 1.4">
+        <!-- 光り輝く鳥居 -->
+        <a-entity id="torii" position="0 0 -45" scale="1.4 1.4 1.4">
             <a-cylinder radius="1.4" height="30" position="-12 15 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-cylinder>
             <a-cylinder radius="1.4" height="30" position="12 15 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-cylinder>
-            <a-box width="38" height="2.5" depth="3" position="0 30 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-box>
-            <!-- 光柱 -->
-            <a-cylinder radius="0.6" height="1500" position="0 750 0" material="shader:flat; color:#fff; transparent:true; opacity:0.6"></a-cylinder>
-            <a-light type="point" intensity="6" distance="80" color="#fff9c4" position="0 15 0"></a-light>
+            <a-box width="36" height="2.5" depth="3" position="0 30 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-box>
+            <!-- 光の柱 -->
+            <a-cylinder radius="0.5" height="1500" position="0 750 0" material="shader:flat; color:#fff; transparent:true; opacity:0.6"></a-cylinder>
+            <a-light type="point" intensity="5" distance="60" color="#fff9c4" position="0 15 0"></a-light>
         </a-entity>
 
-        <!-- エフェクト -->
-        <a-entity id="fx"></a-entity>
+        <a-entity id="particles"></a-entity>
 
-        <!-- プレイヤーリグ -->
-        <a-entity id="rig" position="0 0.5 0" networked="template:#avatar-template;attachTemplateToLocal:false;">
+        <!-- プレイヤー -->
+        <a-entity id="player-rig" position="0 0.5 0">
             <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
-                <a-ring color="#fff9c4" radius-inner="0.01" radius-outer="0.015" position="0 0 -1" opacity="0.8"></a-ring>
+                <a-ring color="#fff9c4" radius-inner="0.01" radius-outer="0.015" position="0 0 -1"></a-ring>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#112" intensity="0.5"></a-light>
+        <a-light type="ambient" color="#223" intensity="0.5"></a-light>
     </a-scene>
 
     <script>
-        const nebula = document.getElementById('nebula-clouds');
-        const railings = document.getElementById('railings');
-        const fx = document.getElementById('fx');
+        const playerRig = document.getElementById('player-rig');
+        const mainCam = document.getElementById('main-cam');
+        const syncStatus = document.getElementById('sync-status');
+        const stepDisplay = document.getElementById('step-count');
 
-        // 星雲・欄干・パーティクルの生成
-        for(let i=0; i<40; i++){
-            let s = document.createElement('a-sphere');
-            s.setAttribute('position', `${(Math.random()-0.5)*200} ${30+Math.random()*50} ${-50-Math.random()*150}`);
-            s.setAttribute('radius', 15+Math.random()*30);
-            s.setAttribute('material', `color:#0033ff; opacity:0.08; transparent:true; shader:flat`);
-            nebula.appendChild(s);
-        }
-        for(let i=0; i<100; i++){
-            let z = -i * 4;
-            [ -2.5, 2.5 ].forEach(x => {
-                let p = document.createElement('a-cylinder');
-                p.setAttribute('position', `${x} 0.6 ${z}`);
-                p.setAttribute('radius', 0.15); p.setAttribute('height', 1.4); p.setAttribute('color', '#3E2723');
-                railings.appendChild(p);
-            });
-        }
-        for(let i=0; i<200; i++){
-            let p = document.createElement('a-sphere');
-            let color = ['#fff9c4', '#00ffff', '#ff66ff'][i%3];
-            p.setAttribute('radius', 0.05);
-            p.setAttribute('material', `color:${color}; emissive:${color}; emissiveIntensity:4; shader:flat`);
-            p.setAttribute('position', `${(Math.random()-0.5)*100} ${Math.random()*40} ${-100+Math.random()*200}`);
-            fx.appendChild(p);
-        }
+        // 定数
+        const SPEED_MULT = 4.0; // 移動の増幅倍率
+        const BRIDGE_WIDTH = 2.2; // 橋の幅制限
 
-        // --- 移動制限ロジック ---
-        const rig = document.getElementById('rig');
-        const cam = document.getElementById('main-cam');
-        const AMPLIFIER = 5.0; 
-        const BRIDGE_WIDTH_LIMIT = 2.2; // 橋から出られない限界値 (左右2.2m)
-        let lastPos = new THREE.Vector3();
+        let lastCamPos = new THREE.Vector3();
+        let stepCount = 0;
+        let isWalking = false;
 
-        function startVR() {
-            const scene = document.querySelector('a-scene');
-            if (scene.enterVR) {
-                scene.enterVR();
-                document.getElementById('ui').style.display = 'none';
-                lastPos.copy(cam.object3D.position);
-                loop();
+        async function initExperience() {
+            // iOSのセンサー許可リクエスト
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                await DeviceMotionEvent.requestPermission();
             }
+
+            const scene = document.querySelector('a-scene');
+            if (scene.enterVR) scene.enterVR();
+
+            document.getElementById('ui').style.display = 'none';
+            syncStatus.innerText = "LINKED";
+            
+            // トラッキングのベース位置を記録
+            lastCamPos.copy(mainCam.object3D.position);
+            
+            // 歩行検知（センサー）の開始
+            initStepDetection();
+            // フレーム更新ループ
+            requestAnimationFrame(update);
         }
 
-        function loop() {
+        // 1. 物理的な歩行（カメラ位置の変化）を増幅する
+        function update() {
             const currentCamPos = new THREE.Vector3();
-            currentCamPos.copy(cam.object3D.position);
-            const delta = new THREE.Vector3().subVectors(currentCamPos, lastPos);
+            currentCamPos.copy(mainCam.object3D.position);
+
+            // 前フレームからの移動差分
+            const delta = new THREE.Vector3().subVectors(currentCamPos, lastCamPos);
 
             if (delta.length() > 0.001) {
-                const currentRigPos = rig.getAttribute('position');
+                const rigPos = playerRig.getAttribute('position');
                 
-                // 次の移動先を計算
-                let nextX = currentRigPos.x + (delta.x * (AMPLIFIER - 1));
-                let nextZ = currentRigPos.z + (delta.z * (AMPLIFIER - 1));
+                // 次のX, Z座標を計算（移動量を倍にする）
+                let nextX = rigPos.x + (delta.x * (SPEED_MULT - 1));
+                let nextZ = rigPos.z + (delta.z * (SPEED_MULT - 1));
 
-                // ★橋の幅（左右）の制限チェック
-                // 橋の幅を超えようとしたら、X軸の移動をキャンセルする
-                if (Math.abs(nextX) > BRIDGE_WIDTH_LIMIT) {
-                    nextX = currentRigPos.x; 
-                }
+                // 橋の幅制限（X軸を固定）
+                if (Math.abs(nextX) > BRIDGE_WIDTH) nextX = (nextX > 0 ? BRIDGE_WIDTH : -BRIDGE_WIDTH);
 
-                // 位置を更新 (高さは橋の上の0.5mに固定)
-                rig.setAttribute('position', { x: nextX, y: 0.5, z: nextZ });
+                playerRig.setAttribute('position', { x: nextX, y: 0.5, z: nextZ });
             }
 
-            lastPos.copy(currentCamPos);
-            const nUsers = document.querySelectorAll('[networked]').length;
-            document.getElementById('user-count').innerText = nUsers;
-            requestAnimationFrame(loop);
+            lastCamPos.copy(currentCamPos);
+            requestAnimationFrame(update);
         }
+
+        // 2. 加速度センサーによる「足踏み/歩行」検知（バックアップ）
+        function initStepDetection() {
+            let lastAccel = 0;
+            window.addEventListener('devicemotion', (e) => {
+                const acc = e.accelerationIncludingGravity;
+                if (!acc) return;
+                const total = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+                const diff = Math.abs(total - lastAccel);
+
+                if (diff > 12 && !isWalking) { // 揺れを検知
+                    executeStepMove();
+                }
+                lastAccel = total;
+            });
+        }
+
+        function executeStepMove() {
+            isWalking = true;
+            stepCount++;
+            stepDisplay.innerText = stepCount;
+
+            const rotation = mainCam.getAttribute('rotation');
+            const angle = (rotation.y) * (Math.PI / 180);
+            const rigPos = playerRig.getAttribute('position');
+
+            // 向いている方向に0.8m進める
+            const dx = -Math.sin(angle) * 0.8;
+            const dz = -Math.cos(angle) * 0.8;
+            
+            let nextX = rigPos.x + dx;
+            if (Math.abs(nextX) > BRIDGE_WIDTH) nextX = rigPos.x;
+
+            playerRig.setAttribute('animation', `property: position; to: ${nextX} 0.5 ${rigPos.z + dz}; dur: 400; easing: easeOutQuad`);
+            
+            setTimeout(() => { isWalking = false; }, 500);
+        }
+
+        // 景観の生成（星雲・欄干・パーティクル）
+        (function setupScene() {
+            const nebula = document.getElementById('nebula-clouds');
+            const railings = document.getElementById('railings');
+            const particles = document.getElementById('particles');
+
+            for(let i=0; i<30; i++) {
+                let s = document.createElement('a-sphere');
+                s.setAttribute('position', `${(Math.random()-0.5)*200} ${20+Math.random()*40} ${-50-Math.random()*150}`);
+                s.setAttribute('radius', 15+Math.random()*20);
+                s.setAttribute('material', `color:#0044ff; opacity:0.1; transparent:true; shader:flat`);
+                nebula.appendChild(s);
+            }
+            for(let i=0; i<100; i++) {
+                let z = -i * 5;
+                [-2.7, 2.7].forEach(x => {
+                    let p = document.createElement('a-cylinder');
+                    p.setAttribute('position', `${x} 0.6 ${z}`);
+                    p.setAttribute('radius', 0.15); p.setAttribute('height', 1.4); p.setAttribute('color', '#3E2723');
+                    railings.appendChild(p);
+                });
+            }
+            for(let i=0; i<150; i++) {
+                let p = document.createElement('a-sphere');
+                let c = ['#fff9c4', '#0ff', '#f0f'][i%3];
+                p.setAttribute('radius', 0.05); p.setAttribute('material', `color:${c}; emissive:${c}; emissiveIntensity:3; shader:flat`);
+                p.setAttribute('position', `${(Math.random()-0.5)*80} ${Math.random()*30} ${-100+Math.random()*200}`);
+                particles.appendChild(p);
+            }
+        })();
     </script>
 </body>
 </html>
