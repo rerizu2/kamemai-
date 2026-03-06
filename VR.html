@@ -2,161 +2,130 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Optical Flow Sync</title>
+    <title>TSUKUYOMI - Inside-Out Tracking v3</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
-        /* 解析用の隠し要素 */
-        #v-container { position: fixed; top: 0; left: 0; width: 160px; height: 120px; z-index: 1000; border: 1px solid #0ff; opacity: 0.8; }
-        video, canvas { width: 100%; height: 100%; }
-        
-        #hud {
-            position: fixed; bottom: 20px; left: 20px; color: #0ff;
-            font-family: monospace; z-index: 1001; pointer-events: none;
-            text-shadow: 0 0 5px #0ff;
+        #ui-layer {
+            position: fixed; inset: 0; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1000;
+            background: radial-gradient(circle, #001a1a 0%, #000 100%);
+            color: #0ff; font-family: 'Courier New', monospace; text-align: center;
         }
         .start-btn {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 2000; padding: 20px; background: #000; color: #0ff;
-            border: 2px solid #0ff; cursor: pointer; font-family: monospace;
+            padding: 20px 40px; border: 2px solid #0ff; background: transparent;
+            color: #0ff; font-size: 1.5rem; cursor: pointer; font-weight: bold;
+            box-shadow: 0 0 20px #0ff; transition: 0.3s;
+        }
+        .start-btn:hover { background: #0ff; color: #000; }
+        #debug-log {
+            position: fixed; top: 10px; left: 10px; color: #0ff; font-size: 12px;
+            pointer-events: none; z-index: 2000; background: rgba(0,0,0,0.5);
         }
     </style>
 </head>
 <body>
 
-    <button id="startBtn" class="start-btn">TSUKUYOMI VISUAL SYNC START</button>
+    <div id="debug-log">SYSTEM: STANDBY...</div>
 
-    <!-- 映像解析用コンテナ（画面左上に表示） -->
-    <div id="v-container">
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas" style="display:none;"></canvas>
+    <div id="ui-layer">
+        <h1 style="letter-spacing: 0.5em;">TSUKUYOMI</h1>
+        <p>【インサイドアウト・トラッキング有効】<br>現実で歩くとVR空間も動きます。広い場所で開始してください。</p>
+        <button class="start-btn" onclick="activateSync()">SYNC START</button>
     </div>
 
-    <div id="hud">
-        SCANNING_REALITY...<br>
-        FLOW_X: <span id="flow-x">0</span><br>
-        SENSITIVITY: 2.0
-    </div>
+    <!-- 
+        webxr="requiredFeatures: local-floor" 
+        これがインサイドアウト・トラッキング（床認識と位置同期）の鍵です
+    -->
+    <a-scene 
+        webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor"
+        renderer="antialias: true; logarithmicDepthBuffer: true; colorManagement: true;">
+        
+        <a-assets>
+            <!-- グリッドテクスチャ -->
+            <img id="grid-img" src="https://cdn.glitch.global/36394fd5-65ef-400d-965d-31952e9f6c0d/grid.png?1629821332014">
+        </a-assets>
 
-    <a-scene background="color: #010005">
-        <!-- ツクヨミの月 -->
-        <a-entity position="0 15 -60">
-            <a-sphere radius="8" color="#fff" material="shader: flat; emissive: #fff"></a-sphere>
-            <a-ring color="#0ff" radius-inner="9" radius-outer="9.2" rotation="90 0 0"></a-ring>
+        <!-- ツクヨミ空間の背景 -->
+        <a-entity id="scene-root">
+            <a-sky color="#020010"></a-sky>
+            
+            <!-- 月 -->
+            <a-entity position="0 40 -120">
+                <a-sphere radius="20" color="#fff" material="shader: flat; emissive: #fff; emissiveIntensity: 1"></a-sphere>
+                <a-ring color="#0ff" radius-inner="24" radius-outer="24.5" rotation="90 0 0"></a-ring>
+            </a-entity>
+
+            <!-- 地面：自分が動いているか視覚的に分かるようにする -->
+            <a-plane position="0 0 0" rotation="-90 0 0" width="200" height="200" 
+                     src="#grid-img" repeat="100 100" material="roughness: 1; metalness: 0;"></a-plane>
+
+            <!-- ネオン竹林を動的に生成 -->
+            <a-entity id="bamboo-field"></a-entity>
         </a-entity>
 
-        <!-- ネオン竹林 -->
-        <a-entity id="bamboo-forest"></a-entity>
-
-        <!-- 地面のグリッド -->
-        <a-grid position="0 0 0" cell-size="2" section-size="10" color="#2b0054" opacity="0.4"></a-grid>
-
-        <!-- カメラリグ -->
-        <a-entity id="rig" position="0 1.6 0">
-            <a-camera id="main-camera" wasd-controls-enabled="false" look-controls="enabled: false">
-                <a-cursor color="#0ff"></a-cursor>
+        <!-- 
+            プレイヤーのカメラリグ
+            WebXR(ARモード)に入ると、このカメラの位置が
+            バックカメラの画像解析によって自動的に書き換えられます。
+        -->
+        <a-entity id="rig">
+            <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
+                <a-entity cursor="fuse: false" position="0 0 -1"
+                          geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+                          material="color: #0ff; shader: flat">
+                </a-entity>
             </a-camera>
         </a-entity>
-        
-        <a-light type="ambient" color="#444"></a-light>
+
+        <a-light type="ambient" color="#222"></a-light>
+        <a-light type="directional" position="1 1 1" intensity="0.5" color="#0ff"></a-light>
     </a-scene>
 
     <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const flowDisplay = document.getElementById('flow-x');
-        const cameraRig = document.getElementById('rig');
-        const mainCamera = document.getElementById('main-camera');
+        const log = document.getElementById('debug-log');
+        const field = document.getElementById('bamboo-field');
 
-        let prevFrameData = null;
-        let currentRotationY = 0;
-
-        // 竹林の生成
-        const forest = document.getElementById('bamboo-forest');
-        for (let i = 0; i < 80; i++) {
+        // 竹林を生成
+        for (let i = 0; i < 120; i++) {
             const b = document.createElement('a-cylinder');
             const x = (Math.random() - 0.5) * 80;
             const z = (Math.random() - 0.5) * 80;
-            const h = 4 + Math.random() * 8;
+            if (Math.abs(x) < 4 && Math.abs(z) < 4) continue;
+            const h = 4 + Math.random() * 12;
+            const color = Math.random() > 0.5 ? '#00ffcc' : '#ff00ff';
             b.setAttribute('position', `${x} ${h/2} ${z}`);
-            b.setAttribute('radius', '0.1');
+            b.setAttribute('radius', '0.12');
             b.setAttribute('height', h);
-            b.setAttribute('color', Math.random() > 0.5 ? '#00ffcc' : '#ff00ff');
-            b.setAttribute('material', 'emissive: #0ff; emissiveIntensity: 0.5');
-            forest.appendChild(b);
+            b.setAttribute('color', color);
+            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
+            field.appendChild(b);
         }
 
-        // カメラ起動
-        document.getElementById('startBtn').addEventListener('click', async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment", width: 160, height: 120 }
+        function activateSync() {
+            const scene = document.querySelector('a-scene');
+            
+            // 重要：ARモードで起動することでインサイドアウト・トラッキングを有効にする
+            // 背景は3Dモデルで埋めているのでVRのように見える
+            if (scene.enterAR) {
+                scene.enterAR().then(() => {
+                    document.getElementById('ui-layer').style.display = 'none';
+                    log.innerText = "TRACKING: ACTIVE (6DoF)";
+                }).catch(err => {
+                    log.innerText = "ERROR: " + err.message;
+                    alert("お使いのデバイスはインサイドアウト・トラッキングに対応していないか、設定が無効です。");
                 });
-                video.srcObject = stream;
-                document.getElementById('startBtn').style.display = 'none';
-                processFrame();
-            } catch (err) {
-                alert("カメラの起動に失敗しました。");
             }
-        });
-
-        // 映像解析ループ
-        function processFrame() {
-            if (video.paused || video.ended) return;
-
-            // キャンバスに現在の映像を縮小して描画（高速化のため）
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const currentFrameData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
-            if (prevFrameData) {
-                const movementX = calculateMovementX(prevFrameData, currentFrameData, canvas.width, canvas.height);
-                
-                // 動いた量に応じてVRの視界を回転させる
-                // 現実のものが左に動く = カメラが右に動いている = VRのカメラを右に向ける
-                const sensitivity = 0.5; // 感度調整
-                currentRotationY += movementX * sensitivity;
-                
-                cameraRig.setAttribute('rotation', `0 ${currentRotationY} 0`);
-                flowDisplay.innerText = movementX.toFixed(2);
-            }
-
-            prevFrameData = currentFrameData;
-            requestAnimationFrame(processFrame);
         }
 
-        // 簡易オプティカルフロー解析（中心付近のピクセルのズレを計算）
-        function calculateMovementX(prev, curr, w, h) {
-            let totalDiffX = 0;
-            const step = 4; // サンプリング間隔
-            let samples = 0;
-
-            // 中央付近のピクセルを比較
-            for (let y = h/4; y < (h*3)/4; y += step) {
-                for (let x = w/4; x < (w*3)/4; x += step) {
-                    const idx = (y * w + x) * 4;
-                    const brightnessCurr = (curr[idx] + curr[idx+1] + curr[idx+2]) / 3;
-                    
-                    // 周辺ピクセルとの一致度を探る（簡易的なパターンマッチング）
-                    let minDiff = 999;
-                    let moveX = 0;
-                    const searchRange = 5;
-
-                    for (let ox = -searchRange; ox <= searchRange; ox++) {
-                        const pIdx = (y * w + (x + ox)) * 4;
-                        const brightnessPrev = (prev[pIdx] + prev[pIdx+1] + prev[pIdx+2]) / 3;
-                        const diff = Math.abs(brightnessCurr - brightnessPrev);
-                        if (diff < minDiff) {
-                            minDiff = diff;
-                            moveX = ox;
-                        }
-                    }
-                    totalDiffX += moveX;
-                    samples++;
-                }
-            }
-            return samples > 0 ? totalDiffX / samples : 0;
-        }
+        // 位置情報をデバッグ表示
+        const cam = document.getElementById('main-cam');
+        setInterval(() => {
+            const p = cam.object3D.position;
+            log.innerText = `SYNC: ON | X:${p.x.toFixed(2)} Y:${p.y.toFixed(2)} Z:${p.z.toFixed(2)}`;
+        }, 100);
     </script>
 </body>
 </html>
