@@ -2,130 +2,136 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Inside-Out Tracking v3</title>
+    <title>TSUKUYOMI - High Speed Sync</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
-        #ui-layer {
+        #ui-overlay {
             position: fixed; inset: 0; display: flex; flex-direction: column;
             justify-content: center; align-items: center; z-index: 1000;
-            background: radial-gradient(circle, #001a1a 0%, #000 100%);
-            color: #0ff; font-family: 'Courier New', monospace; text-align: center;
+            background: rgba(0, 5, 10, 0.8); color: #0ff; font-family: monospace;
         }
         .start-btn {
-            padding: 20px 40px; border: 2px solid #0ff; background: transparent;
+            padding: 20px 50px; border: 2px solid #0ff; background: transparent;
             color: #0ff; font-size: 1.5rem; cursor: pointer; font-weight: bold;
-            box-shadow: 0 0 20px #0ff; transition: 0.3s;
+            box-shadow: 0 0 20px #0ff; border-radius: 50px;
         }
-        .start-btn:hover { background: #0ff; color: #000; }
-        #debug-log {
-            position: fixed; top: 10px; left: 10px; color: #0ff; font-size: 12px;
-            pointer-events: none; z-index: 2000; background: rgba(0,0,0,0.5);
+        #speed-vignette {
+            position: fixed; inset: 0; pointer-events: none; z-index: 500;
+            background: radial-gradient(circle, transparent 50%, rgba(0,255,255,0.2) 100%);
+            opacity: 0; transition: opacity 0.2s;
         }
     </style>
 </head>
 <body>
 
-    <div id="debug-log">SYSTEM: STANDBY...</div>
+    <div id="speed-vignette"></div>
 
-    <div id="ui-layer">
-        <h1 style="letter-spacing: 0.5em;">TSUKUYOMI</h1>
-        <p>【インサイドアウト・トラッキング有効】<br>現実で歩くとVR空間も動きます。広い場所で開始してください。</p>
-        <button class="start-btn" onclick="activateSync()">SYNC START</button>
+    <div id="ui-overlay">
+        <h1 style="text-shadow: 0 0 10px #0ff;">TSUKUYOMI SYNC: TURBO</h1>
+        <p>【高速移動モード有効】<br>現実の1歩がVRでは3歩分になります。</p>
+        <button class="start-btn" onclick="startTurbo()">LINK START</button>
     </div>
 
-    <!-- 
-        webxr="requiredFeatures: local-floor" 
-        これがインサイドアウト・トラッキング（床認識と位置同期）の鍵です
-    -->
-    <a-scene 
-        webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor"
-        renderer="antialias: true; logarithmicDepthBuffer: true; colorManagement: true;">
+    <a-scene webxr="requiredFeatures: local-floor">
+        <a-sky color="#010210"></a-sky>
         
-        <a-assets>
-            <!-- グリッドテクスチャ -->
-            <img id="grid-img" src="https://cdn.glitch.global/36394fd5-65ef-400d-965d-31952e9f6c0d/grid.png?1629821332014">
-        </a-assets>
-
-        <!-- ツクヨミ空間の背景 -->
-        <a-entity id="scene-root">
-            <a-sky color="#020010"></a-sky>
-            
-            <!-- 月 -->
-            <a-entity position="0 40 -120">
-                <a-sphere radius="20" color="#fff" material="shader: flat; emissive: #fff; emissiveIntensity: 1"></a-sphere>
-                <a-ring color="#0ff" radius-inner="24" radius-outer="24.5" rotation="90 0 0"></a-ring>
-            </a-entity>
-
-            <!-- 地面：自分が動いているか視覚的に分かるようにする -->
-            <a-plane position="0 0 0" rotation="-90 0 0" width="200" height="200" 
-                     src="#grid-img" repeat="100 100" material="roughness: 1; metalness: 0;"></a-plane>
-
-            <!-- ネオン竹林を動的に生成 -->
-            <a-entity id="bamboo-field"></a-entity>
+        <!-- 背景の巨大な月 -->
+        <a-entity position="0 50 -150">
+            <a-sphere radius="25" color="#fff" material="shader:flat; emissive:#fff"></a-sphere>
+            <a-ring color="#0ff" radius-inner="30" radius-outer="31" rotation="90 0 0"></a-ring>
         </a-entity>
 
-        <!-- 
-            プレイヤーのカメラリグ
-            WebXR(ARモード)に入ると、このカメラの位置が
-            バックカメラの画像解析によって自動的に書き換えられます。
-        -->
-        <a-entity id="rig">
-            <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
-                <a-entity cursor="fuse: false" position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
-                          material="color: #0ff; shader: flat">
-                </a-entity>
+        <!-- 無限に続くグリッド地面 -->
+        <a-grid position="0 0 0" cell-size="2" section-size="10" color="#2b0054" opacity="0.4"></a-grid>
+
+        <!-- ネオン竹林（広範囲に配置） -->
+        <a-entity id="bamboo-field"></a-entity>
+
+        <!-- プレイヤーリグ -->
+        <a-entity id="player-rig" position="0 0 0">
+            <!-- 実際のカメラ（この座標の変化を監視する） -->
+            <a-camera id="tracked-camera" look-controls wasd-controls-enabled="false">
+                <a-entity position="0 0 -0.5" 
+                          geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.015"
+                          material="color: #0ff; shader: flat"></a-entity>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#222"></a-light>
-        <a-light type="directional" position="1 1 1" intensity="0.5" color="#0ff"></a-light>
+        <a-light type="ambient" color="#333"></a-light>
+        <a-light type="point" position="0 5 0" color="#0ff" intensity="1"></a-light>
     </a-scene>
 
     <script>
-        const log = document.getElementById('debug-log');
-        const field = document.getElementById('bamboo-field');
+        const rig = document.getElementById('player-rig');
+        const cam = document.getElementById('tracked-camera');
+        const vignette = document.getElementById('speed-vignette');
+        
+        let lastCameraPos = new THREE.Vector3();
+        const MOVE_MULTIPLIER = 3.5; // ★ここを変えると速度が変わります（3.5倍速）
 
-        // 竹林を生成
-        for (let i = 0; i < 120; i++) {
-            const b = document.createElement('a-cylinder');
-            const x = (Math.random() - 0.5) * 80;
-            const z = (Math.random() - 0.5) * 80;
-            if (Math.abs(x) < 4 && Math.abs(z) < 4) continue;
-            const h = 4 + Math.random() * 12;
-            const color = Math.random() > 0.5 ? '#00ffcc' : '#ff00ff';
-            b.setAttribute('position', `${x} ${h/2} ${z}`);
-            b.setAttribute('radius', '0.12');
-            b.setAttribute('height', h);
-            b.setAttribute('color', color);
-            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
-            field.appendChild(b);
-        }
-
-        function activateSync() {
+        function startTurbo() {
             const scene = document.querySelector('a-scene');
-            
-            // 重要：ARモードで起動することでインサイドアウト・トラッキングを有効にする
-            // 背景は3Dモデルで埋めているのでVRのように見える
             if (scene.enterAR) {
                 scene.enterAR().then(() => {
-                    document.getElementById('ui-layer').style.display = 'none';
-                    log.innerText = "TRACKING: ACTIVE (6DoF)";
-                }).catch(err => {
-                    log.innerText = "ERROR: " + err.message;
-                    alert("お使いのデバイスはインサイドアウト・トラッキングに対応していないか、設定が無効です。");
+                    document.getElementById('ui-overlay').style.display = 'none';
+                    // 初期位置の記録
+                    lastCameraPos.copy(cam.object3D.position);
+                    animate();
                 });
             }
         }
 
-        // 位置情報をデバッグ表示
-        const cam = document.getElementById('main-cam');
-        setInterval(() => {
-            const p = cam.object3D.position;
-            log.innerText = `SYNC: ON | X:${p.x.toFixed(2)} Y:${p.y.toFixed(2)} Z:${p.z.toFixed(2)}`;
-        }, 100);
+        function animate() {
+            // 現在のカメラの（リグ内での）ローカル位置を取得
+            const currentCamPos = new THREE.Vector3();
+            currentCamPos.copy(cam.object3D.position);
+
+            // 前フレームからの移動量（デルタ）を計算
+            const delta = new THREE.Vector3().subVectors(currentCamPos, lastCameraPos);
+            
+            // Y軸（高さ）の移動はそのまま、X・Z軸（水平移動）だけを増幅
+            if (delta.length() > 0.001) { // 微小なノイズを無視
+                const boostX = delta.x * (MOVE_MULTIPLIER - 1);
+                const boostZ = delta.z * (MOVE_MULTIPLIER - 1);
+
+                // 親であるリグ（プレイヤーの全体位置）をずらすことで加速させる
+                const rigPos = rig.getAttribute('position');
+                rig.setAttribute('position', {
+                    x: rigPos.x + boostX,
+                    y: rigPos.y,
+                    z: rigPos.z + boostZ
+                });
+
+                // 視覚的エフェクト（速いほど青い枠が強く出る）
+                const speed = delta.length() * 50;
+                vignette.style.opacity = Math.min(speed, 0.8);
+            } else {
+                vignette.style.opacity = 0;
+            }
+
+            // 現在の位置を保存
+            lastCameraPos.copy(currentCamPos);
+            requestAnimationFrame(animate);
+        }
+
+        // 竹林の生成（広大に）
+        const field = document.getElementById('bamboo-field');
+        for (let i = 0; i < 300; i++) {
+            const b = document.createElement('a-cylinder');
+            const x = (Math.random() - 0.5) * 300;
+            const z = (Math.random() - 0.5) * 300;
+            if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
+            const h = 5 + Math.random() * 20;
+            const color = Math.random() > 0.5 ? '#00ffcc' : '#ff00ff';
+            b.setAttribute('position', `${x} ${h/2} ${z}`);
+            b.setAttribute('radius', '0.15');
+            b.setAttribute('height', h);
+            b.setAttribute('color', color);
+            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1.5`);
+            field.appendChild(b);
+        }
     </script>
 </body>
 </html>
