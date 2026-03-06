@@ -2,118 +2,154 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Absolute Motion Sync</title>
+    <title>TSUKUYOMI - Physical Walk Sync</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
-        #instructions {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0, 20, 40, 0.9); color: #0ff; padding: 30px;
-            border: 2px solid #0ff; text-align: center; z-index: 1000;
-            font-family: 'Courier New', monospace; box-shadow: 0 0 20px #0ff;
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #overlay {
+            position: fixed; inset: 0; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            background: rgba(0, 10, 20, 0.9); color: #0ff; z-index: 2000;
+            text-align: center; padding: 20px;
         }
         .btn {
-            background: #0ff; color: #000; border: none; padding: 15px 30px;
-            font-weight: bold; cursor: pointer; margin-top: 20px; font-size: 1.2rem;
+            background: transparent; color: #0ff; border: 2px solid #0ff;
+            padding: 15px 40px; font-size: 1.2rem; font-weight: bold;
+            cursor: pointer; box-shadow: 0 0 15px #0ff; margin-top: 20px;
         }
-        #hud {
-            position: fixed; top: 10px; left: 10px; color: #0ff; 
-            font-family: monospace; z-index: 500; pointer-events: none;
+        #status-hud {
+            position: fixed; top: 10px; left: 10px; color: #0ff; font-family: monospace;
+            z-index: 1000; pointer-events: none; text-shadow: 0 0 5px #0ff;
         }
     </style>
 </head>
 <body>
 
-    <div id="hud">
-        TSUKUYOMI_OS v1.0<br>
-        6DoF_TRACKING: <span id="sync-status">INACTIVE</span>
+    <div id="status-hud">
+        TSUKUYOMI_SYSTEM: ACTIVE<br>
+        WALK_SYNC: <span id="walk-data">READY</span><br>
+        STEPS: <span id="step-count">0</span>
     </div>
 
-    <div id="instructions">
-        <h2>TSUKUYOMI LINK START</h2>
-        <p>現実で動くと、VRの世界でも移動します。<br>
-           広い場所で、スマホをしっかり持って操作してください。</p>
-        <button class="btn" onclick="enterWorld()">同期開始</button>
+    <div id="overlay">
+        <h1>TSUKUYOMI LINK</h1>
+        <p>スマホを持って「その場足踏み」するか、<br>実際に一歩踏み出すとVR空間を進みます。</p>
+        <button class="btn" onclick="startSystem()">SYNC START</button>
     </div>
 
-    <!-- WebXRを有効化 -->
-    <a-scene webxr="optionalFeatures: local-floor, bounded-floor; referenceSpaceType: local-floor">
+    <a-scene background="color: #000" fog="type: linear; color: #000; near: 10; far: 50">
         
-        <!-- 空と背景 -->
-        <a-sky color="#010010"></a-sky>
-
-        <!-- 1. 地面のグリッド（移動を実感させるため） -->
-        <a-grid position="0 0 0" cell-size="1" section-size="5" color="#2b0054" section-color="#0ff" opacity="0.3"></a-grid>
-
-        <!-- 2. ツクヨミの月 -->
-        <a-entity position="0 30 -100">
-            <a-sphere radius="15" color="#fff" material="shader: flat; emissive: #fff; emissiveIntensity: 1"></a-sphere>
-            <a-ring color="#0ff" radius-inner="18" radius-outer="18.3" rotation="90 0 0">
-                <a-animation attribute="rotation" to="90 360 0" dur="10000" repeat="indefinite" easing="linear"></a-animation>
-            </a-ring>
+        <!-- ツクヨミの月 -->
+        <a-entity position="0 20 -80">
+            <a-sphere radius="10" color="#fff" material="shader: flat"></a-sphere>
+            <a-ring color="#0ff" radius-inner="12" radius-outer="12.2" rotation="90 0 0"></a-ring>
         </a-entity>
 
-        <!-- 3. ネオン竹林（現実のスケール感で配置） -->
+        <!-- 地面のグリッド（進んでいる感が出る） -->
+        <a-grid position="0 0 0" cell-size="2" section-size="10" color="#111" section-color="#0ff" opacity="0.5"></a-grid>
+
+        <!-- サイバー竹林 -->
         <a-entity id="bamboo-forest"></a-entity>
 
-        <!-- 4. 案内ホログラム（開始位置に表示） -->
-        <a-entity position="0 1.5 -2">
-            <a-text value="TSUKUYOMI CENTER" align="center" color="#0ff" width="3"></a-text>
-            <a-box width="0.5" height="0.05" depth="0.5" color="#0ff" position="0 -1 0" opacity="0.5"></a-box>
-        </a-entity>
-
-        <!-- 5. プレイヤー（自分）のカメラ -->
-        <!-- look-controlsが向きを、WebXRのポーズデータが位置(x,y,z)を同期します -->
-        <a-entity id="rig">
-            <a-camera id="main-camera" wasd-controls="enabled: false" look-controls>
+        <!-- プレイヤーリグ -->
+        <a-entity id="rig" position="0 0 0">
+            <a-camera id="camera" look-controls wasd-controls-enabled="false">
                 <a-cursor color="#0ff"></a-cursor>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#333"></a-light>
-        <a-light type="point" position="0 5 -5" color="#0ff" intensity="1"></a-light>
-
+        <a-light type="ambient" color="#444"></a-light>
+        <a-light type="point" position="0 5 0" color="#0ff" intensity="1.5"></a-light>
     </a-scene>
 
     <script>
-        // 竹林を大量に配置
+        const rig = document.getElementById('rig');
+        const camera = document.getElementById('camera');
+        const stepDisplay = document.getElementById('step-count');
+        
+        let stepCount = 0;
+        let isMoving = false;
+        const moveSpeed = 0.8; // 一歩で進む距離（メートル）
+
+        // 1. 竹林の生成
         const forest = document.getElementById('bamboo-forest');
-        for (let i = 0; i < 150; i++) {
+        for (let i = 0; i < 100; i++) {
             const b = document.createElement('a-cylinder');
             const x = (Math.random() - 0.5) * 100;
             const z = (Math.random() - 0.5) * 100;
-            // プレイヤーの初期位置(0,0)付近には生やさない
-            if (Math.sqrt(x*x + z*z) < 3) continue;
-
             const h = 5 + Math.random() * 10;
-            const color = Math.random() > 0.5 ? '#00ffcc' : '#ff00ff';
-            
             b.setAttribute('position', `${x} ${h/2} ${z}`);
             b.setAttribute('radius', '0.1');
             b.setAttribute('height', h);
-            b.setAttribute('color', color);
-            b.setAttribute('material', `emissive: ${color}; emissiveIntensity: 1`);
+            b.setAttribute('color', Math.random() > 0.5 ? '#00ffcc' : '#ff00ff');
+            b.setAttribute('material', 'emissive: #0ff; emissiveIntensity: 0.5');
             forest.appendChild(b);
         }
 
-        function enterWorld() {
-            const scene = document.querySelector('a-scene');
-            // VRモードに入る（WebXRの6DoFトラッキングを開始）
-            if (scene.enterVR) {
-                scene.enterVR();
-                document.getElementById('instructions').style.display = 'none';
-                document.getElementById('sync-status').innerText = "LINKED (6DoF)";
-                document.getElementById('sync-status').style.color = "#0f0";
+        // 2. システム開始（センサー許可）
+        async function startSystem() {
+            // iOSのセンサー許可リクエスト
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                const permission = await DeviceMotionEvent.requestPermission();
+                if (permission !== 'granted') {
+                    alert('センサーの許可が必要です');
+                    return;
+                }
             }
+
+            document.getElementById('overlay').style.display = 'none';
+            initStepDetection();
         }
 
-        // 定期的にカメラの座標をコンソールに出力（デバッグ用）
-        const cam = document.getElementById('main-camera');
-        setInterval(() => {
-            const p = cam.object3D.position;
-            console.log(`Current Pos: X:${p.x.toFixed(2)} Y:${p.y.toFixed(2)} Z:${p.z.toFixed(2)}`);
-        }, 1000);
+        // 3. 歩行検知ロジック
+        function initStepDetection() {
+            let lastAccel = 0;
+            const threshold = 12; // 振動の強さ（歩いたとみなす感度）
+
+            window.addEventListener('devicemotion', (event) => {
+                const acc = event.accelerationIncludingGravity;
+                if (!acc) return;
+
+                // 3軸の加速度から衝撃の強さを計算
+                const totalAccel = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+                const delta = Math.abs(totalAccel - lastAccel);
+
+                // 衝撃がしきい値を超えたら「一歩」とみなす
+                if (delta > threshold && !isMoving) {
+                    executeStep();
+                }
+                lastAccel = totalAccel;
+            });
+        }
+
+        // 4. VR空間内での移動実行
+        function executeStep() {
+            isMoving = true;
+            stepCount++;
+            stepDisplay.innerText = stepCount;
+
+            // カメラが向いている方向を取得
+            const rotation = camera.getAttribute('rotation');
+            const angle = (rotation.y) * (Math.PI / 180);
+
+            // 向いている方向に座標を計算
+            const currentPos = rig.getAttribute('position');
+            const dx = -Math.sin(angle) * moveSpeed;
+            const dz = -Math.cos(angle) * moveSpeed;
+
+            // アニメーションで滑らかに移動
+            const newPos = {
+                x: currentPos.x + dx,
+                y: currentPos.y,
+                z: currentPos.z + dz
+            };
+            
+            rig.setAttribute('animation', `property: position; to: ${newPos.x} ${newPos.y} ${newPos.z}; dur: 300; easing: easeOutQuad`);
+
+            // 連続検知を防ぐためのクールタイム
+            setTimeout(() => { isMoving = false; }, 400);
+        }
     </script>
 </body>
 </html>
