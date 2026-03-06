@@ -2,124 +2,126 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Multiplayer 6DoF</title>
+    <title>TSUKUYOMI - Multi-User Mirror Sea</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    
+    <!-- A-Frame & Networking Libraries -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <!-- マルチプレイ用ライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
     <script src="https://unpkg.com/networked-aframe@^0.11.0/dist/networked-aframe.min.js"></script>
-    <!-- 通信サーバー（公開デモ用サーバーを使用） -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.5.0/socket.io.slim.js"></script>
-    <script src="https://unpkg.com/easyrtc@^1.1.0/api/easyrtc.js"></script>
-
+    
+    <!-- Reflection & Environment -->
+    <script src="https://unpkg.com/aframe-reflector-component/dist/aframe-reflector-component.min.js"></script>
+    
     <style>
-        body { margin: 0; overflow: hidden; background: #2b2c5c; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: serif; }
         #ui {
             position: fixed; inset: 0; display: flex; flex-direction: column;
             justify-content: center; align-items: center; z-index: 2000;
-            background: rgba(0,0,0,0.8); color: #0ff; font-family: serif;
+            background: linear-gradient(to bottom, #1e1e3f, #ff9a9e); color: #fff;
         }
         .start-btn {
-            padding: 15px 40px; background: #b40000; border: 2px solid #fff;
-            color: #fff; font-size: 1.2rem; cursor: pointer; border-radius: 5px;
+            padding: 20px 60px; background: #b40000; color: #fff; border: 2px solid #fff;
+            font-size: 1.5rem; cursor: pointer; font-weight: bold; border-radius: 5px;
         }
         #hud {
-            position: fixed; top: 10px; left: 10px; color: #fff; z-index: 1000;
-            font-family: monospace; pointer-events: none;
+            position: fixed; top: 20px; left: 20px; color: #ffcc00; z-index: 1000;
+            pointer-events: none; text-shadow: 2px 2px 4px #000;
+        }
+        #alert {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #ff0000; font-size: 2rem; font-weight: bold; display: none; z-index: 3000;
+            text-shadow: 0 0 10px #fff;
         }
     </style>
 </head>
 <body>
 
+    <div id="alert">DISTANCE ALERT: TOO CLOSE</div>
+
     <div id="ui">
         <h1>月詠 - TSUKUYOMI MULTI</h1>
-        <p>同じURLの人と一緒に探索できます</p>
-        <button class="start-btn" onclick="startSystem()">同期開始</button>
+        <p>同じURLの仲間と境界の海を歩く</p>
+        <button class="start-btn" onclick="startSystem()">SYNC START</button>
     </div>
 
     <div id="hud">
-        ROOM: PUBLIC_TSUKUYOMI<br>
+        TSUKUYOMI_NETWORK: ONLINE<br>
         USERS: <span id="user-count">1</span>
     </div>
 
-    <!-- 
-        networked-scene: マルチプレイの設定
-        app: アプリ名, room: ルーム名, adapter: 通信方式
-    -->
+    <!-- マルチプレイ設定: networked-scene -->
     <a-scene 
         networked-scene="
-            app: tsukuyomi-app;
-            room: mirror-sea-room;
+            room: tsukuyomi-kaguya;
             debug: true;
-            adapter: wseasyrtc;
-            serverURL: https://nafs.glitch.me/;
+            adapter: socketio;
+            serverURL: https://naf-naver-signaling.glitch.me/;
         "
-        webxr="requiredFeatures: local-floor"
-        renderer="antialias: true">
-
+        webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor">
+        
         <a-assets>
-            <!-- 他のプレイヤーの見た目（アバター）の定義 -->
+            <!-- 他プレイヤーのアバター定義（黄色く光る魂） -->
             <template id="avatar-template">
                 <a-entity class="avatar">
-                    <!-- 顔代わりの光る面 -->
-                    <a-sphere radius="0.4" color="#ffcc00" material="emissive: #ffcc00; emissiveIntensity: 2; opacity: 0.8"></a-sphere>
-                    <!-- プレイヤー名を表示するタグ（簡易） -->
-                    <a-text value="USER" position="0 0.8 0" align="center" width="3" color="#fff"></a-text>
+                    <a-sphere radius="0.4" color="#ffcc00" material="emissive: #ffcc00; emissiveIntensity: 2">
+                        <a-light type="point" intensity="0.5" color="#ffcc00" distance="2"></a-light>
+                    </a-sphere>
+                    <a-text value="PLAYER" align="center" position="0 0.8 0" scale="0.5 0.5 0.5" color="#fff"></a-text>
                 </a-entity>
             </template>
-
-            <!-- 同期する項目の設定 -->
-            <script>
-                NAF.schemas.add({
-                    template: '#avatar-template',
-                    components: [
-                        'position',
-                        'rotation'
-                    ]
-                });
-            </script>
         </a-assets>
 
-        <!-- 背景と海（反射するように見せる紺色の平面） -->
-        <a-sky color="#f2a6a1"></a-sky>
-        <a-plane position="0 -0.1 0" rotation="-90 0 0" width="1000" height="1000" color="#1a1a3a"></a-plane>
+        <!-- 空 -->
+        <a-sky material="shader: gradient; topColor: #1e1e3f; bottomColor: #ff9a9e"></a-sky>
 
-        <!-- 巨大な鳥居 -->
-        <a-entity id="torii" position="0 0 -50">
-            <a-cylinder color="#b40000" radius="1.2" height="40" position="-12 20 0"></a-cylinder>
-            <a-cylinder color="#b40000" radius="1.2" height="40" position="12 20 0"></a-cylinder>
-            <a-box color="#b40000" width="38" height="2" depth="2.5" position="0 40 0"></a-box>
-            <a-box color="#222" width="40" height="1" depth="3" position="0 41 0"></a-box>
+        <!-- 鏡面反射する水面 -->
+        <a-plane id="water" position="0 0.02 0" rotation="-90 0 0" width="1000" height="1000"
+                 reflector="color: #222; opacity: 1; resolution: 256;"></a-plane>
+
+        <!-- 巨大鳥居 -->
+        <a-entity id="torii" position="0 0 -60">
+            <a-cylinder color="#b40000" radius="2" height="45" position="-20 22.5 0"></a-cylinder>
+            <a-cylinder color="#b40000" radius="2" height="45" position="20 22.5 0"></a-cylinder>
+            <a-box color="#b40000" width="60" height="4" depth="4" position="0 45 0"></a-box>
+            <a-box color="#b40000" width="45" height="3" depth="3" position="0 34 0"></a-box>
         </a-entity>
 
-        <!-- 灯籠 -->
+        <!-- 黄色い灯籠 -->
         <a-entity id="lantern-field"></a-entity>
 
-        <!-- プレイヤーリグ（自分自身） -->
-        <!-- networked="template:#avatar-template;attachTemplateToLocal:false" により自分を他人に同期 -->
-        <a-entity id="rig" position="0 0 0" networked="template:#avatar-template;attachTemplateToLocal:false">
+        <!-- 自分（プレイヤー）: networked 属性を追加 -->
+        <a-entity id="rig" position="0 0 0" networked="template:#avatar-template;attachTemplateToLocal:false;">
             <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
-                <!-- 衝突回避用センサー（簡易） -->
-                <a-entity id="proximity-sensor" geometry="primitive: sphere; radius: 1.5" material="visible: false"></a-entity>
+                <a-ring color="#ffcc00" radius-inner="0.01" radius-outer="0.015" position="0 0 -1"></a-ring>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#fff" intensity="0.5"></a-light>
+        <a-light type="ambient" color="#444"></a-light>
     </a-scene>
 
     <script>
+        // カスタムシェーダー（空）
+        AFRAME.registerShader('gradient', {
+          schema: { topColor: {type: 'color', default: 'black'}, bottomColor: {type: 'color', default: 'white'} },
+          vertexShader: `varying vec3 vWorldPosition; void main() { vec4 worldPosition = modelMatrix * vec4(position, 1.0); vWorldPosition = worldPosition.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+          fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; varying vec3 vWorldPosition; void main() { float h = normalize(vWorldPosition).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0); }`
+        });
+
         const rig = document.getElementById('rig');
         const cam = document.getElementById('main-cam');
-        const AMPLIFIER = 5.0; // 5倍速移動
+        const alertUI = document.getElementById('alert');
+        const AMPLIFIER = 5.0; // 5倍速
         let lastPos = new THREE.Vector3();
 
         // 灯籠生成
         const field = document.getElementById('lantern-field');
-        for (let i = 0; i < 60; i++) {
-            const x = (Math.random() - 0.5) * 200;
-            const z = (Math.random() - 0.5) * 200;
-            const l = document.createElement('a-box');
+        for (let i = 0; i < 80; i++) {
+            const l = document.createElement('a-entity');
+            const x = (Math.random() - 0.5) * 300;
+            const z = (Math.random() - 0.5) * 300;
             l.setAttribute('position', `${x} 0.2 ${z}`);
-            l.setAttribute('width', '0.6'); l.setAttribute('height', '0.8'); l.setAttribute('depth', '0.6');
-            l.setAttribute('material', 'color: #fff; emissive: #ffcc00; emissiveIntensity: 1.5;');
+            l.innerHTML = `<a-box width="0.8" height="1" depth="0.8" color="#ffcc00" material="emissive:#ffcc00; emissiveIntensity:1.5"></a-box>`;
             field.appendChild(l);
         }
 
@@ -129,47 +131,45 @@
                 scene.enterVR();
                 document.getElementById('ui').style.display = 'none';
                 lastPos.copy(cam.object3D.position);
-                animate();
+                loop();
             }
         }
 
-        function animate() {
+        function loop() {
             const currentPos = new THREE.Vector3();
             currentPos.copy(cam.object3D.position);
             const delta = new THREE.Vector3().subVectors(currentPos, lastPos);
 
             if (delta.length() > 0.001) {
-                const rigPos = rig.getAttribute('position');
-                const nextX = rigPos.x + (delta.x * (AMPLIFIER - 1));
-                const nextZ = rigPos.z + (delta.z * (AMPLIFIER - 1));
-
-                // ★衝突回避システム★
+                // 衝突回避ロジック
                 let canMove = true;
-                const avatars = document.querySelectorAll('.avatar');
-                avatars.forEach(av => {
-                    // 自分自身でない他のアバターとの距離をチェック
-                    if (av.parentNode.components && av.parentNode.components.networked.data.owner !== NAF.clientId) {
-                        const dist = new THREE.Vector2(nextX - av.object3D.position.x, nextZ - av.object3D.position.z).length();
-                        if (dist < 2.0) { // 2メートル以内に他人がいたら停止
-                            canMove = false;
-                        }
+                const otherAvatars = document.querySelectorAll('.avatar');
+                const myPos = rig.getAttribute('position');
+
+                otherAvatars.forEach(av => {
+                    const avPos = av.getAttribute('position');
+                    // 自分と他人の距離が1.5m以下なら停止
+                    if (avPos && myPos.distanceTo(avPos) < 1.5) {
+                        canMove = false;
                     }
                 });
 
                 if (canMove) {
-                    rig.setAttribute('position', { x: nextX, y: rigPos.y, z: nextZ });
+                    alertUI.style.display = 'none';
+                    const newX = myPos.x + (delta.x * (AMPLIFIER - 1));
+                    const newZ = myPos.z + (delta.z * (AMPLIFIER - 1));
+                    rig.setAttribute('position', { x: newX, y: 0, z: newZ });
                 } else {
-                    // 近づきすぎ警告（視界を少し赤くする等も可能）
-                    console.log("Collision Avoidance: Too close to another user");
+                    alertUI.style.display = 'block'; // 警告表示
                 }
             }
-
-            // 人数表示の更新
-            const connectedUsers = document.querySelectorAll('[networked]').length;
-            document.getElementById('user-count').innerText = connectedUsers;
-
             lastPos.copy(currentPos);
-            requestAnimationFrame(animate);
+            
+            // ユーザー数表示更新
+            const nUsers = document.querySelectorAll('[networked]').length;
+            document.getElementById('user-count').innerText = nUsers;
+
+            requestAnimationFrame(loop);
         }
     </script>
 </body>
