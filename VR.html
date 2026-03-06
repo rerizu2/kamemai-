@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Realistic Torii Multi-User</title>
+    <title>TSUKUYOMI - Vivid Red Torii VR</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
@@ -11,37 +11,29 @@
     <script src="https://unpkg.com/aframe-reflector-component/dist/aframe-reflector-component.min.js"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: "Hiragino Mincho ProN", "serif"; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: "Hiragino Mincho ProN", serif; }
         #ui {
             position: fixed; inset: 0; display: flex; flex-direction: column;
             justify-content: center; align-items: center; z-index: 2000;
-            background: linear-gradient(to bottom, #1a1a2e, #ff8c7a); color: #fff;
+            background: linear-gradient(to bottom, #1a1a2e, #ff6b6b); color: #fff;
         }
         .start-btn {
-            padding: 20px 60px; background: #800000; color: #fff; border: 1px solid #fff;
-            font-size: 1.4rem; cursor: pointer; border-radius: 2px; letter-spacing: 0.3em;
-        }
-        #hud {
-            position: fixed; top: 20px; left: 20px; color: #ffcc00; z-index: 1000;
-            pointer-events: none; text-shadow: 2px 2px 4px #000;
+            padding: 20px 60px; background: #e60012; color: #fff; border: 1px solid #fff;
+            font-size: 1.4rem; cursor: pointer; border-radius: 4px; letter-spacing: 0.3em;
+            box-shadow: 0 0 20px rgba(230, 0, 18, 0.5);
         }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <h1 style="font-weight: normal; font-size: 3rem;">ツクヨミ</h1>
-        <p>神域、境界の海</p>
+        <h1 style="font-weight: normal; font-size: 3rem; text-shadow: 0 0 10px #e60012;">月詠</h1>
+        <p>鮮やかな朱に染まる境界</p>
         <button class="start-btn" onclick="startSystem()">LINK START</button>
     </div>
 
-    <div id="hud">
-        FIELD: REAL_TORII_SEA<br>
-        NETWORK: SYNCING...
-    </div>
-
     <a-scene 
-        networked-scene="room: tsukuyomi-v4; adapter: socketio; serverURL: https://naf-naver-signaling.glitch.me/;"
+        networked-scene="room: tsukuyomi-red-v1; adapter: socketio; serverURL: https://naf-naver-signaling.glitch.me/;"
         webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor">
         
         <a-assets>
@@ -50,67 +42,69 @@
                     <a-sphere radius="0.3" color="#ffcc00" material="emissive:#ffcc00; emissiveIntensity:2"></a-sphere>
                 </a-entity>
             </template>
-            <!-- 木材の質感を出すための設定 -->
+            <!-- 質感を出すための木目テクスチャ -->
             <img id="wood-tex" src="https://cdn.pixabay.com/photo/2016/12/17/20/11/wood-1914323_960_720.jpg">
-            <img id="stone-tex" src="https://cdn.pixabay.com/photo/2017/01/17/10/38/stone-1986423_960_720.jpg">
         </a-assets>
 
-        <!-- 1. 夕暮れの空（画像再現グラデーション） -->
-        <a-sky material="shader: gradient; topColor: #1a1a2e; bottomColor: #ff8c7a"></a-sky>
+        <!-- 1. 夕暮れの空：より鮮やかなグラデーション -->
+        <a-sky material="shader: gradient; topColor: #1a1a2e; bottomColor: #ff7e5f"></a-sky>
 
-        <!-- 2. 高精度な鏡面水面 -->
+        <!-- 2. 鏡面水面：鳥居の「赤」を綺麗に映す設定 -->
         <a-plane id="water" position="0 0.01 0" rotation="-90 0 0" width="1000" height="1000"
                  reflector="color: #2b2b2b; opacity: 1; resolution: 512;"></a-plane>
 
-        <!-- 3. リアルな巨大鳥居 -->
+        <!-- 3. 真紅の巨大鳥居（リアル構造） -->
         <a-entity id="torii-group" position="0 0 -60" scale="1.5 1.5 1.5">
-            <!-- 笠木・島木（最上部の反りのある構造） -->
-            <a-box id="kasagi" width="48" height="2.2" depth="3.5" position="0 36 0" 
-                   material="src:#wood-tex; color:#b40000; roughness:0.8"></a-box>
-            <a-box id="roof" width="50" height="0.8" depth="4.2" position="0 37.2 0" 
+            
+            <!-- 共通の朱色設定：#e60012 (伝統的な鳥居の赤) -->
+            
+            <!-- 笠木・島木（最上部） -->
+            <a-box width="48" height="2.2" depth="3.5" position="0 36 0" 
+                   material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#440000"></a-box>
+            <a-box width="50" height="0.8" depth="4.2" position="0 37.2 0" 
                    material="color:#111; roughness:0.3; metalness:0.5"></a-box>
             
             <!-- 貫（二番目の横棒） -->
-            <a-box id="nuki" width="38" height="1.8" depth="2.8" position="0 26 0" 
-                   material="src:#wood-tex; color:#b40000; roughness:0.8"></a-box>
+            <a-box width="38" height="1.8" depth="2.8" position="0 26 0" 
+                   material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#440000"></a-box>
             
-            <!-- 額束（中央の看板部分） -->
-            <a-box id="gakuzuka" width="4" height="7.5" depth="2" position="0 31.5 0.2" 
-                   material="src:#wood-tex; color:#b40000;"></a-box>
+            <!-- 額束 -->
+            <a-box width="4" height="7.5" depth="2" position="0 31.5 0.2" 
+                   material="src:#wood-tex; color:#ff2200;"></a-box>
 
-            <!-- 柱（左：わずかに傾斜、石台座付き） -->
-            <a-entity id="pillar-left" position="-14 0 0" rotation="0 0 -2">
+            <!-- 柱（左：わずかに内側に傾斜） -->
+            <a-entity position="-14 0 0" rotation="0 0 -2">
                 <a-cylinder radius="1.8" height="36" position="0 18 0" 
-                            material="src:#wood-tex; color:#b40000; roughness:0.8"></a-cylinder>
-                <a-sphere radius="2.5" scale="1 0.6 1" position="0 0 0" 
-                          material="src:#stone-tex; color:#888;"></a-sphere>
+                            material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#330000"></a-cylinder>
+                <!-- 亀腹（石の台座） -->
+                <a-sphere radius="2.5" scale="1 0.6 1" position="0 0 0" color="#888"></a-sphere>
             </a-entity>
 
-            <!-- 柱（右：わずかに傾斜、石台座付き） -->
-            <a-entity id="pillar-right" position="14 0 0" rotation="0 0 2">
+            <!-- 柱（右：わずかに内側に傾斜） -->
+            <a-entity position="14 0 0" rotation="0 0 2">
                 <a-cylinder radius="1.8" height="36" position="0 18 0" 
-                            material="src:#wood-tex; color:#b40000; roughness:0.8"></a-cylinder>
-                <a-sphere radius="2.5" scale="1 0.6 1" position="0 0 0" 
-                          material="src:#stone-tex; color:#888;"></a-sphere>
+                            material="src:#wood-tex; color:#ff2200; roughness:0.7; emissive:#330000"></a-cylinder>
+                <a-sphere radius="2.5" scale="1 0.6 1" position="0 0 0" color="#888"></a-sphere>
             </a-entity>
         </a-entity>
 
-        <!-- 4. 黄色い灯籠流し -->
+        <!-- 4. 黄色い灯籠（水面を照らす） -->
         <a-entity id="lantern-field"></a-entity>
 
         <!-- 5. プレイヤーリグ -->
         <a-entity id="rig" position="0 0 0" networked="template:#avatar-template;attachTemplateToLocal:false;">
             <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
-                <a-ring color="#ffcc00" radius-inner="0.01" radius-outer="0.015" position="0 0 -1" opacity="0.5"></a-ring>
+                <a-ring color="#ffcc00" radius-inner="0.01" radius-outer="0.015" position="0 0 -1" opacity="0.6"></a-ring>
             </a-camera>
         </a-entity>
 
+        <!-- 光源設定：鳥居の赤を引き立てる -->
         <a-light type="ambient" color="#ffccaa" intensity="0.5"></a-light>
-        <a-light type="directional" position="-1 5 1" intensity="0.8" color="#ff8c7a"></a-light>
+        <a-light type="directional" position="-1 5 1" intensity="0.9" color="#ffffff"></a-light>
     </a-scene>
 
     <script>
-        // カスタム空シェーダー
+        // グラデーション空シェーダー
         AFRAME.registerShader('gradient', {
           schema: { topColor: {type: 'color', default: 'black'}, bottomColor: {type: 'color', default: 'white'} },
           vertexShader: `varying vec3 vWorldPosition; void main() { vec4 worldPosition = modelMatrix * vec4(position, 1.0); vWorldPosition = worldPosition.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -131,11 +125,9 @@
             l.setAttribute('position', `${x} 0.2 ${z}`);
             l.innerHTML = `
                 <a-box width="0.8" height="1.1" depth="0.8" color="#ffcc00" material="emissive:#ffcc00; emissiveIntensity:1.5">
-                    <a-light type="point" color="#ffcc00" intensity="0.4" distance="4"></a-light>
+                    <a-light type="point" color="#ffcc00" intensity="0.5" distance="5"></a-light>
                 </a-box>
-                <a-box width="1.2" height="0.1" depth="1.2" color="#221100" position="0 -0.5 0"></a-box>
             `;
-            l.setAttribute('animation', `property:position; to:${x} 0.5 ${z}; dur:3000; dir:alternate; loop:true; easing:easeInOutSine`);
             field.appendChild(l);
         }
 
@@ -155,22 +147,12 @@
             const delta = new THREE.Vector3().subVectors(currentPos, lastPos);
 
             if (delta.length() > 0.001) {
-                let canMove = true;
-                const otherAvatars = document.querySelectorAll('.avatar');
                 const myPos = rig.getAttribute('position');
-
-                otherAvatars.forEach(av => {
-                    const avPos = av.getAttribute('position');
-                    if (avPos && myPos.distanceTo(avPos) < 1.5) canMove = false;
+                rig.setAttribute('position', {
+                    x: myPos.x + (delta.x * (AMPLIFIER - 1)),
+                    y: 0,
+                    z: myPos.z + (delta.z * (AMPLIFIER - 1))
                 });
-
-                if (canMove) {
-                    rig.setAttribute('position', {
-                        x: myPos.x + (delta.x * (AMPLIFIER - 1)),
-                        y: 0,
-                        z: myPos.z + (delta.z * (AMPLIFIER - 1))
-                    });
-                }
             }
             lastPos.copy(currentPos);
             requestAnimationFrame(loop);
