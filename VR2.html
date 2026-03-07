@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - PS Controller Sync</title>
+    <title>TSUKUYOMI - Bluetooth Gamepad Sync</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-reflector-component/dist/aframe-reflector-component.min.js"></script>
@@ -18,7 +18,7 @@
 
     <div id="ui">
         <h1 style="font-size: 2.5rem; color: #fff9c4;">月詠 - TSUKUYOMI</h1>
-        <p>【PSコントローラー対応】<br>スティックで移動・旋回が可能です</p>
+        <p>【Bluetoothコントローラー対応】<br>PSコントローラーを接続し、ボタンを押してください</p>
         <button class="start-btn" onclick="startExperience()">同期開始</button>
     </div>
 
@@ -77,20 +77,21 @@
         const ROTATION_SPEED = 2.0; // 旋回速度
         const BRIDGE_WIDTH_LIMIT = 2.2; // 橋の幅制限
 
-        let isVR = false;
+        let gamepadInterval; // Gamepadポーリング用インターバル
 
         function startExperience() {
             const scene = document.querySelector('a-scene');
             scene.enterVR();
             document.getElementById('ui').style.display = 'none';
-            isVR = true;
-            loop();
+            
+            // Gamepadのポーリングを開始
+            gamepadInterval = setInterval(updateGamepad, 1000 / 60); // 60fpsで更新
         }
 
-        // --- コントローラー操作ロジック ---
         function updateGamepad() {
             const gamepads = navigator.getGamepads();
-            const gp = gamepads[0] || gamepads[1] || gamepads[2] || gamepads[3];
+            // 接続されている最初のゲームパッドを取得 (通常0番)
+            const gp = gamepads[0] || gamepads[1] || gamepads[2] || gamepads[3]; 
 
             if (gp) {
                 gamepadStatus.innerText = "GAMEPAD: CONNECTED (" + gp.id.split(' ')[0] + ")";
@@ -138,12 +139,7 @@
             }
         }
 
-        function loop() {
-            updateGamepad();
-            requestAnimationFrame(loop);
-        }
-
-        // --- 景観生成 ---
+        // --- 景観生成（変更なし） ---
         (function setup() {
             const neb = document.getElementById('nebula');
             const rai = document.getElementById('railings');
@@ -173,9 +169,20 @@
             }
         })();
 
-        // ゲームパッド接続イベント
+        // Gamepad接続イベントリスナー（これはブラウザが自動的に発行する）
         window.addEventListener("gamepadconnected", (e) => {
-            console.log("Gamepad connected:", e.gamepad.id);
+            console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.",
+              e.gamepad.index, e.gamepad.id, e.gamepad.buttons.length, e.gamepad.axes.length);
+            gamepadStatus.innerText = "GAMEPAD: CONNECTED (" + e.gamepad.id.split(' ')[0] + ")";
+            gamepadStatus.style.color = "#0f0";
+        });
+
+        // Gamepad切断イベントリスナー
+        window.addEventListener("gamepaddisconnected", (e) => {
+            console.log("Gamepad disconnected from index %d: %s",
+              e.gamepad.index, e.gamepad.id);
+            gamepadStatus.innerText = "GAMEPAD: DISCONNECTED";
+            gamepadStatus.style.color = "#0ff";
         });
     </script>
 </body>
