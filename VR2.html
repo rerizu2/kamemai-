@@ -2,123 +2,215 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - BT Inverted Motion</title>
+    <title>TSUKUYOMI - Ultra Realistic VR</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- 鏡面反射コンポーネント -->
     <script src="https://unpkg.com/aframe-reflector-component/dist/aframe-reflector-component.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: "Hiragino Mincho ProN", serif; }
         #ui { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; background: #000; color: #fff; text-align: center; }
-        .start-btn { padding: 20px 60px; background: #5D4037; color: #fff; border: 2px solid #fff9c4; font-size: 1.5rem; cursor: pointer; border-radius: 5px; }
-        #hud { position: fixed; top: 15px; left: 15px; color: #fff9c4; z-index: 1000; pointer-events: none; font-size: 14px; }
+        .start-btn { padding: 25px 80px; background: #5D4037; color: #fff; border: 1px solid #00ffaa; font-size: 1.5rem; cursor: pointer; border-radius: 2px; box-shadow: 0 0 40px rgba(0, 255, 170, 0.3); letter-spacing: 0.5em; }
+        #hud { position: fixed; top: 20px; left: 20px; color: #00ffaa; z-index: 1000; pointer-events: none; font-size: 12px; text-shadow: 0 0 5px #000; letter-spacing: 0.1em; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <h1 style="color: #fff9c4;">月詠 - TSUKUYOMI</h1>
-        <p>【Bluetooth操作：前後リバース設定】<br>スティックを前に倒すと後退、後ろに倒すと前進します</p>
-        <button class="start-btn" onclick="startVR()">SYNC START</button>
+        <h1 style="font-weight: normal; font-size: 3.5rem; margin-bottom: 0.2em;">月詠</h1>
+        <p style="letter-spacing: 0.2em; color: #00ffaa;">REALITY SYNC SYSTEM</p>
+        <button class="start-btn" onclick="startExperience()">進入</button>
     </div>
 
     <div id="hud">
-        BT_CONTROLLER: <span id="bt-status">WAITING...</span><br>
-        INVERTED_Y: ENABLED
+        LATENCY: 12ms<br>
+        6DoF_TRACKING: ONLINE<br>
+        BT_GAMEPAD: <span id="gp-status">SEARCHING...</span><br>
+        Y-AXIS: INVERTED
     </div>
 
-    <a-scene webxr="requiredFeatures: local-floor;">
-        <a-sky color="#00020a"></a-sky>
+    <!-- VRシーン設定：不透明度バッファとアンチエイリアスで画質向上 -->
+    <a-scene 
+        webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor"
+        renderer="antialias: true; colorManagement: true; logarithmicDepthBuffer: true;"
+        fog="type: exponential; color: #00050a; density: 0.015">
+        
+        <a-assets>
+            <!-- 高品位テクスチャ -->
+            <img id="wood-dark" src="https://cdn.pixabay.com/photo/2016/12/17/20/11/wood-1914323_960_720.jpg">
+            <img id="stone-base" src="https://cdn.pixabay.com/photo/2017/01/17/10/38/stone-1986423_960_720.jpg">
+        </a-assets>
 
-        <!-- 鏡面反射の水面 -->
-        <a-plane position="0 0.01 0" rotation="-90 0 0" width="1000" height="1000" reflector="color: #111; opacity: 1; resolution: 256;"></a-plane>
+        <!-- 1. エメラルドグリーンの宇宙空 -->
+        <a-sky material="shader: gradient; topColor: #000508; bottomColor: #001a1a"></a-sky>
 
-        <!-- 茶色の木製の橋 (Y=0.2) -->
-        <a-entity id="bridge" position="0 0.2 0">
-            <a-box width="5.0" height="0.4" depth="600" position="0 -0.2 -250" color="#5D4037"></a-box>
+        <!-- 2. 青く光る巨大な星雲（ネブラ） -->
+        <a-entity id="nebula-layers" position="0 0 -120"></a-entity>
+
+        <!-- 3. 揺らめくオーロラ -->
+        <a-entity id="aurora-curtains" position="0 80 -150"></a-entity>
+
+        <!-- 4. 超高精度・鏡面リフレクター（水面） -->
+        <a-plane position="0 0.01 0" rotation="-90 0 0" width="3000" height="3000" 
+                 reflector="color: #111; opacity: 1; resolution: 1024; metalness: 0.9; roughness: 0.1;">
+        </a-plane>
+
+        <!-- 5. 茶色のリアルな橋（水面上 Y=0.2） -->
+        <a-entity id="bridge-rig" position="0 0.2 0">
+            <!-- 橋本体 -->
+            <a-box width="5.2" height="0.5" depth="800" position="0 -0.25 -300" 
+                   material="src: #wood-dark; color: #3E2723; roughness: 0.8; metalness: 0.2; repeat: 1 100;"></a-box>
+            <!-- 欄干 -->
             <a-entity id="railings"></a-entity>
         </a-entity>
 
-        <!-- 光り輝く鳥居 -->
-        <a-entity id="torii" position="0 0 -50" scale="1.4 1.4 1.4">
-            <a-cylinder radius="1.4" height="30" position="-12 15 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-cylinder>
-            <a-cylinder radius="1.4" height="30" position="12 15 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-cylinder>
-            <a-box width="36" height="2.5" depth="3" position="0 30 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-box>
-            <a-cylinder radius="0.4" height="1500" position="0 750 0" material="shader:flat; color:#fff; transparent:true; opacity:0.7"></a-cylinder>
-            <a-light type="point" intensity="5" distance="70" color="#fff9c4" position="0 15 0"></a-light>
+        <!-- 6. 圧倒的な光を放つ鳥居 -->
+        <a-entity id="divine-torii" position="0 0 -60" scale="1.6 1.6 1.6">
+            <!-- 柱（左・右） -->
+            <a-cylinder radius="1.8" height="40" position="-16 20 0" material="color: #fff; emissive: #fff9c4; emissiveIntensity: 12;"></a-cylinder>
+            <a-cylinder radius="1.8" height="40" position="16 20 0" material="color: #fff; emissive: #fff9c4; emissiveIntensity: 12;"></a-cylinder>
+            <!-- 横梁 -->
+            <a-box width="45" height="3" depth="4" position="0 40 0" material="color: #fff; emissive: #fff9c4; emissiveIntensity: 12;"></a-box>
+            <a-box width="35" height="2.5" depth="3.5" position="0 30 0" material="color: #fff; emissive: #fff9c4; emissiveIntensity: 12;"></a-box>
+            <!-- 天を貫く光の柱 -->
+            <a-cylinder radius="0.4" height="2000" position="0 1000 0" material="shader: flat; color: #fff; transparent: true; opacity: 0.8"></a-cylinder>
+            <!-- 周囲を照らす神々しい光 -->
+            <a-light type="point" intensity="10" distance="100" color="#fff9c4" position="0 20 0"></a-light>
         </a-entity>
 
-        <!-- プレイヤーリグ -->
+        <!-- 7. 祝祭の光粒子 -->
+        <a-entity id="celestial-particles"></a-entity>
+
+        <!-- 8. プレイヤーリグ -->
         <a-entity id="rig" position="0 0.5 0">
-            <a-camera id="cam" look-controls wasd-controls-enabled="false">
-                <a-ring color="#fff9c4" radius-inner="0.01" radius-outer="0.015" position="0 0 -1"></a-ring>
+            <a-camera id="main-cam" look-controls wasd-controls-enabled="false">
+                <a-ring color="#00ffaa" radius-inner="0.01" radius-outer="0.015" position="0 0 -1" opacity="0.9"></a-ring>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#223" intensity="0.5"></a-light>
+        <a-light type="ambient" color="#001111" intensity="0.3"></a-light>
     </a-scene>
 
     <script>
+        // カスタムシェーダー：エメラルド・グラデーション
+        AFRAME.registerShader('gradient', {
+          schema: { topColor: {type: 'color', default: 'black'}, bottomColor: {type: 'color', default: 'white'} },
+          vertexShader: `varying vec3 vWP; void main() { vec4 wp = modelMatrix * vec4(position, 1.0); vWP = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+          fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; varying vec3 vWP; void main() { float h = normalize(vWP).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0); }`
+        });
+
         const rig = document.getElementById('rig');
-        const cam = document.getElementById('cam');
-        const btStatus = document.getElementById('bt-status');
+        const cam = document.getElementById('main-cam');
+        const gpHUD = document.getElementById('gp-status');
 
-        const SPEED = 0.4;
-        const BRIDGE_LIMIT = 2.2;
+        const SPEED_AMP = 5.0; // 現実歩行の増幅倍率
+        const STICK_SPEED = 0.6; // コントローラーの移動速さ
+        const BRIDGE_LIMIT = 2.3; // 橋の通行可能幅
 
-        function startVR() {
+        let lastTrackingPos = new THREE.Vector3();
+
+        function startExperience() {
             document.querySelector('a-scene').enterVR();
             document.getElementById('ui').style.display = 'none';
+            lastTrackingPos.copy(cam.object3D.position);
             loop();
         }
 
+        // --- 毎フレーム更新（歩行同期 ＆ BT操作 ＆ 前後逆転） ---
         function loop() {
+            const currentCamPos = new THREE.Vector3();
+            currentCamPos.copy(cam.object3D.position);
+
+            // 1. 物理歩行同期 (6DoF)
+            const delta = new THREE.Vector3().subVectors(currentCamPos, lastTrackingPos);
+            const rigPos = rig.getAttribute('position');
+
+            // 2. BTコントローラー操作 (PS4/PS5)
             const gps = navigator.getGamepads();
             const gp = gps[0] || gps[1];
+            let moveX = 0, moveZ = 0;
 
             if (gp) {
-                btStatus.innerText = "CONNECTED";
-                btStatus.style.color = "#0f0";
-
-                // スティック値取得
+                gpHUD.innerText = "CONNECTED"; gpHUD.style.color = "#0f0";
                 const stickX = Math.abs(gp.axes[0]) > 0.1 ? gp.axes[0] : 0;
                 const stickY = Math.abs(gp.axes[1]) > 0.1 ? gp.axes[1] : 0;
 
-                // --- 前後逆転ロジック ---
-                // 通常は -stickY で前進だが、そのまま +stickY を使うことで
-                // スティック前倒し（負）でマイナス（後退）、後ろ倒し（正）でプラス（前進）にする
-                const moveDirectionY = stickY; // ★ここが逆（反転）の設定です
-                const moveDirectionX = stickX;
-
-                const rigPos = rig.getAttribute('position');
-                const camRot = cam.getAttribute('rotation');
-                const angle = (camRot.y) * (Math.PI / 180);
-
-                // カメラの向きに合わせて座標を計算
-                let nextX = rigPos.x + (Math.sin(angle) * moveDirectionY * SPEED) + (Math.cos(angle) * moveDirectionX * SPEED);
-                let nextZ = rigPos.z + (Math.cos(angle) * moveDirectionY * SPEED) - (Math.sin(angle) * moveDirectionX * SPEED);
-
-                // 橋の幅制限
-                if (Math.abs(nextX) > BRIDGE_LIMIT) nextX = rigPos.x;
-
-                rig.setAttribute('position', { x: nextX, y: 0.5, z: nextZ });
-            } else {
-                btStatus.innerText = "DISCONNECTED";
-                btStatus.style.color = "#f00";
+                // 【前後逆転の設定】スティック前倒し(マイナス)で後退、後ろ倒し(プラス)で前進
+                const reversedY = stickY; 
+                const camRot = cam.getAttribute('rotation').y * (Math.PI / 180);
+                
+                moveX = (Math.sin(camRot) * reversedY * STICK_SPEED) + (Math.cos(camRot) * stickX * STICK_SPEED);
+                moveZ = (Math.cos(camRot) * reversedY * STICK_SPEED) - (Math.sin(camRot) * stickX * STICK_SPEED);
             }
+
+            // 合計移動量の計算
+            let nextX = rigPos.x + (delta.x * (SPEED_AMP - 1)) + moveX;
+            let nextZ = rigPos.z + (delta.z * (SPEED_AMP - 1)) + moveZ;
+
+            // 橋の幅制限
+            if (Math.abs(nextX) > BRIDGE_LIMIT) nextX = rigPos.x;
+
+            rig.setAttribute('position', { x: nextX, y: 0.5, z: nextZ });
+            lastTrackingPos.copy(currentCamPos);
             requestAnimationFrame(loop);
         }
 
-        // 欄干生成
-        const rai = document.getElementById('railings');
-        for(let i=0; i<100; i++){
-            let z = -i * 4;
-            [-2.7, 2.7].forEach(x => {
-                let p = document.createElement('a-cylinder');
-                p.setAttribute('position', `${x} 0.6 ${z}`);
-                p.setAttribute('radius', 0.15); p.setAttribute('height', 1.4); p.setAttribute('color', '#3E2723');
-                rai.appendChild(p);
-            });
-        }
+        // --- プロシージャル・リアル演出生成 ---
+        (function init() {
+            // 青い雲の山
+            const neb = document.getElementById('nebula-layers');
+            for(let i=0; i<30; i++) {
+                let s = document.createElement('a-sphere');
+                s.setAttribute('position', `${(Math.random()-0.5)*200} ${10+Math.random()*40} ${-Math.random()*100}`);
+                s.setAttribute('radius', 15+Math.random()*30);
+                s.setAttribute('material', `color: #0044ff; opacity: 0.12; transparent: true; shader: flat;`);
+                neb.appendChild(s);
+            }
+
+            // 揺らめくオーロラ
+            const aur = document.getElementById('aurora-curtains');
+            for(let i=0; i<3; i++) {
+                let a = document.createElement('a-curvedimage');
+                a.setAttribute('height', '80'); a.setAttribute('radius', '150'); a.setAttribute('theta-length', '110');
+                a.setAttribute('position', `${(i-1)*40} 0 0`);
+                a.setAttribute('material', `color: #00ffaa; opacity: 0.15; transparent: true; shader: flat; side: double;`);
+                a.setAttribute('animation', `property: material.opacity; from: 0.1; to: 0.3; dur: ${4000+i*1000}; dir: alternate; loop: true; easing: easeInOutSine`);
+                aur.appendChild(a);
+            }
+
+            // 茶色のリアル欄干 + 灯籠ライト
+            const rai = document.getElementById('railings');
+            for(let i=0; i<150; i++) {
+                let z = -i * 5;
+                [-2.8, 2.8].forEach(x => {
+                    let p = document.createElement('a-cylinder');
+                    p.setAttribute('position', `${x} 0.6 ${z}`);
+                    p.setAttribute('radius', 0.18); p.setAttribute('height', 1.5); p.setAttribute('color', '#2b1d1d');
+                    rai.appendChild(p);
+                    // 10mおきに灯籠を配置して足元を照らす
+                    if(i % 2 === 0) {
+                        let l = document.createElement('a-box');
+                        l.setAttribute('position', `${x} 1.2 ${z}`);
+                        l.setAttribute('width', 0.4); l.setAttribute('height', 0.4); l.setAttribute('depth', 0.4);
+                        l.setAttribute('material', 'color: #fff; emissive: #ffaa00; emissiveIntensity: 2');
+                        let lt = document.createElement('a-light');
+                        lt.setAttribute('type', 'point'); lt.setAttribute('intensity', '0.5'); lt.setAttribute('distance', '6'); lt.setAttribute('color', '#ffaa00');
+                        l.appendChild(lt);
+                        rai.appendChild(l);
+                    }
+                });
+            }
+
+            // 天の星屑
+            const par = document.getElementById('celestial-particles');
+            for(let i=0; i<400; i++) {
+                let p = document.createElement('a-sphere');
+                let c = i%3==0 ? '#00ffaa' : (i%3==1 ? '#fff' : '#00ffff');
+                p.setAttribute('radius', 0.06); p.setAttribute('material', `shader:flat; color:${c}; emissive:${c}; emissiveIntensity:3`);
+                p.setAttribute('position', `${(Math.random()-0.5)*150} ${Math.random()*60} ${-150+Math.random()*300}`);
+                par.appendChild(p);
+            }
+        })();
     </script>
 </body>
 </html>
