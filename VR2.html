@@ -2,188 +2,123 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>TSUKUYOMI - Bluetooth Gamepad Sync</title>
+    <title>TSUKUYOMI - BT Inverted Motion</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-reflector-component/dist/aframe-reflector-component.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: "Hiragino Mincho ProN", serif; }
-        #ui { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; background: radial-gradient(circle, #001, #000); color: #fff; text-align: center; }
-        .start-btn { padding: 20px 60px; background: #5D4037; color: #fff; border: 2px solid #fff9c4; font-size: 1.5rem; cursor: pointer; border-radius: 5px; box-shadow: 0 0 30px #fff9c4; }
-        #hud { position: fixed; top: 15px; left: 15px; color: #fff9c4; z-index: 1000; pointer-events: none; text-shadow: 2px 2px 4px #000; font-size: 14px; }
-        .controller-status { color: #0ff; font-weight: bold; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: serif; }
+        #ui { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; background: #000; color: #fff; text-align: center; }
+        .start-btn { padding: 20px 60px; background: #5D4037; color: #fff; border: 2px solid #fff9c4; font-size: 1.5rem; cursor: pointer; border-radius: 5px; }
+        #hud { position: fixed; top: 15px; left: 15px; color: #fff9c4; z-index: 1000; pointer-events: none; font-size: 14px; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <h1 style="font-size: 2.5rem; color: #fff9c4;">月詠 - TSUKUYOMI</h1>
-        <p>【Bluetoothコントローラー対応】<br>PSコントローラーを接続し、ボタンを押してください</p>
-        <button class="start-btn" onclick="startExperience()">同期開始</button>
+        <h1 style="color: #fff9c4;">月詠 - TSUKUYOMI</h1>
+        <p>【Bluetooth操作：前後リバース設定】<br>スティックを前に倒すと後退、後ろに倒すと前進します</p>
+        <button class="start-btn" onclick="startVR()">SYNC START</button>
     </div>
 
     <div id="hud">
-        STATUS: LINKED<br>
-        <span id="gamepad-status" class="controller-status">GAMEPAD: DISCONNECTED</span><br>
-        BRIDGE LIMIT: ACTIVE
+        BT_CONTROLLER: <span id="bt-status">WAITING...</span><br>
+        INVERTED_Y: ENABLED
     </div>
 
-    <a-scene webxr="requiredFeatures: local-floor; referenceSpaceType: local-floor">
-        <a-assets>
-            <img id="bridge-tex" src="https://cdn.pixabay.com/photo/2016/12/17/20/11/wood-1914323_960_720.jpg">
-        </a-assets>
-
-        <!-- 背景：夜空と青い星雲 -->
+    <a-scene webxr="requiredFeatures: local-floor;">
         <a-sky color="#00020a"></a-sky>
-        <a-entity id="nebula"></a-entity>
 
         <!-- 鏡面反射の水面 -->
         <a-plane position="0 0.01 0" rotation="-90 0 0" width="1000" height="1000" reflector="color: #111; opacity: 1; resolution: 256;"></a-plane>
 
-        <!-- 茶色の橋 -->
-        <a-entity id="bridge-rig" position="0 0.2 0">
-            <a-box width="5.0" height="0.4" depth="600" position="0 -0.2 -250" color="#5D4037" material="src: #bridge-tex; roughness: 1;"></a-box>
+        <!-- 茶色の木製の橋 (Y=0.2) -->
+        <a-entity id="bridge" position="0 0.2 0">
+            <a-box width="5.0" height="0.4" depth="600" position="0 -0.2 -250" color="#5D4037"></a-box>
             <a-entity id="railings"></a-entity>
         </a-entity>
 
-        <!-- 光輝く巨大鳥居 -->
-        <a-entity id="torii" position="0 0 -50" scale="1.5 1.5 1.5">
+        <!-- 光り輝く鳥居 -->
+        <a-entity id="torii" position="0 0 -50" scale="1.4 1.4 1.4">
             <a-cylinder radius="1.4" height="30" position="-12 15 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-cylinder>
             <a-cylinder radius="1.4" height="30" position="12 15 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-cylinder>
-            <a-box width="38" height="3" depth="3.5" position="0 30 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-box>
-            <a-cylinder radius="0.6" height="1500" position="0 750 0" material="shader:flat; color:#fff; transparent:true; opacity:0.6"></a-cylinder>
-            <a-light type="point" intensity="6" distance="80" color="#fff9c4" position="0 15 0"></a-light>
+            <a-box width="36" height="2.5" depth="3" position="0 30 0" material="color:#fff; emissive:#fff9c4; emissiveIntensity:10"></a-box>
+            <a-cylinder radius="0.4" height="1500" position="0 750 0" material="shader:flat; color:#fff; transparent:true; opacity:0.7"></a-cylinder>
+            <a-light type="point" intensity="5" distance="70" color="#fff9c4" position="0 15 0"></a-light>
         </a-entity>
 
-        <!-- パーティクル -->
-        <a-entity id="particles"></a-entity>
-
         <!-- プレイヤーリグ -->
-        <a-entity id="rig" position="0 0.5 0" rotation="0 0 0">
-            <a-camera id="camera" look-controls wasd-controls-enabled="false">
-                <a-ring color="#fff9c4" radius-inner="0.01" radius-outer="0.015" position="0 0 -1" opacity="0.8"></a-ring>
+        <a-entity id="rig" position="0 0.5 0">
+            <a-camera id="cam" look-controls wasd-controls-enabled="false">
+                <a-ring color="#fff9c4" radius-inner="0.01" radius-outer="0.015" position="0 0 -1"></a-ring>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#112" intensity="0.5"></a-light>
+        <a-light type="ambient" color="#223" intensity="0.5"></a-light>
     </a-scene>
 
     <script>
         const rig = document.getElementById('rig');
-        const camera = document.getElementById('camera');
-        const gamepadStatus = document.getElementById('gamepad-status');
+        const cam = document.getElementById('cam');
+        const btStatus = document.getElementById('bt-status');
 
-        const SPEED = 0.5; // 移動速度
-        const ROTATION_SPEED = 2.0; // 旋回速度
-        const BRIDGE_WIDTH_LIMIT = 2.2; // 橋の幅制限
+        const SPEED = 0.4;
+        const BRIDGE_LIMIT = 2.2;
 
-        let gamepadInterval; // Gamepadポーリング用インターバル
-
-        function startExperience() {
-            const scene = document.querySelector('a-scene');
-            scene.enterVR();
+        function startVR() {
+            document.querySelector('a-scene').enterVR();
             document.getElementById('ui').style.display = 'none';
-            
-            // Gamepadのポーリングを開始
-            gamepadInterval = setInterval(updateGamepad, 1000 / 60); // 60fpsで更新
+            loop();
         }
 
-        function updateGamepad() {
-            const gamepads = navigator.getGamepads();
-            // 接続されている最初のゲームパッドを取得 (通常0番)
-            const gp = gamepads[0] || gamepads[1] || gamepads[2] || gamepads[3]; 
+        function loop() {
+            const gps = navigator.getGamepads();
+            const gp = gps[0] || gps[1];
 
             if (gp) {
-                gamepadStatus.innerText = "GAMEPAD: CONNECTED (" + gp.id.split(' ')[0] + ")";
-                gamepadStatus.style.color = "#0f0";
+                btStatus.innerText = "CONNECTED";
+                btStatus.style.color = "#0f0";
 
-                // スティック入力取得 (デッドゾーン 0.1)
-                const axes = gp.axes;
-                const leftStickX = Math.abs(axes[0]) > 0.1 ? axes[0] : 0;
-                const leftStickY = Math.abs(axes[1]) > 0.1 ? axes[1] : 0;
-                const rightStickX = Math.abs(axes[2]) > 0.1 ? axes[2] : 0; // PS4/PS5の右スティック
+                // スティック値取得
+                const stickX = Math.abs(gp.axes[0]) > 0.1 ? gp.axes[0] : 0;
+                const stickY = Math.abs(gp.axes[1]) > 0.1 ? gp.axes[1] : 0;
 
-                // 1. 右スティックで旋回 (Y軸回転)
-                if (rightStickX !== 0) {
-                    const currentRot = rig.getAttribute('rotation');
-                    rig.setAttribute('rotation', {
-                        x: currentRot.x,
-                        y: currentRot.y - rightStickX * ROTATION_SPEED,
-                        z: currentRot.z
-                    });
-                }
+                // --- 前後逆転ロジック ---
+                // 通常は -stickY で前進だが、そのまま +stickY を使うことで
+                // スティック前倒し（負）でマイナス（後退）、後ろ倒し（正）でプラス（前進）にする
+                const moveDirectionY = stickY; // ★ここが逆（反転）の設定です
+                const moveDirectionX = stickX;
 
-                // 2. 左スティックで移動 (カメラの向き基準)
-                if (leftStickX !== 0 || leftStickY !== 0) {
-                    const rigPos = rig.getAttribute('position');
-                    const rigRot = rig.getAttribute('rotation');
-                    const camRot = camera.getAttribute('rotation');
-                    
-                    // 合計の向きを計算
-                    const angle = (rigRot.y + camRot.y) * (Math.PI / 180);
+                const rigPos = rig.getAttribute('position');
+                const camRot = cam.getAttribute('rotation');
+                const angle = (camRot.y) * (Math.PI / 180);
 
-                    // 前後移動
-                    let nextX = rigPos.x + (Math.sin(angle) * -leftStickY * SPEED) + (Math.cos(angle) * leftStickX * SPEED);
-                    let nextZ = rigPos.z + (Math.cos(angle) * -leftStickY * SPEED) - (Math.sin(angle) * leftStickX * SPEED);
+                // カメラの向きに合わせて座標を計算
+                let nextX = rigPos.x + (Math.sin(angle) * moveDirectionY * SPEED) + (Math.cos(angle) * moveDirectionX * SPEED);
+                let nextZ = rigPos.z + (Math.cos(angle) * moveDirectionY * SPEED) - (Math.sin(angle) * moveDirectionX * SPEED);
 
-                    // ★橋の幅制限
-                    if (Math.abs(nextX) > BRIDGE_WIDTH_LIMIT) {
-                        nextX = rigPos.x; // 橋から出ようとしたらX移動を無効化
-                    }
+                // 橋の幅制限
+                if (Math.abs(nextX) > BRIDGE_LIMIT) nextX = rigPos.x;
 
-                    rig.setAttribute('position', { x: nextX, y: 0.5, z: nextZ });
-                }
+                rig.setAttribute('position', { x: nextX, y: 0.5, z: nextZ });
             } else {
-                gamepadStatus.innerText = "GAMEPAD: DISCONNECTED";
-                gamepadStatus.style.color = "#0ff";
+                btStatus.innerText = "DISCONNECTED";
+                btStatus.style.color = "#f00";
             }
+            requestAnimationFrame(loop);
         }
 
-        // --- 景観生成（変更なし） ---
-        (function setup() {
-            const neb = document.getElementById('nebula');
-            const rai = document.getElementById('railings');
-            const par = document.getElementById('particles');
-            for(let i=0; i<40; i++){
-                let s = document.createElement('a-sphere');
-                s.setAttribute('position', `${(Math.random()-0.5)*200} ${20+Math.random()*50} ${-50-Math.random()*200}`);
-                s.setAttribute('radius', 10+Math.random()*20);
-                s.setAttribute('material', `color:#0044ff; opacity:0.1; transparent:true; shader:flat`);
-                neb.appendChild(s);
-            }
-            for(let i=0; i<150; i++){
-                let z = -i * 4;
-                [-2.7, 2.7].forEach(x => {
-                    let p = document.createElement('a-cylinder');
-                    p.setAttribute('position', `${x} 0.6 ${z}`);
-                    p.setAttribute('radius', 0.15); p.setAttribute('height', 1.4); p.setAttribute('color', '#3E2723');
-                    rai.appendChild(p);
-                });
-            }
-            for(let i=0; i<200; i++){
-                let p = document.createElement('a-sphere');
-                let c = ['#fff9c4', '#0ff', '#f0f'][i%3];
-                p.setAttribute('radius', 0.05); p.setAttribute('material', `color:${c}; emissive:${c}; emissiveIntensity:3; shader:flat`);
-                p.setAttribute('position', `${(Math.random()-0.5)*100} ${Math.random()*40} ${-100+Math.random()*300}`);
-                par.appendChild(p);
-            }
-        })();
-
-        // Gamepad接続イベントリスナー（これはブラウザが自動的に発行する）
-        window.addEventListener("gamepadconnected", (e) => {
-            console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.",
-              e.gamepad.index, e.gamepad.id, e.gamepad.buttons.length, e.gamepad.axes.length);
-            gamepadStatus.innerText = "GAMEPAD: CONNECTED (" + e.gamepad.id.split(' ')[0] + ")";
-            gamepadStatus.style.color = "#0f0";
-        });
-
-        // Gamepad切断イベントリスナー
-        window.addEventListener("gamepaddisconnected", (e) => {
-            console.log("Gamepad disconnected from index %d: %s",
-              e.gamepad.index, e.gamepad.id);
-            gamepadStatus.innerText = "GAMEPAD: DISCONNECTED";
-            gamepadStatus.style.color = "#0ff";
-        });
+        // 欄干生成
+        const rai = document.getElementById('railings');
+        for(let i=0; i<100; i++){
+            let z = -i * 4;
+            [-2.7, 2.7].forEach(x => {
+                let p = document.createElement('a-cylinder');
+                p.setAttribute('position', `${x} 0.6 ${z}`);
+                p.setAttribute('radius', 0.15); p.setAttribute('height', 1.4); p.setAttribute('color', '#3E2723');
+                rai.appendChild(p);
+            });
+        }
     </script>
 </body>
 </html>
