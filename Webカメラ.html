@@ -3,54 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>超低速・省エネカメラ共有 (0.1 FPS)</title>
+    <title>高速コマ撮り共有 (10 FPS)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 20px; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        #display-img, video { width: 100%; border-radius: 8px; background: #000; margin-top: 10px; min-height: 200px; }
+        body { font-family: sans-serif; text-align: center; background: #000; color: #fff; margin: 0; padding: 10px; }
+        .container { max-width: 500px; margin: auto; }
+        #display-img { width: 100%; height: auto; border-radius: 8px; background: #222; }
+        video { width: 100%; border-radius: 8px; margin-top: 10px; display: none; } /* 送信側プレビュー */
         .controls { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-        button { padding: 12px; border: none; border-radius: 8px; background: #007bff; color: white; font-weight: bold; cursor: pointer; }
+        button { padding: 15px; border: none; border-radius: 8px; background: #007bff; color: white; font-weight: bold; cursor: pointer; font-size: 1.1em; }
+        #qrcode { background: #fff; padding: 10px; border-radius: 8px; margin: 15px auto; display: inline-block; }
+        .status-bar { font-size: 0.8em; color: #aaa; margin: 10px 0; }
         .hidden { display: none; }
-        .status { font-size: 0.9em; color: #555; margin: 5px 0; }
-        /* 更新カウントダウンバー */
-        .progress-container { width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-top: 10px; overflow: hidden; }
-        #progress-bar { width: 0%; height: 100%; background: #28a745; transition: width 0.1s linear; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>超低速カメラ (10秒更新)</h2>
+    <h3>高速コマ撮り配信 (0.1s)</h3>
 
     <div id="mode-selection" class="controls">
-        <button onclick="startAsCamera()">📸 送信側（カメラ）として起動</button>
-        <button style="background:#6c757d;" onclick="startAsMonitor()">🖥️ 受信側（モニター）として起動</button>
+        <button onclick="startAsCamera()">📸 カメラとして送信開始</button>
+        <button style="background:#444;" onclick="startAsMonitor()">🖥️ 受信機として表示</button>
     </div>
 
     <!-- カメラ側UI -->
     <div id="camera-ui" class="hidden">
+        <div class="status-bar">ID: <span id="my-id-text">発行中...</span></div>
         <div id="qrcode"></div>
-        <p class="status">ID: <span id="my-id-text">発行中...</span></p>
-        <p class="status">10秒ごとに撮影して送信します</p>
-        <video id="temp-video" autoplay playsinline muted style="height:80px; width:auto; opacity:0.5;"></video>
+        <p>相手にQRを読み取らせてください</p>
+        <video id="temp-video" autoplay playsinline muted></video>
         <canvas id="capture-canvas" class="hidden"></canvas>
     </div>
 
     <!-- モニター側UI -->
     <div id="monitor-ui" class="hidden">
-        <p id="conn-status" class="status">接続待ち...</p>
-        <div class="progress-container"><div id="progress-bar"></div></div>
-        <p class="status" id="last-update">最終更新: なし</p>
-        <img id="display-img" src="" alt="画像がここに表示されます">
+        <div id="conn-status" class="status-bar">接続を待機中...</div>
+        <img id="display-img" src="" alt="映像待機中">
+        <p style="font-size:0.7em;">※ネットワークが遅いとラグが発生します</p>
     </div>
 </div>
 
 <script>
     let peer;
     let conn;
-    const INTERVAL_MS = 10000; // 10秒 (FPS 0.1相当)
+    const INTERVAL = 100; // 0.1秒 (100ms)
+    const IMG_WIDTH = 400; // 送信画像の横幅（小さいほど高速・低遅延）
+    const QUALITY = 0.3;   // JPEG品質 (0.1〜1.0)
 
     window.onload = () => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -61,46 +61,53 @@
         }
     };
 
-    // --- カメラ側の処理 ---
     async function startAsCamera() {
         showUI('camera-ui');
         const video = document.getElementById('temp-video');
+        video.style.display = "block"; // 送信側もプレビュー表示
         const canvas = document.getElementById('capture-canvas');
         const ctx = canvas.getContext('2d');
 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-        video.srcObject = stream;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", width: 640 }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+        } catch (e) { alert("カメラが起動できません。HTTPS環境か確認してください。"); }
 
         peer = new Peer();
         peer.on('open', (id) => {
             document.getElementById('my-id-text').innerText = id;
-            const joinUrl = `${window.location.origin}${window.location.pathname}?id=${id}`;
-            new QRCode(document.getElementById("qrcode"), { text: joinUrl, width: 160, height: 160 });
+            generateQR(id);
         });
 
         peer.on('connection', (connection) => {
             conn = connection;
-            alert("接続されました！10秒おきの送信を開始します。");
+            console.log("接続完了");
             
-            // 定期送信ループ
+            // 0.1秒ごとのループ
             setInterval(() => {
                 if (conn && conn.open) {
-                    canvas.width = video.videoWidth / 2;
-                    canvas.height = video.videoHeight / 2;
+                    // アスペクト比を維持してリサイズ
+                    const ratio = video.videoHeight / video.videoWidth;
+                    canvas.width = IMG_WIDTH;
+                    canvas.height = IMG_WIDTH * ratio;
+                    
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const imageData = canvas.toDataURL('image/jpeg', 0.4); // 品質を下げてさらに軽量化
-                    conn.send({ image: imageData, time: new Date().toLocaleTimeString() });
+                    
+                    // 圧縮して送信
+                    const imageData = canvas.toDataURL('image/jpeg', QUALITY);
+                    conn.send(imageData); 
                 }
-            }, INTERVAL_MS);
+            }, INTERVAL);
         });
     }
 
-    // --- モニター側の処理 ---
     function startAsMonitor() {
         showUI('monitor-ui');
         peer = new Peer();
         peer.on('connection', (connection) => setupReceiver(connection));
-        startProgressBar();
     }
 
     function connectToPeer(targetId) {
@@ -110,28 +117,19 @@
 
     function setupReceiver(connection) {
         connection.on('open', () => {
-            document.getElementById('conn-status').innerText = "接続中：データ受信をお待ちください";
+            document.getElementById('conn-status').innerText = "通信確立：映像受信中...";
         });
         connection.on('data', (data) => {
-            document.getElementById('display-img').src = data.image;
-            document.getElementById('last-update').innerText = "最終更新: " + data.time;
-            resetProgressBar();
+            document.getElementById('display-img').src = data;
+        });
+        connection.on('close', () => {
+            document.getElementById('conn-status').innerText = "切断されました。";
         });
     }
 
-    // 進捗バーのアニメーション
-    function startProgressBar() {
-        const bar = document.getElementById('progress-bar');
-        let width = 0;
-        setInterval(() => {
-            width += (100 / (INTERVAL_MS / 100)); 
-            if (width > 100) width = 100;
-            bar.style.width = width + '%';
-        }, 100);
-    }
-
-    function resetProgressBar() {
-        document.getElementById('progress-bar').style.width = '0%';
+    function generateQR(id) {
+        const joinUrl = `${window.location.origin}${window.location.pathname}?id=${id}`;
+        new QRCode(document.getElementById("qrcode"), { text: joinUrl, width: 160, height: 160 });
     }
 
     function showUI(id) {
