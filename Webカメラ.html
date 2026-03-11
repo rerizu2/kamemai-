@@ -3,43 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>グループ・マルチカメラ共有</title>
+    <title>QR連携・マルチカメラシステム</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; margin: 0; padding: 20px; }
+        body { font-family: sans-serif; background: #121212; color: white; margin: 0; padding: 15px; }
         .container { max-width: 900px; margin: auto; text-align: center; }
-        h1 { color: #00d1ff; font-size: 1.5rem; }
+        h1 { color: #00d1ff; font-size: 1.4rem; }
         
-        .setup-box { background: #222; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .card { background: #222; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 20px; }
         input { 
             width: 80%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444;
             background: #000; color: #fff; font-size: 18px; text-align: center;
         }
         
-        .btn { 
-            width: 85%; padding: 15px; margin: 8px 0; border: none; border-radius: 10px; 
-            font-size: 16px; font-weight: bold; cursor: pointer;
+        button { 
+            width: 90%; padding: 15px; margin: 8px 0; border: none; border-radius: 10px; 
+            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
         }
-        .btn-camera { background: #e91e63; color: white; }
         .btn-monitor { background: #007bff; color: white; }
+        .btn-camera { background: #e91e63; color: white; }
+        .btn-scan { background: #28a745; color: white; }
+        .btn-sub { background: #444; color: white; }
+        button:active { transform: scale(0.98); }
 
-        /* グリッドレイアウト（カメラ映像が並ぶ場所） */
+        /* モニター側：QRコード表示 */
+        #qr-area { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 10px 0; }
+        
+        /* カメラグリッド */
         #camera-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
             gap: 15px; margin-top: 20px; 
         }
-        
-        .cam-container { 
-            background: #000; border: 2px solid #333; border-radius: 10px; overflow: hidden; position: relative;
-        }
-        .cam-container img { width: 100%; display: block; background: #222; min-height: 150px; }
-        .cam-label { 
-            position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.6); 
-            padding: 2px 8px; font-size: 12px; border-radius: 4px;
-        }
+        .cam-container { background: #000; border: 2px solid #333; border-radius: 10px; overflow: hidden; position: relative; }
+        .cam-container img { width: 100%; display: block; min-height: 180px; }
+        .cam-label { position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.7); padding: 2px 8px; font-size: 12px; }
 
-        video { width: 100%; border-radius: 10px; margin-top: 10px; border: 2px solid #e91e63; }
+        #preview-video { width: 100%; border-radius: 10px; border: 2px solid #e91e63; }
+        #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
         .hidden { display: none; }
         .status { color: #aaa; font-size: 0.9em; margin: 10px; }
     </style>
@@ -47,48 +49,107 @@
 <body>
 
 <div class="container">
-    <h1>マルチカメラ・グループ共有</h1>
+    <h1>マルチカメラ共有システム</h1>
 
-    <!-- 初期設定画面 -->
-    <div id="setup-ui" class="setup-box">
-        <p>グループ名（合言葉）を決めてください</p>
-        <input type="text" id="group-name" placeholder="例: family-home-123">
-        <div class="status">※同じ名前を入力した端末同士が繋がります</div>
-        <button class="btn btn-camera" onclick="startCamera()">📸 この端末をカメラにする</button>
-        <button class="btn btn-monitor" onclick="startMonitor()">🖥️ 全カメラ映像を見る</button>
+    <!-- 1. 初期メニュー -->
+    <div id="setup-ui" class="card">
+        <p>グループ名を入力してください</p>
+        <input type="text" id="group-name" placeholder="例: room-101">
+        <button class="btn-monitor" onclick="startMonitor()">🖥️ モニターを開始（QR表示）</button>
+        <button class="btn-camera" onclick="showCameraOptions()">📸 カメラとして参加</button>
     </div>
 
-    <!-- カメラ配信中画面 -->
+    <!-- 2. カメラ参加オプション -->
+    <div id="camera-options" class="card hidden">
+        <button class="btn-scan" onclick="startQRScanner()">📷 QRをスキャンして接続</button>
+        <div id="reader"></div>
+        <p>または</p>
+        <button class="btn-camera" onclick="startCamera(document.getElementById('group-name').value)">直接接続（入力名を使用）</button>
+        <button class="btn-sub" onclick="location.reload()">戻る</button>
+    </div>
+
+    <!-- 3. モニター表示画面 -->
+    <div id="monitor-ui" class="hidden">
+        <div class="card">
+            <p class="status">グループID: <b id="mon-group-id" style="color:#00d1ff"></b></p>
+            <div id="qr-area"></div>
+            <p class="status">このQRをカメラ端末でスキャンしてください</p>
+        </div>
+        <div id="camera-grid"></div>
+        <button class="btn-sub" onclick="location.reload()">モニター終了</button>
+    </div>
+
+    <!-- 4. カメラ配信中画面 -->
     <div id="camera-ui" class="hidden">
         <div class="status">配信中... グループ: <b id="cam-group-label"></b></div>
         <video id="preview-video" autoplay playsinline muted></video>
         <canvas id="cap-canvas" class="hidden"></canvas>
-        <button class="btn" style="background:#444;" onclick="location.reload()">配信停止</button>
-    </div>
-
-    <!-- モニター画面 -->
-    <div id="monitor-ui" class="hidden">
-        <div class="status">グループ「<b id="mon-group-label"></b>」の映像を受信中...</div>
-        <div id="camera-grid">
-            <!-- ここに複数のカメラ映像が動的に追加される -->
-        </div>
-        <button class="btn" style="background:#444; margin-top:20px;" onclick="location.reload()">終了</button>
+        <button class="btn-sub" onclick="location.reload()">配信停止</button>
     </div>
 </div>
 
 <script>
     let peer;
-    const INTERVAL = 150; // 0.15秒 (複数台だと負荷がかかるため少し緩めています)
+    let html5QrCode;
+    const INTERVAL = 150; 
     const IMG_WIDTH = 320; 
     const QUALITY = 0.3;
 
-    // --- カメラ側の処理 ---
-    async function startCamera() {
+    // --- モニター（親機）の処理 ---
+    function startMonitor() {
         const groupName = document.getElementById('group-name').value;
         if (!groupName) return alert("グループ名を入力してください");
 
+        showUI('monitor-ui');
+        document.getElementById('mon-group-id').innerText = groupName;
+
+        // QRコード生成
+        new QRCode(document.getElementById("qr-area"), {
+            text: groupName,
+            width: 150,
+            height: 150,
+            colorDark : "#000000",
+            colorLight : "#ffffff"
+        });
+
+        peer = new Peer(groupName);
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') alert("そのIDは既に使用されています。");
+        });
+
+        peer.on('connection', (conn) => {
+            addCameraFrame(conn.peer);
+            conn.on('data', (data) => {
+                const img = document.getElementById(`img-${conn.peer}`);
+                if (img) img.src = data;
+            });
+            conn.on('close', () => {
+                document.getElementById(`frame-${conn.peer}`)?.remove();
+            });
+        });
+    }
+
+    // --- カメラ（子機）の処理 ---
+    function showCameraOptions() {
+        showUI('camera-options');
+    }
+
+    function startQRScanner() {
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: 250 },
+            (decodedText) => {
+                html5QrCode.stop();
+                startCamera(decodedText);
+            }
+        ).catch(err => alert("カメラ起動失敗"));
+    }
+
+    async function startCamera(targetGroup) {
+        if (!targetGroup) return alert("グループ名が必要です");
         showUI('camera-ui');
-        document.getElementById('cam-group-label').innerText = groupName;
+        document.getElementById('cam-group-label').innerText = targetGroup;
 
         const video = document.getElementById('preview-video');
         const canvas = document.getElementById('cap-canvas');
@@ -97,12 +158,11 @@
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
             video.srcObject = stream;
-        } catch (e) { return alert("カメラを許可してください"); }
+        } catch (e) { return alert("カメラ許可が必要です"); }
 
-        // カメラ側はランダムIDで開始し、モニター(groupName)に接続しに行く
         peer = new Peer();
         peer.on('open', () => {
-            const conn = peer.connect(groupName);
+            const conn = peer.connect(targetGroup);
             conn.on('open', () => {
                 setInterval(() => {
                     if (conn.open) {
@@ -117,58 +177,21 @@
         });
     }
 
-    // --- モニター側の処理 ---
-    function startMonitor() {
-        const groupName = document.getElementById('group-name').value;
-        if (!groupName) return alert("グループ名を入力してください");
-
-        showUI('monitor-ui');
-        document.getElementById('mon-group-label').innerText = groupName;
-
-        // モニター側はグループ名をIDにして待機する
-        peer = new Peer(groupName);
-
-        peer.on('error', (err) => {
-            if (err.type === 'unavailable-id') {
-                alert("既に同じグループ名でモニターが起動しています。");
-                location.reload();
-            }
-        });
-
-        peer.on('connection', (conn) => {
-            // 新しいカメラが接続されたら映像枠を作成
-            const camId = conn.peer;
-            addCameraFrame(camId);
-
-            conn.on('data', (data) => {
-                const imgTag = document.getElementById(`img-${camId}`);
-                if (imgTag) imgTag.src = data;
-            });
-
-            conn.on('close', () => {
-                const frame = document.getElementById(`frame-${camId}`);
-                if (frame) frame.remove();
-            });
-        });
-    }
-
-    // 映像枠を動的に追加する
+    // --- 補助機能 ---
     function addCameraFrame(id) {
         if (document.getElementById(`frame-${id}`)) return;
-
         const grid = document.getElementById('camera-grid');
         const div = document.createElement('div');
         div.id = `frame-${id}`;
         div.className = 'cam-container';
-        div.innerHTML = `
-            <div class="cam-label">Camera: ${id.substring(0,5)}</div>
-            <img id="img-${id}" src="">
-        `;
+        div.innerHTML = `<div class="cam-label">ID: ${id.substring(0,5)}</div><img id="img-${id}" src="">`;
         grid.appendChild(div);
     }
 
     function showUI(id) {
-        document.getElementById('setup-ui').classList.add('hidden');
+        ['setup-ui', 'camera-options', 'monitor-ui', 'camera-ui'].forEach(ui => {
+            document.getElementById(ui).classList.add('hidden');
+        });
         document.getElementById(id).classList.remove('hidden');
     }
 </script>
