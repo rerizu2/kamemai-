@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS カメラ共有システム</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        video { width: 100%; border-radius: 8px; background: #000; margin-top: 10px; }
+        .controls { margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        input { padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 10px; border: none; border-radius: 5px; background: #007bff; color: white; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        #my-id-display { color: #dc3545; font-weight: bold; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>カメラ共有 (P2P)</h2>
+
+    <!-- モード選択 -->
+    <div id="mode-selection" class="controls">
+        <button onclick="startAsCamera()">📸 この端末をカメラにする</button>
+        <button onclick="startAsMonitor()">🖥️ 別のカメラ映像を見る</button>
+    </div>
+
+    <!-- カメラ側のUI -->
+    <div id="camera-ui" class="hidden">
+        <p>あなたのID: <span id="my-id-display">接続中...</span></p>
+        <p>このIDを「見る側の端末」に入力してください。</p>
+        <video id="local-video" autoplay playsinline muted></video>
+    </div>
+
+    <!-- モニター側のUI -->
+    <div id="monitor-ui" class="hidden">
+        <div class="controls">
+            <input type="text" id="peer-id-input" placeholder="カメラ側のIDを入力">
+            <button onclick="connectToCamera()">映像を受け取る</button>
+        </div>
+        <video id="remote-video" autoplay playsinline></video>
+    </div>
+</div>
+
+<script>
+    let peer;
+    let localStream;
+
+    // --- カメラ側の処理 ---
+    async function startAsCamera() {
+        document.getElementById('mode-selection').classList.add('hidden');
+        document.getElementById('camera-ui').classList.remove('hidden');
+
+        // カメラアクセス
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById('local-video').srcObject = localStream;
+
+        // Peer作成
+        peer = new Peer(); 
+        peer.on('open', (id) => {
+            document.getElementById('my-id-display').innerText = id;
+        });
+
+        // 接続（着信）があった時の処理
+        peer.on('call', (call) => {
+            call.answer(localStream); // 自分の映像を返す
+            console.log("映像を送信中...");
+        });
+    }
+
+    // --- モニター側の処理 ---
+    function startAsMonitor() {
+        document.getElementById('mode-selection').classList.add('hidden');
+        document.getElementById('monitor-ui').classList.remove('hidden');
+        peer = new Peer();
+    }
+
+    function connectToCamera() {
+        const remoteId = document.getElementById('peer-id-input').value;
+        if (!remoteId) return alert("IDを入力してください");
+
+        // 相手を呼び出す
+        const call = peer.call(remoteId, new MediaStream()); // 空のストリームで発信
+        call.on('stream', (remoteStream) => {
+            // 相手の映像を表示
+            document.getElementById('remote-video').srcObject = remoteStream;
+        });
+    }
+</script>
+
+</body>
+</html>
