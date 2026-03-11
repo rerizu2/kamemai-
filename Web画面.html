@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>セキュア・画面共有</title>
+    <title>高速画面共有 (0.1秒更新)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -39,38 +39,32 @@
 <body>
 
 <div class="container">
-    <h2>画面共有システム</h2>
+    <h2>高速画面共有</h2>
+    <p style="font-size: 12px; color: #888;">更新速度: 0.1秒 (10fps)</p>
 
-    <!-- モード選択 -->
     <div id="mode-selection">
         <button class="btn-main" onclick="initAsScreenShare()">💻 画面を共有する</button>
         <button class="btn-sub" onclick="showMonitorSetup()">🖥️ 別の画面を見る</button>
     </div>
 
-    <!-- 【画面共有側】UI -->
     <div id="screen-ui" class="hidden">
         <p class="status">このIDまたはQRを視聴側に伝えてください</p>
         <div style="font-size: 24px; font-weight: bold; color: #00d1ff;" id="my-id-text">ID取得中...</div>
         <div id="qrcode"></div>
-        <div class="status">プレビュー（共有中の画面）:</div>
         <video id="temp-video" autoplay playsinline muted></video>
         <canvas id="capture-canvas" class="hidden"></canvas>
         <button class="btn-sub" onclick="location.reload()">共有を停止</button>
     </div>
 
-    <!-- 【見る側】設定UI -->
     <div id="monitor-setup" class="hidden">
         <p>接続方法を選んでください</p>
-        <button class="btn-scan" onclick="startQRScanner()">📷 QRをスキャン（スマホ等）</button>
+        <button class="btn-scan" onclick="startQRScanner()">📷 QRをスキャン</button>
         <div id="reader"></div>
-        
-        <p style="margin: 20px 0 10px;">またはIDを手入力</p>
         <input type="text" id="peer-id-input" placeholder="相手のIDを入力">
         <button class="btn-main" onclick="connectViaInput()">接続して画面を見る</button>
         <button class="btn-sub" onclick="location.reload()">戻る</button>
     </div>
 
-    <!-- 【見る側】映像表示UI -->
     <div id="monitor-display" class="hidden">
         <div class="status" id="conn-status">接続中...</div>
         <img id="display-img" src="" alt="画面受信中">
@@ -81,35 +75,29 @@
 <script>
     let peer;
     let conn;
-    const INTERVAL = 150; // 送信間隔（少し長めに設定して負荷軽減）
-    const IMG_WIDTH = 800; // 画面共有なので解像度を少し上げる
-    const QUALITY = 0.5;   
-    let html5QrCode;
+    
+    // --- ここで更新間隔を設定 ---
+    const INTERVAL = 100; // 100ms = 0.1秒
+    const IMG_WIDTH = 800; 
+    const QUALITY = 0.4;   // 速度優先のため、画質を少し下げています
 
-    // --- 画面共有側の処理 ---
     async function initAsScreenShare() {
         const video = document.getElementById('temp-video');
         const canvas = document.getElementById('capture-canvas');
         const ctx = canvas.getContext('2d');
 
         try {
-            // カメラではなく画面キャプチャを取得
             const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { cursor: "always" }, 
+                video: { frameRate: { ideal: 10 } }, // 取得側も10fpsを目標にする
                 audio: false 
             });
             video.srcObject = stream;
             video.style.display = "block";
             showUI('screen-ui');
 
-            // 共有が停止された時（ブラウザの「共有を停止」ボタンなど）
-            stream.getVideoTracks()[0].onended = () => {
-                alert("画面共有が終了されました");
-                location.reload();
-            };
+            stream.getVideoTracks()[0].onended = () => location.reload();
 
         } catch (e) { 
-            console.error(e);
             alert("画面共有の許可が得られませんでした"); 
             return; 
         }
@@ -122,24 +110,22 @@
 
         peer.on('connection', (connection) => {
             conn = connection;
-            console.log("接続されました");
             
+            // 0.1秒ごとにキャプチャして送信
             setInterval(() => {
                 if (conn && conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
-                    // 画面のアスペクト比を維持してキャンバスをリサイズ
                     const ratio = video.videoHeight / video.videoWidth;
                     canvas.width = IMG_WIDTH;
                     canvas.height = IMG_WIDTH * ratio;
                     
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    // データ通信で画像を送信
+                    // 指定した画質でJPEG変換して送信
                     conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
                 }
             }, INTERVAL);
         });
     }
 
-    // --- 見る側の処理 ---
     function showMonitorSetup() {
         showUI('monitor-setup');
         peer = new Peer();
@@ -147,40 +133,28 @@
 
     function connectViaInput() {
         const id = document.getElementById('peer-id-input').value;
-        if (!id) return alert("IDを入力してください");
-        connectToPeer(id);
+        if (id) connectToPeer(id);
     }
 
     function startQRScanner() {
         html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(
-            { facingMode: "environment" }, 
-            { fps: 10, qrbox: 250 },
-            (decodedText) => {
-                html5QrCode.stop();
-                document.getElementById('reader').innerHTML = "";
-                connectToPeer(decodedText);
-            }
-        ).catch(err => alert("カメラが起動できません"));
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+            html5QrCode.stop();
+            connectToPeer(decodedText);
+        });
     }
 
     function connectToPeer(targetId) {
         showUI('monitor-display');
         conn = peer.connect(targetId);
-        
         conn.on('open', () => {
             document.getElementById('conn-status').innerText = "接続成功！画面受信中...";
             document.getElementById('display-img').style.display = "block";
         });
-
         conn.on('data', (data) => {
             document.getElementById('display-img').src = data;
         });
-
-        conn.on('close', () => {
-            alert("接続が切断されました");
-            location.reload();
-        });
+        conn.on('close', () => location.reload());
     }
 
     function showUI(uiId) {
