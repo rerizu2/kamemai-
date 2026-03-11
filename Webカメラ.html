@@ -3,211 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>マルチカメラ・ライブモニター</title>
+    <title>セキュア・カメラ共有</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --danger: #f43f5e; }
-        body { font-family: sans-serif; background: var(--bg); color: white; margin: 0; padding: 15px; }
-        .container { max-width: 1000px; margin: auto; text-align: center; }
-        h1 { font-size: 1.2rem; color: var(--accent); margin-bottom: 20px; }
+        body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; padding: 20px; }
+        .container { max-width: 500px; margin: auto; background: #2a2a2a; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { margin-top: 0; color: #00d1ff; }
         
-        .card { background: var(--card); padding: 20px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); margin-bottom: 20px; }
-        input { 
-            width: 80%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #334155;
-            background: #000; color: #fff; font-size: 18px; text-align: center;
-        }
-        
+        /* 共通ボタン */
         button { 
-            width: 90%; padding: 14px; margin: 8px 0; border: none; border-radius: 10px; 
+            width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; 
             font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
         }
-        .btn-mon { background: #0284c7; color: white; }
-        .btn-cam { background: var(--danger); color: white; }
-        .btn-scan { background: #10b981; color: white; }
-        .btn-back { background: #475569; color: white; margin-top: 20px; }
-        button:active { transform: scale(0.96); opacity: 0.8; }
+        .btn-main { background: #007bff; color: white; }
+        .btn-sub { background: #444; color: white; }
+        .btn-scan { background: #28a745; color: white; }
+        button:active { transform: scale(0.98); }
 
-        /* モニター画面：グリッドレイアウト */
-        #camera-grid { 
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
-            gap: 15px; margin-top: 10px; 
+        /* 入力エリア */
+        input { 
+            width: calc(100% - 24px); padding: 12px; margin: 10px 0; border-radius: 8px; 
+            border: 1px solid #444; background: #000; color: #fff; font-size: 18px; text-align: center;
         }
-        .cam-box { background: #000; border: 2px solid #334155; border-radius: 12px; overflow: hidden; position: relative; }
-        .cam-box img { width: 100%; display: block; aspect-ratio: 4/3; object-fit: contain; background: #000; }
-        .cam-info { position: absolute; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.5); padding: 5px; font-size: 11px; display: flex; justify-content: space-between; }
 
-        /* カメラ配信画面 */
-        #preview-video { width: 100%; border-radius: 12px; border: 2px solid var(--danger); background: #000; }
-        #qr-display { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 10px 0; }
-        #reader { width: 100%; border-radius: 12px; overflow: hidden; margin-top: 10px; }
+        /* 映像表示 */
+        #display-img { width: 100%; border-radius: 10px; background: #000; display: none; margin-top: 15px; }
+        video { width: 100%; border-radius: 10px; display: none; } /* 送信側プレビュー */
         
+        /* QR表示 */
+        #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 15px 0; }
+        #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
+
+        .status { font-size: 14px; color: #aaa; margin: 10px 0; }
         .hidden { display: none; }
-        .status { font-size: 0.8rem; color: #94a3b8; margin: 10px; }
-        .loading-dot { color: var(--accent); }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Camera Share System</h1>
+    <h2>カメラ共有システム</h2>
 
-    <!-- 1. メインメニュー -->
-    <div id="ui-main" class="card">
-        <p>グループ名を入力</p>
-        <input type="text" id="group-id" placeholder="例: my-room-777">
-        <button class="btn-mon" onclick="initMonitor()">🖥️ モニターを開始 (映像を見る)</button>
-        <button class="btn-cam" onclick="showCamOptions()">📸 カメラとして参加 (映像を送る)</button>
+    <!-- モード選択 -->
+    <div id="mode-selection">
+        <button class="btn-main" onclick="initAsCamera()">📸 カメラとして配信する</button>
+        <button class="btn-sub" onclick="showMonitorSetup()">🖥️ 別のカメラを見る</button>
     </div>
 
-    <!-- 2. カメラ参加方法選択 -->
-    <div id="ui-cam-setup" class="card hidden">
-        <button class="btn-scan" onclick="launchScanner()">📷 QRをスキャンして接続</button>
+    <!-- 【カメラ配信側】UI -->
+    <div id="camera-ui" class="hidden">
+        <p class="status">このIDまたはQRを相手に伝えてください</p>
+        <div style="font-size: 24px; font-weight: bold; color: #00d1ff;" id="my-id-text">ID取得中...</div>
+        <div id="qrcode"></div>
+        <video id="temp-video" autoplay playsinline muted></video>
+        <canvas id="capture-canvas" class="hidden"></canvas>
+    </div>
+
+    <!-- 【見る側】設定UI -->
+    <div id="monitor-setup" class="hidden">
+        <p>接続方法を選んでください</p>
+        <button class="btn-scan" onclick="startQRScanner()">📷 QRコードをスキャン</button>
         <div id="reader"></div>
-        <p style="margin:15px 0;">または</p>
-        <button class="btn-cam" onclick="initCamera(document.getElementById('group-id').value)">直接接続する</button>
-        <button class="btn-back" onclick="location.reload()">戻る</button>
+        
+        <p style="margin: 20px 0 10px;">またはIDを手入力</p>
+        <input type="text" id="peer-id-input" placeholder="相手のIDを入力">
+        <button class="btn-main" onclick="connectViaInput()">接続して映像を見る</button>
+        <button class="btn-sub" onclick="location.reload()">戻る</button>
     </div>
 
-    <!-- 3. モニター画面 (複数の映像が並ぶ) -->
-    <div id="ui-monitor" class="hidden">
-        <div class="card">
-            <div class="status">グループ: <b id="display-mon-id" style="color:var(--accent)"></b></div>
-            <div id="qr-display"></div>
-            <div class="status">このQRをカメラで読み取ってください</div>
-        </div>
-        <div id="camera-grid"></div>
-        <button class="btn-back" onclick="location.reload()">モニターを終了</button>
-    </div>
-
-    <!-- 4. カメラ配信画面 -->
-    <div id="ui-camera" class="hidden">
-        <div class="card">
-            <div class="status" id="cam-status">接続準備中...</div>
-            <video id="preview-video" autoplay playsinline muted></video>
-            <canvas id="send-canvas" class="hidden"></canvas>
-        </div>
-        <button class="btn-back" onclick="location.reload()">配信を停止</button>
+    <!-- 【見る側】映像表示UI -->
+    <div id="monitor-display" class="hidden">
+        <div class="status" id="conn-status">接続中...</div>
+        <img id="display-img" src="" alt="映像受信中">
+        <button class="btn-sub" style="margin-top:20px;" onclick="location.reload()">切断して終了</button>
     </div>
 </div>
 
 <script>
     let peer;
     let conn;
+    const INTERVAL = 100; // 0.1秒
+    const IMG_WIDTH = 400; 
+    const QUALITY = 0.3;   
     let html5QrCode;
-    const FPS_INTERVAL = 100; // 0.1秒
-    const RES_WIDTH = 400;    // 画質（横幅）
-    const JPG_QUALITY = 0.4;  // 圧縮率
 
-    // --- 【モニター側】のロジック ---
-    function initMonitor() {
-        const gid = document.getElementById('group-id').value;
-        if(!gid) return alert("グループ名を入力してください");
-        
-        showUI('ui-monitor');
-        document.getElementById('display-mon-id').innerText = gid;
-
-        // モニター用QR生成
-        new QRCode(document.getElementById("qr-display"), { text: gid, width: 140, height: 140 });
-
-        // グループ名をIDにして待機
-        peer = new Peer(gid);
-        
-        peer.on('open', () => console.log("Monitor started: " + gid));
-        peer.on('error', (err) => {
-            if(err.type === 'unavailable-id') alert("このグループ名はすでに使われています");
-        });
-
-        // カメラからの接続を受けたとき
-        peer.on('connection', (c) => {
-            console.log("Camera connected: " + c.peer);
-            createCamBox(c.peer); // 表示枠を作成
-
-            c.on('data', (data) => {
-                const targetImg = document.getElementById(`img-${c.peer}`);
-                if(targetImg) {
-                    targetImg.src = data; // 届いた画像を表示
-                }
-            });
-
-            c.on('close', () => {
-                document.getElementById(`box-${c.peer}`)?.remove();
-            });
-        });
-    }
-
-    // 映像枠を動的に追加
-    function createCamBox(peerId) {
-        if(document.getElementById(`box-${peerId}`)) return;
-        const grid = document.getElementById('camera-grid');
-        const box = document.createElement('div');
-        box.id = `box-${peerId}`;
-        box.className = 'cam-box';
-        box.innerHTML = `
-            <div class="cam-info">
-                <span>ID: ${peerId.substring(0,6)}</span>
-                <span class="loading-dot">● LIVE</span>
-            </div>
-            <img id="img-${peerId}" src="">
-        `;
-        grid.appendChild(box);
-    }
-
-    // --- 【カメラ側】のロジック ---
-    function showCamOptions() { showUI('ui-cam-setup'); }
-
-    function launchScanner() {
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
-            (text) => {
-                html5QrCode.stop();
-                initCamera(text);
-            }
-        );
-    }
-
-    async function initCamera(targetGid) {
-        if(!targetGid) return alert("グループIDがありません");
-        showUI('ui-camera');
-        
-        const video = document.getElementById('preview-video');
-        const canvas = document.getElementById('send-canvas');
+    // --- カメラ配信側の処理 ---
+    async function initAsCamera() {
+        showUI('camera-ui');
+        const video = document.getElementById('temp-video');
+        video.style.display = "block";
+        const canvas = document.getElementById('capture-canvas');
         const ctx = canvas.getContext('2d');
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment", width: 640 }, audio: false 
-            });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
             video.srcObject = stream;
-        } catch (e) { alert("カメラが使えません"); return; }
+        } catch (e) { alert("カメラ許可が必要です"); return; }
 
-        peer = new Peer(); // カメラ側はランダムID
-        peer.on('open', (myId) => {
-            const c = peer.connect(targetGid);
-            c.on('open', () => {
-                document.getElementById('cam-status').innerText = "配信中: " + targetGid;
-                // 0.1秒おきに画像を送信
-                setInterval(() => {
-                    if(c.open) {
-                        const h = video.videoHeight * (RES_WIDTH / video.videoWidth);
-                        canvas.width = RES_WIDTH;
-                        canvas.height = h;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        c.send(canvas.toDataURL('image/jpeg', JPG_QUALITY));
-                    }
-                }, FPS_INTERVAL);
-            });
-            c.on('error', () => alert("モニターが見つかりません"));
+        peer = new Peer();
+        peer.on('open', (id) => {
+            document.getElementById('my-id-text').innerText = id;
+            new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
+        });
+
+        peer.on('connection', (connection) => {
+            conn = connection;
+            setInterval(() => {
+                if (conn && conn.open) {
+                    const ratio = video.videoHeight / video.videoWidth;
+                    canvas.width = IMG_WIDTH;
+                    canvas.height = IMG_WIDTH * ratio;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
+                }
+            }, INTERVAL);
         });
     }
 
-    // UI切り替え
-    function showUI(id) {
-        ['ui-main', 'ui-cam-setup', 'ui-monitor', 'ui-camera'].forEach(el => {
-            document.getElementById(el).classList.add('hidden');
+    // --- 見る側の設定画面表示 ---
+    function showMonitorSetup() {
+        showUI('monitor-setup');
+        peer = new Peer(); // 見る側もPeerを初期化
+    }
+
+    // ID手入力で接続
+    function connectViaInput() {
+        const id = document.getElementById('peer-id-input').value;
+        if (!id) return alert("IDを入力してください");
+        connectToPeer(id);
+    }
+
+    // QRスキャナー起動
+    function startQRScanner() {
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: 250 },
+            (decodedText) => {
+                html5QrCode.stop();
+                document.getElementById('reader').innerHTML = "";
+                connectToPeer(decodedText);
+            }
+        ).catch(err => alert("カメラが起動できません"));
+    }
+
+    // 接続実行
+    function connectToPeer(targetId) {
+        showUI('monitor-display');
+        conn = peer.connect(targetId);
+        
+        conn.on('open', () => {
+            document.getElementById('conn-status').innerText = "接続成功！映像受信中...";
+            document.getElementById('display-img').style.display = "block";
         });
-        document.getElementById(id).classList.remove('hidden');
+
+        conn.on('data', (data) => {
+            document.getElementById('display-img').src = data;
+        });
+
+        conn.on('close', () => {
+            alert("接続が切断されました");
+            location.reload();
+        });
+    }
+
+    // UI切り替え補助
+    function showUI(uiId) {
+        ['mode-selection', 'camera-ui', 'monitor-setup', 'monitor-display'].forEach(id => {
+            document.getElementById(id).classList.add('hidden');
+        });
+        document.getElementById(uiId).classList.remove('hidden');
     }
 </script>
 
