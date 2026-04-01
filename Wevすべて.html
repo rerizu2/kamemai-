@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>スマホ対応 高速共有</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; background: #111; color: white; margin: 0; padding: 10px; overflow-x: hidden; }
+        .container { max-width: 600px; margin: auto; background: #222; padding: 15px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { margin: 10px 0; color: #00d1ff; font-size: 22px; }
+        
+        button { 
+            width: 100%; padding: 16px; margin: 8px 0; border: none; border-radius: 12px; 
+            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-main { background: #007bff; color: white; }
+        .btn-sub { background: #444; color: white; }
+        .btn-add { background: #28a745; color: white; width: auto; padding: 12px 25px; }
+
+        input { 
+            width: 120px; padding: 12px; margin: 10px; border-radius: 10px; 
+            border: 1px solid #444; background: #000; color: #fff; font-size: 24px; text-align: center;
+            inputmode: numeric; /* スマホで数字キーボードを出す */
+        }
+
+        #monitor-grid { 
+            display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 15px; 
+        }
+        .monitor-card { background: #333; padding: 8px; border-radius: 12px; }
+        .monitor-card img { width: 100%; border-radius: 8px; background: #000; display: block; }
+        
+        video { width: 100%; border-radius: 10px; display: none; margin-top: 10px; border: 1px solid #555; }
+        #qrcode { background: white; padding: 8px; border-radius: 10px; display: inline-block; margin: 10px 0; }
+        .id-display { font-size: 40px; font-weight: bold; color: #00d1ff; letter-spacing: 5px; }
+        .hidden { display: none; }
+        .info-text { font-size: 12px; color: #aaa; padding: 5px 10px; line-height: 1.4; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>超高速 画面・カメラ共有</h2>
+
+    <!-- モード選択 -->
+    <div id="mode-selection">
+        <button class="btn-main" onclick="initSender('screen')">💻 画面を共有する</button>
+        <p class="info-text">※iPhoneはブラウザの制限で画面共有ができません。Androidは可能です。</p>
+        <button class="btn-main" style="background:#00a2ff" onclick="initSender('camera')">📷 カメラを共有する</button>
+        <button class="btn-sub" onclick="showMonitor()">🖥️ 別の画面を見る</button>
+    </div>
+
+    <!-- 送信側UI -->
+    <div id="screen-ui" class="hidden">
+        <p style="margin-bottom:5px">接続用4桁ID</p>
+        <div class="id-display" id="my-id-text">----</div>
+        <div id="qrcode"></div>
+        <p class="info-text">このページを閉じたり、スリープになると切断されます</p>
+        <video id="temp-video" autoplay playsinline muted></video>
+        <canvas id="capture-canvas" class="hidden"></canvas>
+        <button class="btn-sub" onclick="location.reload()">共有を停止</button>
+    </div>
+
+    <!-- 受信側UI -->
+    <div id="monitor-ui" class="hidden">
+        <div style="background: #333; padding: 15px; border-radius: 15px;">
+            <p style="margin-top:0">相手のIDを入力</p>
+            <input type="number" id="peer-id-input" pattern="\d*" placeholder="0000" inputmode="numeric">
+            <button class="btn-add" onclick="connectToNewPeer()">追加</button>
+        </div>
+        <div id="monitor-grid"></div>
+        <button class="btn-sub" onclick="location.reload()" style="margin-top:20px">メニューに戻る</button>
+    </div>
+</div>
+
+<script>
+    let peer;
+    let connections = {};
+
+    const FPS_INTERVAL = 50; 
+    const IMG_WIDTH = 500;   
+    const QUALITY = 0.3;     
+
+    function generate4DigitId() {
+        return Math.floor(1000 + Math.random() * 9000).toString();
+    }
+
+    async function initSender(type) {
+        const video = document.getElementById('temp-video');
+        const canvas = document.getElementById('capture-canvas');
+        const ctx = canvas.getContext('2d');
+
+        try {
+            let stream;
+            if (type === 'screen') {
+                if (!navigator.mediaDevices.getDisplayMedia) {
+                    alert("お使いのブラウザ・機種では画面共有がサポートされていません。カメラ共有をご利用ください。");
+                    return;
+                }
+                stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 20 } });
+            } else {
+                // スマホの背面カメラを優先的に起動
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment", frameRate: 20 }, 
+                    audio: false 
+                });
+            }
+            video.srcObject = stream;
+            video.style.display = "block";
+            showUI('screen-ui');
+        } catch (e) { 
+            console.error(e);
+            alert("エラー: 許可が得られなかったか、未対応の機種です。"); 
+            return; 
+        }
+
+        const startPeer = () => {
+            const id = generate4DigitId();
+            peer = new Peer(id);
+            peer.on('open', (id) => {
+                document.getElementById('my-id-text').innerText = id;
+                document.getElementById("qrcode").innerHTML = "";
+                new QRCode(document.getElementById("qrcode"), { text: id, width: 160, height: 160 });
+            });
+            peer.on('error', (err) => { if (err.type === 'unavailable-id') startPeer(); });
+            
+            peer.on('connection', (conn) => {
+                // 送信ループ
+                const timer = setInterval(() => {
+                    if (!conn.open) { clearInterval(timer); return; }
+                    if (conn.dataChannel.bufferedAmount === 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
+                        const ratio = video.videoHeight / video.videoWidth;
+                        canvas.width = IMG_WIDTH;
+                        canvas.height = IMG_WIDTH * ratio;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        conn.send(canvas.toDataURL('image/jpeg', QUALITY));
+                    }
+                }, FPS_INTERVAL);
+            });
+        };
+        startPeer();
+    }
+
+    function showMonitor() {
+        showUI('monitor-ui');
+        peer = new Peer();
+    }
+
+    function connectToNewPeer() {
+        const targetId = document.getElementById('peer-id-input').value;
+        if (!targetId || connections[targetId]) return;
+
+        const conn = peer.connect(targetId, { reliable: false });
+        
+        const card = document.createElement('div');
+        card.className = 'monitor-card';
+        card.id = `card-${targetId}`;
+        card.innerHTML = `
+            <div style="font-size:12px; margin-bottom:5px;">配信元: ${targetId}</div>
+            <img id="img-${targetId}" src="" alt="接続中...">
+            <button class="btn-sub" style="padding:8px; margin-top:8px; font-size:12px;" onclick="closeConn('${targetId}')">削除</button>
+        `;
+        document.getElementById('monitor-grid').appendChild(card);
+        
+        conn.on('open', () => {
+            connections[targetId] = conn;
+            document.getElementById('peer-id-input').value = "";
+        });
+        conn.on('data', (data) => {
+            const img = document.getElementById(`img-${targetId}`);
+            if (img) img.src = data;
+        });
+        conn.on('close', () => closeConn(targetId));
+    }
+
+    function closeConn(id) {
+        if (connections[id]) connections[id].close();
+        delete connections[id];
+        const card = document.getElementById(`card-${id}`);
+        if (card) card.remove();
+    }
+
+    function showUI(uiId) {
+        ['mode-selection', 'screen-ui', 'monitor-ui'].forEach(id => {
+            document.getElementById(id).classList.add('hidden');
+        });
+        document.getElementById(uiId).classList.remove('hidden');
+    }
+</script>
+
+</body>
+</html>
