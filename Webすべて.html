@@ -3,88 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iPhone対応 高速画面共有</title>
+    <title>iPhone画面共有 診断機能付</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #111; color: white; margin: 0; padding: 10px; text-align: center; }
+        body { font-family: -apple-system, sans-serif; background: #111; color: white; margin: 0; padding: 15px; text-align: center; }
         .container { max-width: 500px; margin: auto; background: #222; padding: 20px; border-radius: 20px; }
-        h2 { color: #00d1ff; margin-bottom: 20px; }
-        
-        button { 
-            width: 100%; padding: 16px; margin: 10px 0; border: none; border-radius: 12px; 
-            font-size: 16px; font-weight: bold; cursor: pointer;
-        }
+        button { width: 100%; padding: 16px; margin: 10px 0; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .btn-main { background: #007bff; color: white; }
         .btn-sub { background: #444; color: white; }
-        .btn-add { background: #28a745; color: white; width: auto; padding: 12px 20px; }
-
-        input { 
-            width: 100px; padding: 12px; margin: 10px; border-radius: 10px; 
-            border: 1px solid #444; background: #000; color: #fff; font-size: 24px; text-align: center;
-        }
-
-        #monitor-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 15px; }
-        .monitor-card { background: #333; padding: 10px; border-radius: 12px; }
-        .monitor-card img { width: 100%; border-radius: 8px; background: #000; }
-        
+        #error-log { color: #ff5555; background: #331111; padding: 10px; border-radius: 8px; font-size: 12px; margin: 10px 0; text-align: left; display: none; overflow-wrap: break-word; }
         video { width: 100%; border-radius: 10px; display: none; margin-top: 10px; }
-        #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 15px 0; }
         .id-display { font-size: 42px; font-weight: bold; color: #00d1ff; letter-spacing: 5px; }
         .hidden { display: none; }
-        .status-msg { font-size: 13px; color: #ccc; margin: 10px 0; line-height: 1.5; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>高速画面共有</h2>
+    
+    <!-- エラー表示エリア -->
+    <div id="error-log"></div>
 
-    <!-- モード選択 -->
     <div id="mode-selection">
         <button class="btn-main" onclick="initSender('screen')">💻 画面を共有する</button>
-        <p id="ios-notice" class="status-msg" style="display:none;">
-            iPhoneをご利用ですね。ボタンを押した後、<br><b>「画面共有を開始」</b>を選択してください。
-        </p>
-        <button class="btn-main" style="background:#00a2ff" onclick="initSender('camera')">📷 カメラを共有する</button>
+        <p style="font-size:12px; color:#aaa;">iPhoneの場合、Safari以外では動作しません</p>
         <button class="btn-sub" onclick="showMonitor()">🖥️ 別の画面を見る</button>
     </div>
 
-    <!-- 送信側UI -->
     <div id="screen-ui" class="hidden">
-        <p class="status-msg">接続用4桁ID</p>
-        <div class="id-display" id="my-id-text">----</div>
+        <p>4桁ID: <span class="id-display" id="my-id-text">----</span></p>
         <div id="qrcode"></div>
         <video id="temp-video" autoplay playsinline muted></video>
         <canvas id="capture-canvas" class="hidden"></canvas>
-        <button class="btn-sub" onclick="location.reload()">共有を終了</button>
+        <button class="btn-sub" onclick="location.reload()">終了</button>
     </div>
 
-    <!-- 受信側UI -->
     <div id="monitor-ui" class="hidden">
-        <div style="background: #333; padding: 15px; border-radius: 15px;">
-            <p style="margin:0">相手のIDを入力</p>
-            <input type="number" id="peer-id-input" pattern="\d*" placeholder="0000" inputmode="numeric">
-            <button class="btn-add" onclick="connectToNewPeer()">追加</button>
-        </div>
-        <div id="monitor-grid"></div>
-        <button class="btn-sub" onclick="location.reload()" style="margin-top:20px">戻る</button>
+        <input type="number" id="peer-id-input" pattern="\d*" placeholder="0000" inputmode="numeric" style="padding:15px; width:120px; font-size:24px; text-align:center; border-radius:10px;">
+        <button class="btn-main" onclick="connectToNewPeer()">接続</button>
+        <div id="monitor-grid" style="margin-top:15px;"></div>
     </div>
 </div>
 
 <script>
-    // iPhone/iOS判定
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (isIOS) document.getElementById('ios-notice').style.display = 'block';
-
-    let peer;
-    let connections = {};
-    const FPS_INTERVAL = 60; // iPhoneの負荷を考慮し少し調整(約16fps)
-    const IMG_WIDTH = 480;   
-    const QUALITY = 0.3;     
-
-    function generate4DigitId() {
-        return Math.floor(1000 + Math.random() * 9000).toString();
+    function logError(msg) {
+        const log = document.getElementById('error-log');
+        log.style.display = 'block';
+        log.innerText += msg + "\n";
     }
 
     async function initSender(type) {
@@ -92,100 +59,59 @@
         const canvas = document.getElementById('capture-canvas');
         const ctx = canvas.getContext('2d');
 
+        // 診断チェック
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            logError("❌ このブラウザは画面共有(getDisplayMedia)に対応していません。Safariで開いていますか？");
+            return;
+        }
+        if (location.protocol !== 'https:') {
+            logError("❌ HTTPS接続ではありません。セキュリティ制限により画面共有は実行できません。");
+        }
+
         try {
-            let stream;
-            if (type === 'screen') {
-                // iPhoneの「画面収録」を呼び出すメイン処理
-                stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { 
-                        displaySurface: "monitor",
-                        frameRate: { max: 15 } 
-                    }
-                });
-            } else {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" }, audio: false 
-                });
-            }
+            logError("⏳ 画面共有を要求中...");
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: 15 }
+            });
             video.srcObject = stream;
             video.style.display = "block";
             showUI('screen-ui');
 
-            // 共有が停止されたらリロード
-            stream.getVideoTracks()[0].onended = () => location.reload();
-
-        } catch (e) { 
-            alert("共有がキャンセルされたか、お使いのiOSバージョンが未対応です。");
-            return; 
-        }
-
-        const startPeer = () => {
-            const id = generate4DigitId();
-            peer = new Peer(id);
+            const peer = new Peer(Math.floor(1000 + Math.random() * 9000).toString());
             peer.on('open', (id) => {
                 document.getElementById('my-id-text').innerText = id;
-                document.getElementById("qrcode").innerHTML = "";
-                new QRCode(document.getElementById("qrcode"), { text: id, width: 160, height: 160 });
+                new QRCode(document.getElementById("qrcode"), { text: id, width: 150, height: 150 });
             });
-            peer.on('error', (err) => { if (err.type === 'unavailable-id') startPeer(); });
-            
             peer.on('connection', (conn) => {
                 setInterval(() => {
-                    if (conn.open && conn.dataChannel.bufferedAmount === 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
-                        const ratio = video.videoHeight / video.videoWidth;
-                        canvas.width = IMG_WIDTH;
-                        canvas.height = IMG_WIDTH * ratio;
+                    if (conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
+                        canvas.width = 480;
+                        canvas.height = 480 * (video.videoHeight / video.videoWidth);
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        conn.send(canvas.toDataURL('image/jpeg', QUALITY));
+                        conn.send(canvas.toDataURL('image/jpeg', 0.3));
                     }
-                }, FPS_INTERVAL);
+                }, 100);
             });
-        };
-        startPeer();
+            peer.on('error', e => logError("PeerJS Error: " + e.type));
+
+        } catch (e) {
+            logError("❌ エラー詳細: " + e.name + " - " + e.message);
+        }
     }
 
-    function showMonitor() {
-        showUI('monitor-ui');
-        peer = new Peer();
-    }
-
+    function showMonitor() { showUI('monitor-ui'); window.peer = new Peer(); }
     function connectToNewPeer() {
         const targetId = document.getElementById('peer-id-input').value;
-        if (!targetId || connections[targetId]) return;
-        const conn = peer.connect(targetId, { reliable: false });
-        
-        const card = document.createElement('div');
-        card.className = 'monitor-card';
-        card.id = `card-${targetId}`;
-        card.innerHTML = `
-            <div style="font-size:12px; margin-bottom:5px;">配信: ${targetId}</div>
-            <img id="img-${targetId}" src="" alt="接続中...">
-            <button class="btn-sub" style="padding:8px; margin-top:8px; font-size:12px;" onclick="closeConn('${targetId}')">削除</button>
-        `;
-        document.getElementById('monitor-grid').appendChild(card);
-        
-        conn.on('open', () => { connections[targetId] = conn; });
-        conn.on('data', (data) => {
-            const img = document.getElementById(`img-${targetId}`);
-            if (img) img.src = data;
-        });
-        conn.on('close', () => closeConn(targetId));
+        const conn = window.peer.connect(targetId, { reliable: false });
+        const img = document.createElement('img');
+        img.style.width = "100%";
+        document.getElementById('monitor-grid').appendChild(img);
+        conn.on('data', data => img.src = data);
     }
-
-    function closeConn(id) {
-        if (connections[id]) connections[id].close();
-        delete connections[id];
-        const card = document.getElementById(`card-${id}`);
-        if (card) card.remove();
-    }
-
-    function showUI(uiId) {
-        ['mode-selection', 'screen-ui', 'monitor-ui'].forEach(id => {
-            document.getElementById(id).classList.add('hidden');
-        });
-        document.getElementById(uiId).classList.remove('hidden');
+    function showUI(id) {
+        document.getElementById('mode-selection').classList.add('hidden');
+        document.getElementById(id).classList.remove('hidden');
     }
 </script>
-
 </body>
 </html>
