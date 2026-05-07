@@ -61,7 +61,12 @@
         <p>配信中... カメラID</p>
         <div id="id-display">----</div>
         <div id="qrcode"></div>
-        <div style="margin-top:15px;"><video id="temp-video" autoplay playsinline muted></video></div>
+        <div style="margin-top:15px;">
+            <video id="temp-video" autoplay playsinline muted></video>
+        </div>
+        <div>
+            <button class="btn-sub" onclick="switchCamera()">🔄 カメラ切替</button>
+        </div>
         <canvas id="capture-canvas" class="hidden"></canvas>
     </div>
 
@@ -86,9 +91,40 @@
     const INTERVAL = 100; // 0.1秒
     const IMG_WIDTH = 350; 
     const QUALITY = 0.3;
-    let myConnections = {}; // 接続中のカメラを管理 { peerID: connectionObj }
+    let myConnections = {}; // 接続中のカメラを管理
+
+    // カメラ切り替え用
+    let currentStream = null;
+    let currentFacingMode = "environment"; // 初期値は背面
 
     // --- カメラ配信側の処理 ---
+    async function startCameraStream() {
+        const video = document.getElementById('temp-video');
+        
+        // 既存のストリームがあれば停止
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: currentFacingMode }, 
+                audio: false 
+            });
+            currentStream = stream;
+            video.srcObject = stream;
+        } catch (e) {
+            console.error(e);
+            alert("カメラの起動に失敗しました。許可設定を確認してください。");
+        }
+    }
+
+    async function switchCamera() {
+        // モードを反転
+        currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+        await startCameraStream();
+    }
+
     async function initAsCamera() {
         showUI('camera-ui');
         const video = document.getElementById('temp-video');
@@ -96,25 +132,28 @@
         const ctx = canvas.getContext('2d');
         const connections = [];
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-            video.srcObject = stream;
-        } catch (e) { alert("カメラ許可が必要です"); return; }
+        await startCameraStream();
 
         function tryConnect() {
             const randomID = Math.floor(1000 + Math.random() * 9000).toString();
             peer = new Peer(randomID);
             peer.on('open', id => {
                 document.getElementById('id-display').innerText = id;
+                document.getElementById("qrcode").innerHTML = ""; // 初期化
                 new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
             });
             peer.on('error', err => { if(err.type==='unavailable-id') tryConnect(); });
             peer.on('connection', conn => {
                 connections.push(conn);
-                conn.on('close', () => { /* 削除処理など */ });
+                conn.on('close', () => {
+                    const index = connections.indexOf(conn);
+                    if (index > -1) connections.splice(index, 1);
+                });
             });
+
             setInterval(() => {
-                if (connections.length > 0) {
+                // connections が空でなく、かつビデオが準備できている場合
+                if (connections.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
                     canvas.width = IMG_WIDTH;
                     canvas.height = IMG_WIDTH * (video.videoHeight / video.videoWidth);
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -132,7 +171,6 @@
         peer = new Peer(); 
     }
 
-    // 新しいカメラを追加
     function connectToNewCamera(targetId) {
         const id = targetId || document.getElementById('peer-id-input').value;
         if (!id || id.length !== 4) return alert("4桁のIDを入力してください");
@@ -142,9 +180,7 @@
         setupCameraCard(id, conn);
     }
 
-    // 映像カードの作成
     function setupCameraCard(id, conn) {
-        // HTML要素作成
         const grid = document.getElementById('monitor-grid');
         const card = document.createElement('div');
         card.className = 'video-card';
@@ -158,10 +194,12 @@
         `;
         grid.appendChild(card);
 
-        // 通信イベント
         conn.on('open', () => {
-            document.getElementById(`stat-${id}`).innerText = "● LIVE";
-            document.getElementById(`stat-${id}`).style.color = "#00ff88";
+            const stat = document.getElementById(`stat-${id}`);
+            if(stat) {
+                stat.innerText = "● LIVE";
+                stat.style.color = "#00ff88";
+            }
             myConnections[id] = conn;
         });
 
@@ -174,7 +212,6 @@
         conn.on('error', () => removeCamera(id));
     }
 
-    // カメラを削除
     function removeCamera(id) {
         if (myConnections[id]) {
             myConnections[id].close();
@@ -184,7 +221,6 @@
         if (card) card.remove();
     }
 
-    // QRスキャナー
     function startQRScanner() {
         const reader = new Html5Qrcode("reader");
         reader.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (id) => {
