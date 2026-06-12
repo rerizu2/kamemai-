@@ -3,143 +3,204 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>超高速画面共有 (バイナリ転送版)</title>
+    <title>高速画面共有 (4桁ID版)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; padding: 10px; }
-        .container { max-width: 900px; margin: auto; background: #2a2a2a; padding: 15px; border-radius: 12px; }
-        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; background: #007bff; color: white; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin-top: 15px; }
-        .screen-box { background: #000; border-radius: 8px; padding: 5px; border: 1px solid #444; }
-        img { width: 100%; border-radius: 4px; background: #111; min-height: 200px; object-fit: contain; }
-        .fps-counter { font-size: 10px; color: #0f0; }
+        body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: #2a2a2a; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { margin-top: 0; color: #00d1ff; }
+        
+        button { 
+            width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; 
+            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        .btn-main { background: #007bff; color: white; }
+        .btn-sub { background: #444; color: white; }
+        .btn-scan { background: #28a745; color: white; }
+        button:active { transform: scale(0.98); }
+
+        input { 
+            width: calc(100% - 24px); padding: 12px; margin: 10px 0; border-radius: 8px; 
+            border: 1px solid #444; background: #000; color: #fff; font-size: 24px; text-align: center;
+            letter-spacing: 5px;
+        }
+
+        #display-img { width: 100%; border-radius: 10px; background: #000; display: none; margin-top: 15px; }
+        video { width: 100%; border-radius: 10px; display: none; margin-top: 10px; border: 1px solid #555; }
+        
+        #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 15px 0; }
+        #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
+
+        .status { font-size: 14px; color: #aaa; margin: 10px 0; }
         .hidden { display: none; }
-        #log { font-size: 11px; color: #aaa; background: #000; padding: 10px; margin: 10px 0; text-align: left; height: 80px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h3>高速画面共有 (バイナリ転送)</h3>
-    <div id="log">起動待機中...</div>
+    <h2>高速画面共有</h2>
+    <p style="font-size: 12px; color: #888;">更新速度: 0.1秒 (バックグラウンド維持)</p>
 
-    <div id="setup">
-        <button onclick="startBroadcast()">💻 配信を開始する</button>
-        <button onclick="startViewer()" style="background:#6610f2;">🖥️ 視聴を開始する</button>
+    <div id="mode-selection">
+        <button class="btn-main" onclick="initAsScreenShare()">💻 画面を共有する</button>
+        <button class="btn-sub" onclick="showMonitorSetup()">🖥️ 別の画面を見る</button>
     </div>
 
-    <div id="broadcaster" class="hidden">
-        <p>配信ID: <span id="my-id" style="font-size:24px; color:#00d1ff; font-weight:bold;">----</span></p>
+    <div id="screen-ui" class="hidden">
+        <p class="status">視聴側にこの4桁の数字を伝えてください</p>
+        <div style="font-size: 48px; font-weight: bold; color: #00d1ff; letter-spacing: 10px;" id="my-id-text">----</div>
         <div id="qrcode"></div>
-        <video id="v-preview" autoplay playsinline muted style="width:200px; border:1px solid #444;"></video>
-        <canvas id="c-canvas" class="hidden"></canvas>
+        <video id="temp-video" autoplay playsinline muted></video>
+        <canvas id="capture-canvas" class="hidden"></canvas>
+        <button class="btn-sub" onclick="location.reload()">共有を停止</button>
     </div>
 
-    <div id="viewer" class="hidden">
-        <input type="number" id="join-id" placeholder="4桁ID" style="padding:10px; width:80px;">
-        <button onclick="joinStream()">+ 画面追加</button>
-        <div id="monitor-grid" class="grid"></div>
+    <div id="monitor-setup" class="hidden">
+        <p>接続方法を選んでください</p>
+        <button class="btn-scan" onclick="startQRScanner()">📷 QRをスキャン</button>
+        <div id="reader"></div>
+        <input type="number" id="peer-id-input" placeholder="4桁のID" maxlength="4" oninput="if(value.length>4)value=value.slice(0,4)">
+        <button class="btn-main" onclick="connectViaInput()">接続して画面を見る</button>
+        <button class="btn-sub" onclick="location.reload()">戻る</button>
+    </div>
+
+    <div id="monitor-display" class="hidden">
+        <div class="status" id="conn-status">接続中...</div>
+        <img id="display-img" src="" alt="画面受信中">
+        <button class="btn-sub" style="margin-top:20px;" onclick="location.reload()">切断して終了</button>
     </div>
 </div>
 
 <script>
-    const APP_ID = "BIN-SCR-";
     let peer;
-    const log = (m) => { const e = document.getElementById('log'); e.innerHTML += `> ${m}<br>`; e.scrollTop = e.scrollHeight; };
+    let conn;
+    let worker;
+    
+    const INTERVAL = 100; 
+    const IMG_WIDTH = 800; 
+    const QUALITY = 0.4;
 
-    // --- 配信側 ---
-    async function startBroadcast() {
-        const video = document.getElementById('v-preview');
-        const canvas = document.getElementById('c-canvas');
+    // Web Worker (バックグラウンドでのタイマー維持用)
+    const workerCode = `
+        let timer;
+        self.onmessage = function(e) {
+            if (e.data === 'start') {
+                timer = setInterval(() => self.postMessage('tick'), ${INTERVAL});
+            } else if (e.data === 'stop') {
+                clearInterval(timer);
+            }
+        };
+    `;
+
+    // 4桁のランダムな数字を生成
+    function generateShortId() {
+        return Math.floor(1000 + Math.random() * 9000).toString();
+    }
+
+    async function initAsScreenShare() {
+        const video = document.getElementById('temp-video');
+        const canvas = document.getElementById('capture-canvas');
         const ctx = canvas.getContext('2d');
 
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { frameRate: 15, width: { ideal: 1280 } } 
+                video: { frameRate: { ideal: 15 } },
+                audio: false 
             });
             video.srcObject = stream;
-            document.getElementById('setup').classList.add('hidden');
-            document.getElementById('broadcaster').classList.remove('hidden');
-        } catch (e) { alert("画面共有に失敗しました"); return; }
+            video.style.display = "block";
+            showUI('screen-ui');
+            stream.getVideoTracks()[0].onended = () => location.reload();
+        } catch (e) { 
+            alert("画面共有の許可が得られませんでした"); 
+            return; 
+        }
 
-        const id = Math.floor(1000 + Math.random() * 9000).toString();
-        peer = new Peer(APP_ID + id, {
-            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
-        });
+        // 4桁IDでPeerを作成（重複していたらエラーが出るので再試行する）
+        const attemptPeerConnection = () => {
+            const shortId = generateShortId();
+            peer = new Peer(shortId);
 
-        peer.on('open', (fullId) => {
-            const shortId = fullId.replace(APP_ID, "");
-            document.getElementById('my-id').innerText = shortId;
-            new QRCode(document.getElementById("qrcode"), { text: shortId, width: 120, height: 120 });
-            log("サーバー接続完了。ID: " + shortId);
-        });
+            peer.on('open', (id) => {
+                document.getElementById('my-id-text').innerText = id;
+                document.getElementById('qrcode').innerHTML = ""; // 前のQRを消去
+                new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
+            });
 
-        peer.on('connection', (conn) => {
-            log("視聴者が接続しました。転送を開始します。");
-            
-            // 0.1秒ごとの定期実行
-            setInterval(() => {
-                if (conn.open && video.readyState >= 2) {
-                    const w = 800; // 転送サイズ
-                    const h = w * (video.videoHeight / video.videoWidth);
-                    canvas.width = w; canvas.height = h;
-                    ctx.drawImage(video, 0, 0, w, h);
-                    
-                    // 【重要】toBlob を使ってバイナリで送る（toDataURLより高速で軽量）
-                    canvas.toBlob((blob) => {
-                        if (blob) conn.send(blob); 
-                    }, 'image/jpeg', 0.4); // 画質0.4
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    // IDが既に使われていたら再試行
+                    attemptPeerConnection();
+                } else {
+                    console.error(err);
                 }
-            }, 100); 
+            });
+
+            // Web Worker設定
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            worker = new Worker(URL.createObjectURL(blob));
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                worker.onmessage = () => {
+                    if (conn && conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
+                        const ratio = video.videoHeight / video.videoWidth;
+                        canvas.width = IMG_WIDTH;
+                        canvas.height = IMG_WIDTH * ratio;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
+                    }
+                };
+                worker.postMessage('start');
+            });
+        };
+
+        attemptPeerConnection();
+    }
+
+    function showMonitorSetup() {
+        showUI('monitor-setup');
+        peer = new Peer(); // 受信側はランダムなIDでOK
+    }
+
+    function connectViaInput() {
+        const id = document.getElementById('peer-id-input').value;
+        if (id) connectToPeer(id);
+    }
+
+    function startQRScanner() {
+        const html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+            html5QrCode.stop();
+            connectToPeer(decodedText);
         });
     }
 
-    // --- 視聴側 ---
-    function startViewer() {
-        document.getElementById('setup').classList.add('hidden');
-        document.getElementById('viewer').classList.remove('hidden');
-        peer = new Peer({
-            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
+    function connectToPeer(targetId) {
+        showUI('monitor-display');
+        conn = peer.connect(targetId);
+        conn.on('open', () => {
+            document.getElementById('conn-status').innerText = "接続成功！画面受信中...";
+            document.getElementById('display-img').style.display = "block";
         });
-        log("視聴モード準備完了");
-    }
-
-    function joinStream() {
-        const id = document.getElementById('join-id').value;
-        const conn = peer.connect(APP_ID + id);
-        
-        const box = document.createElement('div');
-        box.className = 'screen-box';
-        box.innerHTML = `<div class="fps-counter">ID: ${id} | <span id="fps-${id}">0</span>fps</div><img id="img-${id}">`;
-        document.getElementById('monitor-grid').appendChild(box);
-
-        let lastTime = Date.now();
-        let frameCount = 0;
-        let objectUrl = null;
-
-        conn.on('open', () => log(id + " に接続しました"));
-        
         conn.on('data', (data) => {
-            if (data instanceof Blob) {
-                // 前のメモリを解放してメモリリークを防ぐ
-                if (objectUrl) URL.revokeObjectURL(objectUrl);
-                
-                // 受信したバイナリデータを画像URLに変換
-                objectUrl = URL.createObjectURL(data);
-                document.getElementById(`img-${id}`).src = objectUrl;
-
-                // FPS計測
-                frameCount++;
-                const now = Date.now();
-                if (now - lastTime >= 1000) {
-                    document.getElementById(`fps-${id}`).innerText = frameCount;
-                    frameCount = 0;
-                    lastTime = now;
-                }
-            }
+            document.getElementById('display-img').src = data;
         });
+        conn.on('close', () => {
+            alert("接続が終了しました");
+            location.reload();
+        });
+    }
+
+    function showUI(uiId) {
+        ['mode-selection', 'screen-ui', 'monitor-setup', 'monitor-display'].forEach(id => {
+            document.getElementById(id).classList.add('hidden');
+        });
+        document.getElementById(uiId).classList.remove('hidden');
     }
 </script>
+
 </body>
 </html>
