@@ -3,139 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画面共有 (動作確認・軽量版)</title>
+    <title>超高速画面共有 (バイナリ転送版)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; padding: 10px; }
-        .container { max-width: 800px; margin: auto; background: #2a2a2a; padding: 15px; border-radius: 12px; }
-        .btn { padding: 12px; margin: 5px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .btn-main { background: #007bff; color: white; width: 100%; font-size: 16px; }
-        .btn-add { background: #28a745; color: white; }
-        input { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #000; color: #fff; width: 100px; font-size: 18px; }
-        #monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin-top: 15px; }
+        .container { max-width: 900px; margin: auto; background: #2a2a2a; padding: 15px; border-radius: 12px; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; background: #007bff; color: white; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin-top: 15px; }
         .screen-box { background: #000; border-radius: 8px; padding: 5px; border: 1px solid #444; }
-        .status-tag { font-size: 11px; color: #0f0; margin-bottom: 4px; display: block; }
-        img { width: 100%; border-radius: 4px; background: #111; min-height: 150px; }
-        #log { font-size: 10px; color: #aaa; background: #000; padding: 8px; margin-top: 10px; text-align: left; height: 60px; overflow-y: auto; border-radius: 5px; }
+        img { width: 100%; border-radius: 4px; background: #111; min-height: 200px; object-fit: contain; }
+        .fps-counter { font-size: 10px; color: #0f0; }
         .hidden { display: none; }
+        #log { font-size: 11px; color: #aaa; background: #000; padding: 10px; margin: 10px 0; text-align: left; height: 80px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h3>高速画面共有</h3>
-    <div id="log">システム待機中...</div>
+    <h3>高速画面共有 (バイナリ転送)</h3>
+    <div id="log">起動待機中...</div>
 
-    <div id="mode-selection">
-        <button class="btn btn-main" onclick="startBroadcaster()">💻 画面を配信する</button>
-        <button class="btn btn-main" style="background:#6610f2; margin-top:10px;" onclick="startViewer()">🖥️ 画面を視聴する</button>
+    <div id="setup">
+        <button onclick="startBroadcast()">💻 配信を開始する</button>
+        <button onclick="startViewer()" style="background:#6610f2;">🖥️ 視聴を開始する</button>
     </div>
 
-    <!-- 配信側 -->
-    <div id="ui-broadcast" class="hidden">
-        <p>視聴側でこの4桁を入力してください</p>
-        <div style="font-size: 40px; font-weight: bold; color: #00d1ff;" id="my-id">----</div>
-        <div id="qrcode" style="background:white; padding:10px; display:inline-block; margin:10px;"></div>
-        <video id="preview" autoplay playsinline muted style="width:100%; max-width:400px; border:1px solid #555;"></video>
-        <canvas id="cap-canvas" class="hidden"></canvas>
+    <div id="broadcaster" class="hidden">
+        <p>配信ID: <span id="my-id" style="font-size:24px; color:#00d1ff; font-weight:bold;">----</span></p>
+        <div id="qrcode"></div>
+        <video id="v-preview" autoplay playsinline muted style="width:200px; border:1px solid #444;"></video>
+        <canvas id="c-canvas" class="hidden"></canvas>
     </div>
 
-    <!-- 視聴側 -->
-    <div id="ui-view" class="hidden">
-        <input type="number" id="input-id" placeholder="4桁ID">
-        <button class="btn btn-add" onclick="addScreen()">+ 追加</button>
-        <div id="monitor-grid"></div>
+    <div id="viewer" class="hidden">
+        <input type="number" id="join-id" placeholder="4桁ID" style="padding:10px; width:80px;">
+        <button onclick="joinStream()">+ 画面追加</button>
+        <div id="monitor-grid" class="grid"></div>
     </div>
 </div>
 
 <script>
-    const PREFIX = "SCR10-";
+    const APP_ID = "BIN-SCR-";
     let peer;
     const log = (m) => { const e = document.getElementById('log'); e.innerHTML += `> ${m}<br>`; e.scrollTop = e.scrollHeight; };
 
-    // 環境チェック
-    if (location.protocol === 'file:') {
-        alert("【エラー】このプログラムはファイルをダブルクリックでは動きません。GitHub Pagesなどのサーバーにアップロードするか、ローカルサーバー(VSCode Live Server等)で実行してください。");
-    }
-
-    // --- 配信側ロジック ---
-    async function startBroadcaster() {
-        log("配信準備中...");
-        const video = document.getElementById('preview');
-        const canvas = document.getElementById('cap-canvas');
+    // --- 配信側 ---
+    async function startBroadcast() {
+        const video = document.getElementById('v-preview');
+        const canvas = document.getElementById('c-canvas');
         const ctx = canvas.getContext('2d');
 
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { frameRate: 10, width: { max: 800 } } 
+                video: { frameRate: 15, width: { ideal: 1280 } } 
             });
             video.srcObject = stream;
-            document.getElementById('mode-selection').classList.add('hidden');
-            document.getElementById('ui-broadcast').classList.remove('hidden');
-        } catch (e) { log("エラー: 共有が拒否されました"); return; }
+            document.getElementById('setup').classList.add('hidden');
+            document.getElementById('broadcaster').classList.remove('hidden');
+        } catch (e) { alert("画面共有に失敗しました"); return; }
 
         const id = Math.floor(1000 + Math.random() * 9000).toString();
-        peer = new Peer(PREFIX + id, { debug: 1 });
+        peer = new Peer(APP_ID + id, {
+            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
+        });
 
         peer.on('open', (fullId) => {
-            const shortId = fullId.replace(PREFIX, "");
+            const shortId = fullId.replace(APP_ID, "");
             document.getElementById('my-id').innerText = shortId;
             new QRCode(document.getElementById("qrcode"), { text: shortId, width: 120, height: 120 });
-            log("配信待機中：ID " + shortId);
+            log("サーバー接続完了。ID: " + shortId);
         });
 
         peer.on('connection', (conn) => {
-            log("視聴者が接続しました");
-            // 0.1秒おきに送信
+            log("視聴者が接続しました。転送を開始します。");
+            
+            // 0.1秒ごとの定期実行
             setInterval(() => {
                 if (conn.open && video.readyState >= 2) {
-                    const w = 640;
+                    const w = 800; // 転送サイズ
                     const h = w * (video.videoHeight / video.videoWidth);
                     canvas.width = w; canvas.height = h;
                     ctx.drawImage(video, 0, 0, w, h);
-                    // 画質を0.2まで下げて転送速度を最優先
-                    conn.send(canvas.toDataURL('image/jpeg', 0.2));
+                    
+                    // 【重要】toBlob を使ってバイナリで送る（toDataURLより高速で軽量）
+                    canvas.toBlob((blob) => {
+                        if (blob) conn.send(blob); 
+                    }, 'image/jpeg', 0.4); // 画質0.4
                 }
-            }, 100);
+            }, 100); 
         });
     }
 
-    // --- 視聴側ロジック ---
+    // --- 視聴側 ---
     function startViewer() {
-        document.getElementById('mode-selection').classList.add('hidden');
-        document.getElementById('ui-view').classList.remove('hidden');
-        peer = new Peer({ debug: 1 });
+        document.getElementById('setup').classList.add('hidden');
+        document.getElementById('viewer').classList.remove('hidden');
+        peer = new Peer({
+            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
+        });
         log("視聴モード準備完了");
     }
 
-    function addScreen() {
-        const id = document.getElementById('input-id').value;
-        if (!id) return;
+    function joinStream() {
+        const id = document.getElementById('join-id').value;
+        const conn = peer.connect(APP_ID + id);
         
-        log(id + " へ接続試行...");
-        const conn = peer.connect(PREFIX + id);
-        
-        const grid = document.getElementById('monitor-grid');
         const box = document.createElement('div');
         box.className = 'screen-box';
-        box.innerHTML = `<span class="status-tag" id="st-${id}">接続中...</span><img id="img-${id}">`;
-        grid.appendChild(box);
+        box.innerHTML = `<div class="fps-counter">ID: ${id} | <span id="fps-${id}">0</span>fps</div><img id="img-${id}">`;
+        document.getElementById('monitor-grid').appendChild(box);
 
-        conn.on('open', () => {
-            log(id + " 接続成功！");
-            document.getElementById(`st-${id}`).innerText = "● LIVE (" + id + ")";
-        });
+        let lastTime = Date.now();
+        let frameCount = 0;
+        let objectUrl = null;
 
+        conn.on('open', () => log(id + " に接続しました"));
+        
         conn.on('data', (data) => {
-            // 受信したデータを画像に流し込む
-            document.getElementById(`img-${id}`).src = data;
-        });
+            if (data instanceof Blob) {
+                // 前のメモリを解放してメモリリークを防ぐ
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
+                
+                // 受信したバイナリデータを画像URLに変換
+                objectUrl = URL.createObjectURL(data);
+                document.getElementById(`img-${id}`).src = objectUrl;
 
-        conn.on('close', () => {
-            log(id + " 切断されました");
-            document.getElementById(`st-${id}`).innerText = "OFFLINE";
-            document.getElementById(`st-${id}`).style.color = "red";
+                // FPS計測
+                frameCount++;
+                const now = Date.now();
+                if (now - lastTime >= 1000) {
+                    document.getElementById(`fps-${id}`).innerText = frameCount;
+                    frameCount = 0;
+                    lastTime = now;
+                }
+            }
         });
     }
 </script>
