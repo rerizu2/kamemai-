@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高速画面共有 (0.1秒更新)</title>
+    <title>高速画面共有 (4桁ID版)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -23,7 +23,8 @@
 
         input { 
             width: calc(100% - 24px); padding: 12px; margin: 10px 0; border-radius: 8px; 
-            border: 1px solid #444; background: #000; color: #fff; font-size: 18px; text-align: center;
+            border: 1px solid #444; background: #000; color: #fff; font-size: 24px; text-align: center;
+            letter-spacing: 5px;
         }
 
         #display-img { width: 100%; border-radius: 10px; background: #000; display: none; margin-top: 15px; }
@@ -40,7 +41,7 @@
 
 <div class="container">
     <h2>高速画面共有</h2>
-    <p style="font-size: 12px; color: #888;">更新速度: 0.1秒 (10fps)</p>
+    <p style="font-size: 12px; color: #888;">更新速度: 0.1秒 (バックグラウンド維持)</p>
 
     <div id="mode-selection">
         <button class="btn-main" onclick="initAsScreenShare()">💻 画面を共有する</button>
@@ -48,8 +49,8 @@
     </div>
 
     <div id="screen-ui" class="hidden">
-        <p class="status">このIDまたはQRを視聴側に伝えてください</p>
-        <div style="font-size: 24px; font-weight: bold; color: #00d1ff;" id="my-id-text">ID取得中...</div>
+        <p class="status">視聴側にこの4桁の数字を伝えてください</p>
+        <div style="font-size: 48px; font-weight: bold; color: #00d1ff; letter-spacing: 10px;" id="my-id-text">----</div>
         <div id="qrcode"></div>
         <video id="temp-video" autoplay playsinline muted></video>
         <canvas id="capture-canvas" class="hidden"></canvas>
@@ -60,7 +61,7 @@
         <p>接続方法を選んでください</p>
         <button class="btn-scan" onclick="startQRScanner()">📷 QRをスキャン</button>
         <div id="reader"></div>
-        <input type="text" id="peer-id-input" placeholder="相手のIDを入力">
+        <input type="number" id="peer-id-input" placeholder="4桁のID" maxlength="4" oninput="if(value.length>4)value=value.slice(0,4)">
         <button class="btn-main" onclick="connectViaInput()">接続して画面を見る</button>
         <button class="btn-sub" onclick="location.reload()">戻る</button>
     </div>
@@ -75,11 +76,28 @@
 <script>
     let peer;
     let conn;
+    let worker;
     
-    // --- ここで更新間隔を設定 ---
-    const INTERVAL = 100; // 100ms = 0.1秒
+    const INTERVAL = 100; 
     const IMG_WIDTH = 800; 
-    const QUALITY = 0.4;   // 速度優先のため、画質を少し下げています
+    const QUALITY = 0.4;
+
+    // Web Worker (バックグラウンドでのタイマー維持用)
+    const workerCode = `
+        let timer;
+        self.onmessage = function(e) {
+            if (e.data === 'start') {
+                timer = setInterval(() => self.postMessage('tick'), ${INTERVAL});
+            } else if (e.data === 'stop') {
+                clearInterval(timer);
+            }
+        };
+    `;
+
+    // 4桁のランダムな数字を生成
+    function generateShortId() {
+        return Math.floor(1000 + Math.random() * 9000).toString();
+    }
 
     async function initAsScreenShare() {
         const video = document.getElementById('temp-video');
@@ -88,47 +106,63 @@
 
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { frameRate: { ideal: 10 } }, // 取得側も10fpsを目標にする
+                video: { frameRate: { ideal: 15 } },
                 audio: false 
             });
             video.srcObject = stream;
             video.style.display = "block";
             showUI('screen-ui');
-
             stream.getVideoTracks()[0].onended = () => location.reload();
-
         } catch (e) { 
             alert("画面共有の許可が得られませんでした"); 
             return; 
         }
 
-        peer = new Peer();
-        peer.on('open', (id) => {
-            document.getElementById('my-id-text').innerText = id;
-            new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
-        });
+        // 4桁IDでPeerを作成（重複していたらエラーが出るので再試行する）
+        const attemptPeerConnection = () => {
+            const shortId = generateShortId();
+            peer = new Peer(shortId);
 
-        peer.on('connection', (connection) => {
-            conn = connection;
-            
-            // 0.1秒ごとにキャプチャして送信
-            setInterval(() => {
-                if (conn && conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
-                    const ratio = video.videoHeight / video.videoWidth;
-                    canvas.width = IMG_WIDTH;
-                    canvas.height = IMG_WIDTH * ratio;
-                    
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    // 指定した画質でJPEG変換して送信
-                    conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
+            peer.on('open', (id) => {
+                document.getElementById('my-id-text').innerText = id;
+                document.getElementById('qrcode').innerHTML = ""; // 前のQRを消去
+                new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
+            });
+
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    // IDが既に使われていたら再試行
+                    attemptPeerConnection();
+                } else {
+                    console.error(err);
                 }
-            }, INTERVAL);
-        });
+            });
+
+            // Web Worker設定
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            worker = new Worker(URL.createObjectURL(blob));
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                worker.onmessage = () => {
+                    if (conn && conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
+                        const ratio = video.videoHeight / video.videoWidth;
+                        canvas.width = IMG_WIDTH;
+                        canvas.height = IMG_WIDTH * ratio;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
+                    }
+                };
+                worker.postMessage('start');
+            });
+        };
+
+        attemptPeerConnection();
     }
 
     function showMonitorSetup() {
         showUI('monitor-setup');
-        peer = new Peer();
+        peer = new Peer(); // 受信側はランダムなIDでOK
     }
 
     function connectViaInput() {
@@ -137,7 +171,7 @@
     }
 
     function startQRScanner() {
-        html5QrCode = new Html5Qrcode("reader");
+        const html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
             html5QrCode.stop();
             connectToPeer(decodedText);
@@ -154,7 +188,10 @@
         conn.on('data', (data) => {
             document.getElementById('display-img').src = data;
         });
-        conn.on('close', () => location.reload());
+        conn.on('close', () => {
+            alert("接続が終了しました");
+            location.reload();
+        });
     }
 
     function showUI(uiId) {
