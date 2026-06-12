@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>マルチ画面共有 (0.1秒更新)</title>
+    <title>マルチ画面共有 (QRスキャン対応)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; padding: 10px; }
         .container { max-width: 900px; margin: auto; background: #2a2a2a; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -18,16 +19,17 @@
         .btn-main { background: #007bff; color: white; width: 100%; }
         .btn-sub { background: #444; color: white; }
         .btn-add { background: #28a745; color: white; }
+        .btn-qr { background: #6f42c1; color: white; }
         
         input { 
             padding: 12px; border-radius: 8px; border: 1px solid #444; 
-            background: #000; color: #fff; font-size: 18px; text-align: center; width: 150px;
+            background: #000; color: #fff; font-size: 18px; text-align: center; width: 120px;
         }
 
         /* 配信側ビデオ */
         #temp-video { width: 100%; border-radius: 10px; display: none; margin-top: 10px; border: 1px solid #555; }
         
-        /* 視聴側グリッドレイアウト */
+        /* 視聴側グリッド */
         #monitor-grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
@@ -37,10 +39,13 @@
             background: #000; border-radius: 10px; padding: 5px; border: 2px solid #333; position: relative;
         }
         .screen-label { 
-            position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.6); 
+            position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.7); 
             padding: 2px 8px; border-radius: 5px; font-size: 12px; color: #00d1ff;
         }
-        .screen-img { width: 100%; border-radius: 5px; display: block; }
+        .screen-img { width: 100%; border-radius: 5px; display: block; min-height: 150px; }
+        
+        /* QRスキャナー用 */
+        #reader { width: 100%; max-width: 400px; margin: 10px auto; border-radius: 10px; overflow: hidden; display: none; }
         
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 15px 0; }
         .hidden { display: none; }
@@ -60,7 +65,7 @@
 
     <!-- 配信側UI -->
     <div id="screen-ui" class="hidden">
-        <p class="status">この4桁IDを視聴側に伝えてください</p>
+        <p class="status">視聴側でこのIDを入力するか、QRをスキャンしてください</p>
         <div style="font-size: 48px; font-weight: bold; color: #00d1ff;" id="my-id-text">----</div>
         <div id="qrcode"></div>
         <video id="temp-video" autoplay playsinline muted></video>
@@ -71,24 +76,26 @@
     <!-- 視聴側UI -->
     <div id="monitor-setup" class="hidden">
         <div style="background:#333; padding:15px; border-radius:10px;">
-            <input type="number" id="peer-id-input" placeholder="4桁ID" maxlength="4">
-            <button class="btn-add" onclick="connectToNewPeer()">+ 画面を追加</button>
+            <div id="reader"></div>
+            <button id="qr-toggle-btn" class="btn-qr" onclick="toggleQRScanner()">📷 QRスキャン開始</button>
+            <br>
+            <input type="number" id="peer-id-input" placeholder="4桁ID">
+            <button class="btn-add" onclick="connectByInput()">+ 追加</button>
             <button class="btn-sub" onclick="location.reload()">終了</button>
         </div>
         
-        <div id="monitor-grid">
-            <!-- ここに複数の画面が追加される -->
-        </div>
+        <div id="monitor-grid"></div>
     </div>
 </div>
 
 <script>
     let peer;
-    const INTERVAL = 100; // 0.1秒
-    const IMG_WIDTH = 640; // 複数画面のため少し解像度を下げて負荷軽減
-    const QUALITY = 0.3;   // 同時接続時の帯域節約
+    let html5QrCode;
+    const INTERVAL = 100;
+    const IMG_WIDTH = 640;
+    const QUALITY = 0.3;
 
-    // --- Web Worker (バックグラウンド維持用) ---
+    // Web Worker (バックグラウンド維持)
     const workerCode = `
         let timer;
         self.onmessage = function(e) {
@@ -100,27 +107,25 @@
         };
     `;
 
-    // --- 配信側ロジック ---
+    // --- 配信側 ---
     async function initAsScreenShare() {
         const video = document.getElementById('temp-video');
         const canvas = document.getElementById('capture-canvas');
         const ctx = canvas.getContext('2d');
 
         try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { frameRate: { ideal: 15 } },
-                audio: false 
-            });
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15 } } });
             video.srcObject = stream;
             video.style.display = "block";
             showUI('screen-ui');
-        } catch (e) { alert("失敗しました"); return; }
+        } catch (e) { return; }
 
         const attemptPeer = () => {
             const shortId = Math.floor(1000 + Math.random() * 9000).toString();
             peer = new Peer(shortId);
             peer.on('open', id => {
                 document.getElementById('my-id-text').innerText = id;
+                document.getElementById('qrcode').innerHTML = "";
                 new QRCode(document.getElementById("qrcode"), { text: id, width: 150, height: 150 });
             });
             peer.on('error', err => { if(err.type==='unavailable-id') attemptPeer(); });
@@ -143,59 +148,82 @@
         attemptPeer();
     }
 
-    // --- 視聴側ロジック ---
+    // --- 視聴側 ---
     function showMonitorSetup() {
         showUI('monitor-setup');
-        peer = new Peer(); // 視聴側はランダムなID
+        peer = new Peer();
     }
 
-    function connectToNewPeer() {
-        const targetId = document.getElementById('peer-id-input').value;
-        if (!targetId || targetId.length !== 4) {
+    // 入力ボタンから接続
+    function connectByInput() {
+        const id = document.getElementById('peer-id-input').value;
+        if (id.length === 4) {
+            addScreen(id);
+            document.getElementById('peer-id-input').value = "";
+        } else {
             alert("4桁のIDを入力してください");
-            return;
+        }
+    }
+
+    // QRスキャナーの開始/停止
+    async function toggleQRScanner() {
+        const readerEl = document.getElementById('reader');
+        const btn = document.getElementById('qr-toggle-btn');
+
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("reader");
         }
 
-        // 既に接続済みか確認
-        if (document.getElementById(`container-${targetId}`)) {
-            alert("既に接続されています");
-            return;
+        if (readerEl.style.display === "none" || readerEl.style.display === "") {
+            readerEl.style.display = "block";
+            btn.innerText = "❌ スキャン停止";
+            await html5QrCode.start(
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: 250 },
+                (decodedText) => {
+                    addScreen(decodedText); // スキャン成功
+                    toggleQRScanner(); // 成功したら一旦閉じる
+                },
+                (errorMessage) => {} // 無視
+            );
+        } else {
+            await html5QrCode.stop();
+            readerEl.style.display = "none";
+            btn.innerText = "📷 QRスキャン開始";
         }
+    }
 
-        const conn = peer.connect(targetId);
-        
-        // 画面用の枠を先に作成
+    // 画面を追加して接続
+    function addScreen(targetId) {
+        if (document.getElementById(`container-${targetId}`)) return;
+
         const grid = document.getElementById('monitor-grid');
         const container = document.createElement('div');
         container.id = `container-${targetId}`;
         container.className = 'screen-container';
         container.innerHTML = `
             <div class="screen-label">ID: ${targetId} <span id="status-${targetId}">(接続中...)</span></div>
-            <img id="img-${targetId}" class="screen-img" src="" alt="Waiting...">
+            <img id="img-${targetId}" class="screen-img" src="">
             <button class="btn-sub" style="font-size:10px; padding:4px;" onclick="removeScreen('${targetId}')">削除</button>
         `;
         grid.appendChild(container);
 
+        const conn = peer.connect(targetId);
         conn.on('open', () => {
             document.getElementById(`status-${targetId}`).innerText = "● LIVE";
             document.getElementById(`status-${targetId}`).style.color = "#00ff00";
         });
-
         conn.on('data', (data) => {
             document.getElementById(`img-${targetId}`).src = data;
         });
-
         conn.on('close', () => {
-            document.getElementById(`status-${targetId}`).innerText = "(切断されました)";
+            document.getElementById(`status-${targetId}`).innerText = "(切断)";
             document.getElementById(`status-${targetId}`).style.color = "red";
         });
-        
-        document.getElementById('peer-id-input').value = ""; // 入力欄をクリア
     }
 
     function removeScreen(id) {
-        const el = document.getElementById(`container-${id}`);
-        if (el) el.remove();
+        document.getElementById(`container-${id}`).remove();
     }
 
     function showUI(uiId) {
