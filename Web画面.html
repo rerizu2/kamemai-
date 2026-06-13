@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高速画面共有 (4桁ID版)</title>
+    <title>高速画面共有 & 録画 (マイク対応)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -17,8 +17,10 @@
             font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
         }
         .btn-main { background: #007bff; color: white; }
+        .btn-record { background: #dc3545; color: white; }
         .btn-sub { background: #444; color: white; }
         .btn-scan { background: #28a745; color: white; }
+        button:disabled { background: #888; cursor: not-allowed; }
         button:active { transform: scale(0.98); }
 
         input { 
@@ -27,9 +29,7 @@
             letter-spacing: 5px;
         }
 
-        #display-img { width: 100%; border-radius: 10px; background: #000; display: none; margin-top: 15px; }
-        video { width: 100%; border-radius: 10px; display: none; margin-top: 10px; border: 1px solid #555; }
-        
+        video { width: 100%; border-radius: 10px; display: none; margin-top: 10px; border: 1px solid #555; background: #000; }
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 15px 0; }
         #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
 
@@ -40,129 +40,131 @@
 <body>
 
 <div class="container">
-    <h2>高速画面共有</h2>
-    <p style="font-size: 12px; color: #888;">更新速度: 0.1秒 (バックグラウンド維持)</p>
+    <h2>画面共有 & 録画</h2>
 
     <div id="mode-selection">
-        <button class="btn-main" onclick="initAsScreenShare()">💻 画面を共有する</button>
+        <button class="btn-main" onclick="initAsScreenShare()">💻 画面を共有する (マイク込)</button>
         <button class="btn-sub" onclick="showMonitorSetup()">🖥️ 別の画面を見る</button>
     </div>
 
+    <!-- 共有側UI -->
     <div id="screen-ui" class="hidden">
         <p class="status">視聴側にこの4桁の数字を伝えてください</p>
         <div style="font-size: 48px; font-weight: bold; color: #00d1ff; letter-spacing: 10px;" id="my-id-text">----</div>
         <div id="qrcode"></div>
-        <video id="temp-video" autoplay playsinline muted></video>
-        <canvas id="capture-canvas" class="hidden"></canvas>
+        <p>プレビュー (マイク音はハウリング防止で消音中)</p>
+        <video id="local-video" autoplay playsinline muted></video>
         <button class="btn-sub" onclick="location.reload()">共有を停止</button>
     </div>
 
+    <!-- 視聴側セットアップUI -->
     <div id="monitor-setup" class="hidden">
         <p>接続方法を選んでください</p>
         <button class="btn-scan" onclick="startQRScanner()">📷 QRをスキャン</button>
         <div id="reader"></div>
-        <input type="number" id="peer-id-input" placeholder="4桁のID" maxlength="4" oninput="if(value.length>4)value=value.slice(0,4)">
+        <input type="number" id="peer-id-input" placeholder="4桁のID" maxlength="4">
         <button class="btn-main" onclick="connectViaInput()">接続して画面を見る</button>
         <button class="btn-sub" onclick="location.reload()">戻る</button>
     </div>
 
+    <!-- 視聴側メインUI -->
     <div id="monitor-display" class="hidden">
         <div class="status" id="conn-status">接続中...</div>
-        <img id="display-img" src="" alt="画面受信中">
+        <video id="remote-video" autoplay playsinline controls></video>
+        
+        <div id="record-controls" style="margin-top: 15px;">
+            <button id="start-rec" class="btn-record" onclick="startRecording()">🔴 録画開始</button>
+            <button id="stop-rec" class="btn-sub hidden" onclick="stopRecording()">⏹️ 録画停止・保存</button>
+        </div>
+
         <button class="btn-sub" style="margin-top:20px;" onclick="location.reload()">切断して終了</button>
     </div>
 </div>
 
 <script>
     let peer;
-    let conn;
-    let worker;
-    
-    const INTERVAL = 100; 
-    const IMG_WIDTH = 800; 
-    const QUALITY = 0.4;
-
-    // Web Worker (バックグラウンドでのタイマー維持用)
-    const workerCode = `
-        let timer;
-        self.onmessage = function(e) {
-            if (e.data === 'start') {
-                timer = setInterval(() => self.postMessage('tick'), ${INTERVAL});
-            } else if (e.data === 'stop') {
-                clearInterval(timer);
-            }
-        };
-    `;
+    let localStream;
+    let mediaRecorder;
+    let recordedChunks = [];
 
     // 4桁のランダムな数字を生成
     function generateShortId() {
         return Math.floor(1000 + Math.random() * 9000).toString();
     }
 
+    // --- 共有側 (Sender) ---
     async function initAsScreenShare() {
-        const video = document.getElementById('temp-video');
-        const canvas = document.getElementById('capture-canvas');
-        const ctx = canvas.getContext('2d');
-
         try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { frameRate: { ideal: 15 } },
-                audio: false 
+            // 1. 画面共有ストリームを取得
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                video: { frameRate: { ideal: 30 } },
+                audio: true // システム音を含める
             });
-            video.srcObject = stream;
-            video.style.display = "block";
+
+            // 2. マイクストリームを取得
+            let micStream;
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (e) {
+                console.warn("マイクの使用が拒否されました。画面音のみ送信します。");
+            }
+
+            // 3. 画面音とマイク音をミックス
+            const audioContext = new AudioContext();
+            const destination = audioContext.createMediaStreamDestination();
+            
+            if (screenStream.getAudioTracks().length > 0) {
+                audioContext.createMediaStreamSource(screenStream).connect(destination);
+            }
+            if (micStream) {
+                audioContext.createMediaStreamSource(micStream).connect(destination);
+            }
+
+            // 4. 送信用ストリームの組み立て
+            localStream = new MediaStream([
+                screenStream.getVideoTracks()[0],
+                ...destination.stream.getAudioTracks()
+            ]);
+
+            document.getElementById('local-video').srcObject = localStream;
+            document.getElementById('local-video').style.display = "block";
             showUI('screen-ui');
-            stream.getVideoTracks()[0].onended = () => location.reload();
+
+            startPeerServer();
+
+            // 共有停止時の処理
+            screenStream.getVideoTracks()[0].onended = () => location.reload();
+
         } catch (e) { 
-            alert("画面共有の許可が得られませんでした"); 
-            return; 
+            console.error(e);
+            alert("開始できませんでした。権限を確認してください。"); 
         }
-
-        // 4桁IDでPeerを作成（重複していたらエラーが出るので再試行する）
-        const attemptPeerConnection = () => {
-            const shortId = generateShortId();
-            peer = new Peer(shortId);
-
-            peer.on('open', (id) => {
-                document.getElementById('my-id-text').innerText = id;
-                document.getElementById('qrcode').innerHTML = ""; // 前のQRを消去
-                new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
-            });
-
-            peer.on('error', (err) => {
-                if (err.type === 'unavailable-id') {
-                    // IDが既に使われていたら再試行
-                    attemptPeerConnection();
-                } else {
-                    console.error(err);
-                }
-            });
-
-            // Web Worker設定
-            const blob = new Blob([workerCode], { type: 'application/javascript' });
-            worker = new Worker(URL.createObjectURL(blob));
-
-            peer.on('connection', (connection) => {
-                conn = connection;
-                worker.onmessage = () => {
-                    if (conn && conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
-                        const ratio = video.videoHeight / video.videoWidth;
-                        canvas.width = IMG_WIDTH;
-                        canvas.height = IMG_WIDTH * ratio;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
-                    }
-                };
-                worker.postMessage('start');
-            });
-        };
-
-        attemptPeerConnection();
     }
 
+    function startPeerServer() {
+        const shortId = generateShortId();
+        peer = new Peer(shortId);
+
+        peer.on('open', (id) => {
+            document.getElementById('my-id-text').innerText = id;
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
+        });
+
+        // 受信側から着信があったらストリームを返す
+        peer.on('call', (call) => {
+            call.answer(localStream);
+        });
+
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') startPeerServer();
+        });
+    }
+
+    // --- 視聴側 (Receiver) ---
     function showMonitorSetup() {
         showUI('monitor-setup');
-        peer = new Peer(); // 受信側はランダムなIDでOK
+        peer = new Peer(); 
     }
 
     function connectViaInput() {
@@ -180,18 +182,57 @@
 
     function connectToPeer(targetId) {
         showUI('monitor-display');
-        conn = peer.connect(targetId);
-        conn.on('open', () => {
-            document.getElementById('conn-status').innerText = "接続成功！画面受信中...";
-            document.getElementById('display-img').style.display = "block";
+        
+        // 相手に発信する (MediaConnection)
+        // 引数に空のストリームを渡すか、何も渡さない
+        const call = peer.call(targetId, new MediaStream());
+
+        call.on('stream', (remoteStream) => {
+            document.getElementById('conn-status').innerText = "受信中 (音声あり)";
+            const video = document.getElementById('remote-video');
+            video.srcObject = remoteStream;
+            video.style.display = "block";
+            window.remoteStream = remoteStream; // 録画用に保存
         });
-        conn.on('data', (data) => {
-            document.getElementById('display-img').src = data;
-        });
-        conn.on('close', () => {
+
+        call.on('close', () => {
             alert("接続が終了しました");
             location.reload();
         });
+    }
+
+    // --- 録画機能 ---
+    function startRecording() {
+        recordedChunks = [];
+        const stream = window.remoteStream;
+        if (!stream) return alert("ストリームが見つかりません");
+
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `recording_${new Date().getTime()}.webm`;
+            a.click();
+        };
+
+        mediaRecorder.start();
+        document.getElementById('start-rec').classList.add('hidden');
+        document.getElementById('stop-rec').classList.remove('hidden');
+        document.getElementById('conn-status').innerText = "🔴 録画中...";
+    }
+
+    function stopRecording() {
+        mediaRecorder.stop();
+        document.getElementById('start-rec').classList.remove('hidden');
+        document.getElementById('stop-rec').classList.add('hidden');
+        document.getElementById('conn-status').innerText = "録画を保存しました";
     }
 
     function showUI(uiId) {
