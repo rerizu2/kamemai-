@@ -3,99 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高速画面共有 (マイク・録画対応版)</title>
+    <title>高速マルチ画面共有 (監視システム版)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: auto; background: #2a2a2a; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        h2 { margin-top: 0; color: #00d1ff; }
+        body { font-family: -apple-system, sans-serif; background: #121212; color: white; margin: 0; padding: 10px; }
+        .container { max-width: 1200px; margin: auto; text-align: center; }
+        h2 { color: #00d1ff; margin-bottom: 10px; }
         
+        /* 共通ボタン */
         button { 
-            width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; 
-            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
+            padding: 12px; margin: 5px; border: none; border-radius: 8px; 
+            font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s;
         }
         .btn-main { background: #007bff; color: white; }
         .btn-sub { background: #444; color: white; }
         .btn-scan { background: #28a745; color: white; }
-        .btn-record { background: #dc3545; color: white; }
-        .btn-recording { background: #ffc107; color: black; animation: blink 1s infinite; }
+        .btn-record { background: #dc3545; color: white; padding: 5px 10px; font-size: 12px; }
+        .recording { background: #ffc107 !important; color: black !important; animation: blink 1s infinite; }
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        
-        button:active { transform: scale(0.98); }
-        button:disabled { background: #333; color: #777; cursor: not-allowed; }
 
+        /* 入力エリア */
+        .setup-box { background: #2a2a2a; padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
         input { 
-            width: calc(100% - 24px); padding: 12px; margin: 10px 0; border-radius: 8px; 
-            border: 1px solid #444; background: #000; color: #fff; font-size: 24px; text-align: center;
-            letter-spacing: 5px;
+            width: 150px; padding: 12px; border-radius: 8px; border: 1px solid #444; 
+            background: #000; color: #fff; font-size: 20px; text-align: center;
         }
 
-        #display-img { width: 100%; border-radius: 10px; background: #000; display: none; margin-top: 15px; }
-        video { width: 100%; border-radius: 10px; display: none; margin-top: 10px; border: 1px solid #555; }
+        /* マルチモニター用グリッド */
+        #monitor-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
+            gap: 15px; padding: 10px; 
+        }
+        .monitor-card { 
+            background: #1e1e1e; border: 2px solid #333; border-radius: 12px; 
+            padding: 10px; position: relative; overflow: hidden;
+        }
+        .monitor-card h4 { margin: 5px 0; font-size: 14px; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
+        .monitor-card img { width: 100%; border-radius: 8px; background: #000; min-height: 180px; }
+        
+        .status-dot { width: 10px; height: 10px; background: #28a745; border-radius: 50%; display: inline-block; margin-right: 5px; }
         
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin: 15px 0; }
-        #reader { width: 100%; margin-top: 10px; border-radius: 10px; overflow: hidden; }
-
-        .status { font-size: 14px; color: #aaa; margin: 10px 0; }
         .hidden { display: none; }
-        #record-status { color: #ff4444; font-weight: bold; margin: 5px; }
+        video { width: 100%; border-radius: 8px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>高速画面共有 + マイク</h2>
-    
-    <div id="mode-selection">
-        <button class="btn-main" onclick="initAsScreenShare()">💻 画面とマイクを共有</button>
-        <button class="btn-sub" onclick="showMonitorSetup()">🖥️ 別の画面を見る</button>
+    <h2>Multi-View System</h2>
+
+    <!-- モード選択 -->
+    <div id="mode-selection" class="setup-box">
+        <button class="btn-main" onclick="initAsScreenShare()">💻 画面を共有する（送信側）</button>
+        <button class="btn-sub" onclick="showMonitorDashboard()">🖥️ 複数の画面を監視する（受信側）</button>
     </div>
 
     <!-- 共有側UI -->
-    <div id="screen-ui" class="hidden">
+    <div id="screen-ui" class="hidden setup-box">
+        <p>このIDを監視者に伝えてください</p>
         <div id="my-id-text" style="font-size: 48px; font-weight: bold; color: #00d1ff; letter-spacing: 10px;">----</div>
-        <div id="qrcode"></div>
-        <div id="record-status-sender" class="hidden">● 録画中 (音声込)...</div>
-        <button id="btn-record-sender" class="btn-record" onclick="toggleRecording('sender')">🔴 録画開始</button>
+        <div id="qrcode"></div><br>
+        <button id="btn-record-sender" class="btn-record" onclick="toggleRecording('sender')">🔴 自分の画面を録画</button>
         <video id="temp-video" autoplay playsinline muted></video>
         <canvas id="capture-canvas" class="hidden"></canvas>
-        <button class="btn-sub" onclick="location.reload()">共有を停止</button>
+        <button class="btn-sub" onclick="location.reload()">共有を終了</button>
     </div>
 
-    <!-- 接続設定UI -->
-    <div id="monitor-setup" class="hidden">
-        <button class="btn-scan" onclick="startQRScanner()">📷 QRをスキャン</button>
-        <div id="reader"></div>
-        <input type="number" id="peer-id-input" placeholder="4桁のID" maxlength="4">
-        <button class="btn-main" onclick="connectViaInput()">接続して画面を見る</button>
-        <button class="btn-sub" onclick="location.reload()">戻る</button>
-    </div>
+    <!-- 監視側UI（ダッシュボード） -->
+    <div id="monitor-dashboard" class="hidden">
+        <div class="setup-box">
+            <input type="number" id="peer-id-input" placeholder="4桁ID">
+            <button class="btn-main" onclick="connectToNewPeer()">＋ 画面を追加</button>
+            <button class="btn-scan" onclick="startQRScanner()">📷 QRスキャン</button>
+            <div id="reader"></div>
+        </div>
 
-    <!-- 受信側UI -->
-    <div id="monitor-display" class="hidden">
-        <div class="status" id="conn-status">接続中...</div>
-        <div id="record-status-receiver" class="hidden">● 録画中 (音声込)...</div>
-        <button id="btn-record-receiver" class="btn-record" onclick="toggleRecording('receiver')">🔴 画面と音声を録画</button>
-        <img id="display-img" src="" alt="画面受信中">
-        <!-- 音声再生用 -->
-        <audio id="remote-audio" autoplay></audio>
-        <!-- 受信録画用の隠しキャンバス -->
-        <canvas id="record-canvas" class="hidden"></canvas>
-        <button class="btn-sub" style="margin-top:20px;" onclick="location.reload()">切断して終了</button>
+        <div id="monitor-grid">
+            <!-- ここに監視パネルが追加される -->
+        </div>
+        
+        <button class="btn-sub" onclick="location.reload()">全終了</button>
     </div>
 </div>
 
 <script>
     let peer;
-    let conn;
-    let worker;
-    let mediaRecorder;
-    let recordedChunks = [];
-    let isRecording = false;
-    let localStream; // マイク＋画面のストリーム
-    let remoteStream; // 受信した音声ストリーム
+    let connections = {}; // IDごとの接続情報
+    let recorders = {};   // IDごとのMediaRecorder
+    let recordedChunks = {};
+    let localStream;      // 送信側のストリーム
     
     const INTERVAL = 100; 
     const IMG_WIDTH = 800; 
@@ -112,201 +112,212 @@
         };
     `;
 
-    function generateShortId() {
-        return Math.floor(1000 + Math.random() * 9000).toString();
-    }
-
-    // --- 録画ロジック ---
-    function setupRecorder(stream) {
-        recordedChunks = [];
-        // 音声トラックがあるか確認
-        const options = { mimeType: 'video/webm;codecs=vp9,opus' };
-        mediaRecorder = new MediaRecorder(stream, options);
-        
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) recordedChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sharing_record_${new Date().getTime()}.webm`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-        };
-    }
-
-    function toggleRecording(mode) {
-        const btn = mode === 'sender' ? document.getElementById('btn-record-sender') : document.getElementById('btn-record-receiver');
-        const status = mode === 'sender' ? document.getElementById('record-status-sender') : document.getElementById('record-status-receiver');
-
-        if (!isRecording) {
-            let combinedStream;
-            if (mode === 'sender') {
-                combinedStream = localStream; 
-            } else {
-                // 受信側の録画: キャンバス映像 + 受信音声
-                const canvas = document.getElementById('record-canvas');
-                const videoStream = canvas.captureStream(15);
-                combinedStream = new MediaStream([...videoStream.getVideoTracks()]);
-                if (remoteStream && remoteStream.getAudioTracks().length > 0) {
-                    combinedStream.addTrack(remoteStream.getAudioTracks()[0]);
-                }
-            }
-            
-            if (!combinedStream) return alert("ストリームが準備できていません");
-            
-            setupRecorder(combinedStream);
-            mediaRecorder.start();
-            isRecording = true;
-            btn.innerText = "⏹ 録画停止・保存";
-            btn.classList.add('btn-recording');
-            status.classList.remove('hidden');
-        } else {
-            mediaRecorder.stop();
-            isRecording = false;
-            btn.innerText = mode === 'sender' ? "🔴 録画開始" : "🔴 画面と音声を録画";
-            btn.classList.remove('btn-recording');
-            status.classList.add('hidden');
-        }
-    }
-
-    // --- 送信側処理 ---
+    // ----------------------
+    // 共有側（送信者）
+    // ----------------------
     async function initAsScreenShare() {
         const video = document.getElementById('temp-video');
         const canvas = document.getElementById('capture-canvas');
         const ctx = canvas.getContext('2d');
 
         try {
-            // 画面共有とマイクを両方取得
             const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
             let micStream;
-            try {
-                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            } catch(e) {
-                console.log("マイクなしで続行します");
-            }
+            try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch(e){}
 
-            // ストリームを合成 (録画・送信用)
             localStream = new MediaStream([...screenStream.getVideoTracks()]);
-            if (micStream) micStream.getAudioTracks().forEach(track => localStream.addTrack(track));
-            if (screenStream.getAudioTracks().length > 0) screenStream.getAudioTracks().forEach(track => localStream.addTrack(track));
+            if (micStream) micStream.getAudioTracks().forEach(t => localStream.addTrack(t));
+            if (screenStream.getAudioTracks().length > 0) screenStream.getAudioTracks().forEach(t => localStream.addTrack(t));
 
             video.srcObject = screenStream;
-            video.style.display = "block";
             showUI('screen-ui');
             screenStream.getVideoTracks()[0].onended = () => location.reload();
-        } catch (e) { 
-            alert("開始できませんでした: " + e); 
-            return; 
-        }
 
-        const attemptPeerConnection = () => {
-            const shortId = generateShortId();
-            peer = new Peer(shortId);
+            const setupPeer = () => {
+                const id = Math.floor(1000 + Math.random() * 9000).toString();
+                peer = new Peer(id);
+                peer.on('open', id => {
+                    document.getElementById('my-id-text').innerText = id;
+                    document.getElementById('qrcode').innerHTML = "";
+                    new QRCode(document.getElementById("qrcode"), { text: id, width: 150, height: 150 });
+                });
+                peer.on('error', err => { if(err.type==='unavailable-id') setupPeer(); });
+                
+                const blob = new Blob([workerCode], { type: 'application/javascript' });
+                const worker = new Worker(URL.createObjectURL(blob));
 
-            peer.on('open', (id) => {
-                document.getElementById('my-id-text').innerText = id;
-                document.getElementById('qrcode').innerHTML = "";
-                new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
-            });
-
-            peer.on('error', (err) => {
-                if (err.type === 'unavailable-id') attemptPeerConnection();
-            });
-
-            const blob = new Blob([workerCode], { type: 'application/javascript' });
-            worker = new Worker(URL.createObjectURL(blob));
-
-            // データ接続と音声コールの両方を管理
-            peer.on('connection', (connection) => {
-                conn = connection;
-                // 接続してきた相手にマイク音声を送る
-                peer.call(conn.peer, localStream);
-
-                worker.onmessage = () => {
-                    if (conn && conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
-                        const ratio = video.videoHeight / video.videoWidth;
-                        canvas.width = IMG_WIDTH;
-                        canvas.height = IMG_WIDTH * ratio;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
-                    }
-                };
-                worker.postMessage('start');
-            });
-        };
-        attemptPeerConnection();
+                peer.on('connection', conn => {
+                    peer.call(conn.peer, localStream);
+                    worker.onmessage = () => {
+                        if (conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
+                            const ratio = video.videoHeight / video.videoWidth;
+                            canvas.width = IMG_WIDTH; canvas.height = IMG_WIDTH * ratio;
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
+                        }
+                    };
+                    worker.postMessage('start');
+                });
+            };
+            setupPeer();
+        } catch (e) { alert("失敗: " + e); }
     }
 
-    // --- 受信側処理 ---
-    function showMonitorSetup() {
-        showUI('monitor-setup');
+    // ----------------------
+    // 監視側（受信者）
+    // ----------------------
+    function showMonitorDashboard() {
+        showUI('monitor-dashboard');
         peer = new Peer();
-        
-        // 音声着信時の処理
-        peer.on('call', (call) => {
-            call.answer(); // 応答する
-            call.on('stream', (stream) => {
-                remoteStream = stream;
-                document.getElementById('remote-audio').srcObject = stream;
+        // 音声着信を一括受け入れ
+        peer.on('call', call => {
+            call.answer();
+            call.on('stream', stream => {
+                const audioEl = document.getElementById(`audio-${call.peer}`);
+                if (audioEl) {
+                    audioEl.srcObject = stream;
+                    connections[call.peer].stream = stream;
+                }
             });
         });
     }
 
-    function connectViaInput() {
+    function connectToNewPeer() {
         const id = document.getElementById('peer-id-input').value;
-        if (id) connectToPeer(id);
+        if (!id || connections[id]) return;
+        addMonitorCard(id);
+        const conn = peer.connect(id);
+        setupConnection(id, conn);
+        document.getElementById('peer-id-input').value = "";
     }
 
-    function startQRScanner() {
-        const html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
-            html5QrCode.stop();
-            connectToPeer(decodedText);
-        });
-    }
-
-    function connectToPeer(targetId) {
-        showUI('monitor-display');
-        const displayImg = document.getElementById('display-img');
-        const recordCanvas = document.getElementById('record-canvas');
-        const recordCtx = recordCanvas.getContext('2d');
-
-        conn = peer.connect(targetId);
+    function setupConnection(id, conn) {
+        connections[id] = { conn: conn, stream: null };
         conn.on('open', () => {
-            document.getElementById('conn-status').innerText = "接続成功！画面と音声を受信中...";
-            displayImg.style.display = "block";
+            document.getElementById(`status-${id}`).innerText = "接続中";
         });
-
-        conn.on('data', (data) => {
-            displayImg.src = data;
+        conn.on('data', data => {
+            const img = document.getElementById(`img-${id}`);
+            if (img) img.src = data;
             
-            // 録画中ならキャンバスを更新
-            if (isRecording) {
-                const img = new Image();
-                img.onload = () => {
-                    recordCanvas.width = img.width;
-                    recordCanvas.height = img.height;
-                    recordCtx.drawImage(img, 0, 0);
+            // 録画用キャンバス更新
+            const canvas = document.getElementById(`canvas-${id}`);
+            if (recorders[id] && recorders[id].state === "recording") {
+                const ctx = canvas.getContext('2d');
+                const drawImg = new Image();
+                drawImg.onload = () => {
+                    canvas.width = drawImg.width; canvas.height = drawImg.height;
+                    ctx.drawImage(drawImg, 0, 0);
                 };
-                img.src = data;
+                drawImg.src = data;
             }
         });
-
-        conn.on('close', () => {
-            alert("接続が終了しました");
-            location.reload();
-        });
+        conn.on('close', () => removeMonitorCard(id));
     }
 
+    function addMonitorCard(id) {
+        const grid = document.getElementById('monitor-grid');
+        const card = document.createElement('div');
+        card.className = 'monitor-card';
+        card.id = `card-${id}`;
+        card.innerHTML = `
+            <h4>
+                <span><span class="status-dot"></span> ID: ${id} (<span id="status-${id}">待機中</span>)</span>
+                <button class="btn-sub" onclick="removeMonitorCard('${id}')" style="padding:2px 8px;">×</button>
+            </h4>
+            <img id="img-${id}" src="" alt="Waiting...">
+            <div style="margin-top:5px;">
+                <button id="rec-btn-${id}" class="btn-record" onclick="toggleMonitorRecording('${id}')">🔴 録画</button>
+                <audio id="audio-${id}" autoplay></audio>
+                <button class="btn-sub" onclick="document.getElementById('audio-${id}').muted = !document.getElementById('audio-${id}').muted" style="padding:5px 10px; font-size:12px;">🔇 消音</button>
+            </div>
+            <canvas id="canvas-${id}" class="hidden"></canvas>
+        `;
+        grid.appendChild(card);
+    }
+
+    function removeMonitorCard(id) {
+        if (connections[id] && connections[id].conn) connections[id].conn.close();
+        delete connections[id];
+        const card = document.getElementById(`card-${id}`);
+        if (card) card.remove();
+    }
+
+    // ----------------------
+    // 録画機能（マルチ対応）
+    // ----------------------
+    function toggleMonitorRecording(id) {
+        if (!recorders[id]) {
+            // 開始
+            const canvas = document.getElementById(`canvas-${id}`);
+            const videoStream = canvas.captureStream(15);
+            const combined = new MediaStream([...videoStream.getVideoTracks()]);
+            const remoteAudio = connections[id].stream;
+            if (remoteAudio) remoteAudio.getAudioTracks().forEach(t => combined.addTrack(t));
+
+            recordedChunks[id] = [];
+            const mr = new MediaRecorder(combined, { mimeType: 'video/webm' });
+            mr.ondataavailable = e => { if(e.data.size > 0) recordedChunks[id].push(e.data); };
+            mr.onstop = () => {
+                const blob = new Blob(recordedChunks[id], { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `monitor_${id}_${Date.now()}.webm`; a.click();
+            };
+            mr.start();
+            recorders[id] = mr;
+            document.getElementById(`rec-btn-${id}`).innerText = "⏹ 停止";
+            document.getElementById(`rec-btn-${id}`).classList.add('recording');
+        } else {
+            // 停止
+            recorders[id].stop();
+            delete recorders[id];
+            document.getElementById(`rec-btn-${id}`).innerText = "🔴 録画";
+            document.getElementById(`rec-btn-${id}`).classList.remove('recording');
+        }
+    }
+
+    // 送信側録画用
+    let senderRecorder;
+    function toggleRecording(mode) {
+        const btn = document.getElementById('btn-record-sender');
+        if (!senderRecorder) {
+            const chunks = [];
+            senderRecorder = new MediaRecorder(localStream, { mimeType: 'video/webm' });
+            senderRecorder.ondataavailable = e => chunks.push(e.data);
+            senderRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = "my_screen.webm"; a.click();
+            };
+            senderRecorder.start();
+            btn.innerText = "⏹ 録画停止";
+            btn.classList.add('recording');
+        } else {
+            senderRecorder.stop();
+            senderRecorder = null;
+            btn.innerText = "🔴 自分の画面を録画";
+            btn.classList.remove('recording');
+        }
+    }
+
+    // ----------------------
+    // 共通
+    // ----------------------
     function showUI(uiId) {
-        ['mode-selection', 'screen-ui', 'monitor-setup', 'monitor-display'].forEach(id => {
+        ['mode-selection', 'screen-ui', 'monitor-dashboard'].forEach(id => {
             document.getElementById(id).classList.add('hidden');
         });
         document.getElementById(uiId).classList.remove('hidden');
+    }
+
+    function startQRScanner() {
+        const scanner = new Html5Qrcode("reader");
+        scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
+            scanner.stop();
+            document.getElementById('peer-id-input').value = text;
+            connectToNewPeer();
+        });
     }
 </script>
 
