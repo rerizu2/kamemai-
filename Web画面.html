@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高速画面共有 (録画機能付き)</title>
+    <title>高速画面共有 (マイク・録画対応版)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -46,10 +46,10 @@
 <body>
 
 <div class="container">
-    <h2>高速画面共有</h2>
+    <h2>高速画面共有 + マイク</h2>
     
     <div id="mode-selection">
-        <button class="btn-main" onclick="initAsScreenShare()">💻 画面を共有する</button>
+        <button class="btn-main" onclick="initAsScreenShare()">💻 画面とマイクを共有</button>
         <button class="btn-sub" onclick="showMonitorSetup()">🖥️ 別の画面を見る</button>
     </div>
 
@@ -57,7 +57,7 @@
     <div id="screen-ui" class="hidden">
         <div id="my-id-text" style="font-size: 48px; font-weight: bold; color: #00d1ff; letter-spacing: 10px;">----</div>
         <div id="qrcode"></div>
-        <div id="record-status-sender" class="hidden">● 録画中...</div>
+        <div id="record-status-sender" class="hidden">● 録画中 (音声込)...</div>
         <button id="btn-record-sender" class="btn-record" onclick="toggleRecording('sender')">🔴 録画開始</button>
         <video id="temp-video" autoplay playsinline muted></video>
         <canvas id="capture-canvas" class="hidden"></canvas>
@@ -76,9 +76,11 @@
     <!-- 受信側UI -->
     <div id="monitor-display" class="hidden">
         <div class="status" id="conn-status">接続中...</div>
-        <div id="record-status-receiver" class="hidden">● 録画中...</div>
-        <button id="btn-record-receiver" class="btn-record" onclick="toggleRecording('receiver')">🔴 画面を録画する</button>
+        <div id="record-status-receiver" class="hidden">● 録画中 (音声込)...</div>
+        <button id="btn-record-receiver" class="btn-record" onclick="toggleRecording('receiver')">🔴 画面と音声を録画</button>
         <img id="display-img" src="" alt="画面受信中">
+        <!-- 音声再生用 -->
+        <audio id="remote-audio" autoplay></audio>
         <!-- 受信録画用の隠しキャンバス -->
         <canvas id="record-canvas" class="hidden"></canvas>
         <button class="btn-sub" style="margin-top:20px;" onclick="location.reload()">切断して終了</button>
@@ -92,7 +94,8 @@
     let mediaRecorder;
     let recordedChunks = [];
     let isRecording = false;
-    let captureStream; // 録画用ストリーム
+    let localStream; // マイク＋画面のストリーム
+    let remoteStream; // 受信した音声ストリーム
     
     const INTERVAL = 100; 
     const IMG_WIDTH = 800; 
@@ -116,7 +119,9 @@
     // --- 録画ロジック ---
     function setupRecorder(stream) {
         recordedChunks = [];
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+        // 音声トラックがあるか確認
+        const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+        mediaRecorder = new MediaRecorder(stream, options);
         
         mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) recordedChunks.push(e.data);
@@ -127,7 +132,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `recording_${new Date().getTime()}.webm`;
+            a.download = `sharing_record_${new Date().getTime()}.webm`;
             a.click();
             window.URL.revokeObjectURL(url);
         };
@@ -138,29 +143,31 @@
         const status = mode === 'sender' ? document.getElementById('record-status-sender') : document.getElementById('record-status-receiver');
 
         if (!isRecording) {
-            // 録画開始
-            let stream;
+            let combinedStream;
             if (mode === 'sender') {
-                stream = document.getElementById('temp-video').srcObject;
+                combinedStream = localStream; 
             } else {
-                // 受信側はCanvasからストリームを作成
+                // 受信側の録画: キャンバス映像 + 受信音声
                 const canvas = document.getElementById('record-canvas');
-                stream = canvas.captureStream(10); // 10fps
+                const videoStream = canvas.captureStream(15);
+                combinedStream = new MediaStream([...videoStream.getVideoTracks()]);
+                if (remoteStream && remoteStream.getAudioTracks().length > 0) {
+                    combinedStream.addTrack(remoteStream.getAudioTracks()[0]);
+                }
             }
             
-            if (!stream) return alert("ストリームが見つかりません");
+            if (!combinedStream) return alert("ストリームが準備できていません");
             
-            setupRecorder(stream);
+            setupRecorder(combinedStream);
             mediaRecorder.start();
             isRecording = true;
             btn.innerText = "⏹ 録画停止・保存";
             btn.classList.add('btn-recording');
             status.classList.remove('hidden');
         } else {
-            // 録画停止
             mediaRecorder.stop();
             isRecording = false;
-            btn.innerText = mode === 'sender' ? "🔴 録画開始" : "🔴 画面を録画する";
+            btn.innerText = mode === 'sender' ? "🔴 録画開始" : "🔴 画面と音声を録画";
             btn.classList.remove('btn-recording');
             status.classList.add('hidden');
         }
@@ -173,16 +180,26 @@
         const ctx = canvas.getContext('2d');
 
         try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { frameRate: { ideal: 15 } },
-                audio: true // 音声もキャプチャ可能にする
-            });
-            video.srcObject = stream;
+            // 画面共有とマイクを両方取得
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            let micStream;
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch(e) {
+                console.log("マイクなしで続行します");
+            }
+
+            // ストリームを合成 (録画・送信用)
+            localStream = new MediaStream([...screenStream.getVideoTracks()]);
+            if (micStream) micStream.getAudioTracks().forEach(track => localStream.addTrack(track));
+            if (screenStream.getAudioTracks().length > 0) screenStream.getAudioTracks().forEach(track => localStream.addTrack(track));
+
+            video.srcObject = screenStream;
             video.style.display = "block";
             showUI('screen-ui');
-            stream.getVideoTracks()[0].onended = () => location.reload();
+            screenStream.getVideoTracks()[0].onended = () => location.reload();
         } catch (e) { 
-            alert("画面共有の許可が得られませんでした"); 
+            alert("開始できませんでした: " + e); 
             return; 
         }
 
@@ -203,8 +220,12 @@
             const blob = new Blob([workerCode], { type: 'application/javascript' });
             worker = new Worker(URL.createObjectURL(blob));
 
+            // データ接続と音声コールの両方を管理
             peer.on('connection', (connection) => {
                 conn = connection;
+                // 接続してきた相手にマイク音声を送る
+                peer.call(conn.peer, localStream);
+
                 worker.onmessage = () => {
                     if (conn && conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
                         const ratio = video.videoHeight / video.videoWidth;
@@ -224,6 +245,15 @@
     function showMonitorSetup() {
         showUI('monitor-setup');
         peer = new Peer();
+        
+        // 音声着信時の処理
+        peer.on('call', (call) => {
+            call.answer(); // 応答する
+            call.on('stream', (stream) => {
+                remoteStream = stream;
+                document.getElementById('remote-audio').srcObject = stream;
+            });
+        });
     }
 
     function connectViaInput() {
@@ -247,14 +277,14 @@
 
         conn = peer.connect(targetId);
         conn.on('open', () => {
-            document.getElementById('conn-status').innerText = "接続成功！画面受信中...";
+            document.getElementById('conn-status').innerText = "接続成功！画面と音声を受信中...";
             displayImg.style.display = "block";
         });
 
         conn.on('data', (data) => {
             displayImg.src = data;
             
-            // 受信した画像を録画用キャンバスにも描画
+            // 録画中ならキャンバスを更新
             if (isRecording) {
                 const img = new Image();
                 img.onload = () => {
