@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Speed Sync (Ultimate Background v1)</title>
+    <title>High-Speed Sync (0.1s Worker版)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #121212; color: white; margin: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        header { background: #2a2a2a; padding: 10px; text-align: center; border-bottom: 2px solid #444; }
+        header { background: #2a2a2a; padding: 10px; text-align: center; border-bottom: 1px solid #444; }
         .main-layout { display: flex; flex: 1; overflow: hidden; }
         .primary-view { flex: 3; display: flex; justify-content: center; align-items: center; background: #000; position: relative; }
         #main-screen { max-width: 100%; max-height: 100%; object-fit: contain; }
@@ -43,9 +43,8 @@
         </div>
         <img id="main-screen" class="hidden">
     </div>
-    
     <div id="teacher-monitor" class="monitor-sidebar hidden">
-        <p style="font-size:12px; font-weight:bold; color:#aaa; margin-bottom:10px;">🎓 生徒の画面一覧 (0.1s)</p>
+        <p style="font-size:12px; font-weight:bold; color:#aaa; margin-bottom:10px;">🎓 生徒の画面一覧 (0.1s高速)</p>
         <div id="student-grid"></div>
     </div>
 </div>
@@ -76,7 +75,7 @@
     let studentConns = {};
     let pktCount = 0;
 
-    // --- バックグラウンド動作専用Workerタイマー ---
+    // --- 【重要】別ウィンドウでも0.1秒を維持するWorker設定 ---
     const workerCode = `
         let timer;
         self.onmessage = function(e) {
@@ -87,14 +86,14 @@
             }
         };
     `;
-    const timerWorker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
+    const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+    const timerWorker = new Worker(URL.createObjectURL(workerBlob));
 
     function setStatus(msg) { document.getElementById('status-text').innerText = msg; }
 
     // --- 教員モード ---
     async function initTeacher() {
         try {
-            // 教員の画面キャプチャを開始
             const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 } });
             video.srcObject = stream;
             document.getElementById('teacher-monitor').classList.remove('hidden');
@@ -106,9 +105,7 @@
                 document.getElementById('display-id').innerText = id;
                 new QRCode(document.getElementById("qrcode"), { text: window.location.href.split('#')[0] + "#" + id, width: 140, height: 140 });
                 setStatus("生徒の接続待機中...");
-                
-                // 【教員側Worker開始】ID確定後にタイマー起動
-                timerWorker.postMessage('start');
+                timerWorker.postMessage('start'); // 0.1秒タイマー開始
             });
 
             peer.on('connection', conn => {
@@ -132,25 +129,20 @@
                 conn.on('close', () => { document.getElementById(`card-${conn.peer}`)?.remove(); delete studentConns[conn.peer]; });
             });
 
-            // 【教員側メイン送信ループ】
-            // Workerからの'tick'（0.1秒ごと）を受け取って、全生徒に画面を送信
+            // 教員側の高速送信ループ（Workerから通知が届くたびに実行）
             timerWorker.onmessage = () => {
                 if (video.readyState >= 2) {
                     canvas.width = 850; 
-                    canvas.height = (video.videoHeight/video.videoWidth)*850;
+                    canvas.height = (video.videoHeight / video.videoWidth) * 850;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const img = canvas.toDataURL('image/jpeg', 0.4);
-                    
+                    const img = canvas.toDataURL('image/jpeg', 0.4); // 画質と負荷のバランス
                     Object.values(studentConns).forEach(c => {
-                        // 通信路が詰まっていない場合のみ送信（フリーズ防止）
-                        if(c.open && c.bufferedAmount === 0) {
-                            c.send({type:'t-img', img: img});
-                        }
+                        // ネットの混雑（バッファ）がない時だけ送ることでフリーズ防止
+                        if(c.open && c.bufferedAmount === 0) c.send({type:'t-img', img});
                     });
                 }
             };
-
-        } catch (e) { alert("共有が許可されませんでした。"); }
+        } catch (e) { alert("許可が必要です"); }
     }
 
     // --- 生徒モード ---
@@ -170,15 +162,13 @@
                 conn.on('open', () => {
                     setStatus("教員に接続成功！");
                     document.getElementById('main-screen').classList.remove('hidden');
+                    timerWorker.postMessage('start'); // 0.1秒タイマー開始
                     
-                    // 【生徒側Worker開始】接続完了後にタイマー起動
-                    timerWorker.postMessage('start');
-                    
-                    // 【生徒側メイン送信ループ】
+                    // 生徒側の高速送信ループ
                     timerWorker.onmessage = () => {
                         if (conn.open && video.readyState >= 2 && conn.bufferedAmount === 0) {
-                            canvas.width = 320;
-                            canvas.height = (video.videoHeight/video.videoWidth)*320;
+                            canvas.width = 320; 
+                            canvas.height = (video.videoHeight / video.videoWidth) * 320;
                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                             const imgData = canvas.toDataURL('image/jpeg', 0.3);
                             conn.send({ type: 's-img', img: imgData });
