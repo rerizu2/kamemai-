@@ -3,30 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Screen Share System (Ultimate Stable)</title>
+    <title>High-Speed Sync (Stable v5)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #121212; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { font-family: sans-serif; background: #121212; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #2a2a2a; padding: 10px; text-align: center; border-bottom: 1px solid #444; }
         
         .main-layout { display: flex; flex: 1; overflow: hidden; }
-        /* 教員画面の表示 */
         .primary-view { flex: 3; display: flex; justify-content: center; align-items: center; background: #000; position: relative; }
-        #main-screen { max-width: 100%; max-height: 100%; object-fit: contain; }
+        #main-screen { max-width: 100%; max-height: 100%; object-fit: contain; border: 1px solid #333; }
 
         /* 右側：生徒監視サイドバー */
-        .monitor-sidebar { width: 300px; background: #1e1e1e; border-left: 2px solid #444; overflow-y: auto; padding: 10px; }
-        .student-card { background: #333; margin-bottom: 12px; padding: 8px; border-radius: 10px; border: 1px solid #555; }
-        .student-card img { width: 100%; background: #000; border-radius: 5px; min-height: 100px; display: block; }
-        .student-id { font-size: 11px; color: #00d1ff; margin-bottom: 4px; }
+        .monitor-sidebar { width: 320px; background: #1e1e1e; border-left: 2px solid #444; overflow-y: auto; padding: 10px; }
+        .student-card { background: #333; margin-bottom: 12px; padding: 8px; border-radius: 10px; border: 2px solid #555; }
+        .student-card img { width: 100%; background: #000; border-radius: 5px; min-height: 120px; display: block; }
+        .student-info { font-size: 11px; color: #00fbff; margin-bottom: 5px; display: flex; justify-content: space-between; }
 
-        /* 自分の配信状態ランプ */
-        #my-status-lamp { position: fixed; bottom: 20px; left: 20px; padding: 8px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; z-index: 100; background: #444; }
-        .active-lamp { background: #e84118 !important; box-shadow: 0 0 10px #e84118; animation: blink 1s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-
-        /* セットアップ */
+        /* セットアップ画面 */
         .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .setup-box { background: #333; padding: 30px; border-radius: 20px; text-align: center; width: 320px; }
         button { padding: 14px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; margin: 10px 0; width: 100%; font-size: 16px; }
@@ -36,38 +30,38 @@
         
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin-top: 10px; }
         .hidden { display: none !important; }
+        .status-msg { font-size: 12px; color: #aaa; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <header>
-    <div style="font-size: 14px;">ID: <span id="display-id" style="font-weight:bold; color:#00d1ff;">----</span></div>
+    <div>ID: <span id="display-id" style="font-weight:bold; color:#00fbff; font-size:20px;">----</span></div>
+    <div id="connection-count" class="status-msg">接続: 0名</div>
 </header>
 
 <div class="main-layout">
     <div class="primary-view">
         <div id="teacher-id-panel" class="hidden" style="text-align:center;">
             <div id="qrcode"></div>
-            <p style="color:#aaa; font-size:12px; margin-top:10px;">生徒がカメラで読み取ると接続されます</p>
+            <p style="color:#aaa; font-size:12px;">生徒にQRコードを見せてください</p>
         </div>
         <img id="main-screen" class="hidden">
     </div>
     
     <div id="teacher-monitor" class="monitor-sidebar hidden">
-        <p style="font-size:12px; font-weight:bold; color:#aaa; margin-bottom:10px;">🎓 生徒監視中 (0.1s)</p>
+        <p style="font-size:12px; font-weight:bold; color:#aaa; margin-bottom:10px;">🎓 生徒の画面一覧</p>
         <div id="student-grid"></div>
     </div>
 </div>
 
-<!-- 自分の送信状態ランプ（生徒用） -->
-<div id="my-status-lamp" class="hidden">🔴 画面送信中</div>
-
-<video id="hidden-video" autoplay playsinline muted class="hidden"></video>
-<canvas id="hidden-canvas" class="hidden"></canvas>
+<!-- 非表示の作業用要素 -->
+<video id="v-work" autoplay playsinline muted class="hidden"></video>
+<canvas id="c-work" class="hidden"></canvas>
 
 <div id="setup-screen" class="setup-overlay">
     <div class="setup-box">
-        <h2 style="margin-top:0; color:#00d1ff;">High-Speed Sync</h2>
+        <h2 style="margin-top:0; color:#00fbff;">Screen Monitor</h2>
         <button class="btn-teacher" onclick="initTeacher()">👨‍🏫 教員として開始</button>
         <hr style="border-color:#444; margin: 20px 0;">
         <input type="number" id="input-id" placeholder="教員IDを入力">
@@ -77,17 +71,16 @@
 
 <script>
     let peer;
-    const canvas = document.getElementById('hidden-canvas');
+    const canvas = document.getElementById('c-work');
     const ctx = canvas.getContext('2d');
-    const video = document.getElementById('hidden-video');
-    const lamp = document.getElementById('my-status-lamp');
-    let activeConnections = {};
+    const video = document.getElementById('v-work');
+    let studentConns = {};
 
     // 裏でも止まらないタイマーWorker
-    const workerCode = `let t; self.onmessage=e=>{ if(e.data=='start'){ t=setInterval(()=>self.postMessage('tick'),100); }else{ clearInterval(t); } };`;
+    const workerCode = `let t; self.onmessage=e=>{ if(e.data=='start'){ t=setInterval(()=>self.postMessage('t'),100); }else{ clearInterval(t); } };`;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
 
-    // --- 【教員】 ---
+    // --- 【教員モード】 ---
     async function initTeacher() {
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
@@ -104,74 +97,81 @@
             });
 
             peer.on('connection', conn => {
-                const grid = document.getElementById('student-grid');
-                const card = document.createElement('div');
-                card.className = 'student-card';
-                card.id = `card-${conn.peer}`;
-                card.innerHTML = `<div class="student-id">生徒: ${conn.peer}</div><img id="img-${conn.peer}">`;
-                grid.appendChild(card);
-                activeConnections[conn.peer] = conn;
+                conn.on('open', () => {
+                    const grid = document.getElementById('student-grid');
+                    const card = document.createElement('div');
+                    card.className = 'student-card';
+                    card.id = `card-${conn.peer}`;
+                    card.innerHTML = `<div class="student-info"><span>生徒: ${conn.peer}</span><span id="pkt-${conn.peer}">0</span></div><img id="img-${conn.peer}">`;
+                    grid.appendChild(card);
+                    studentConns[conn.peer] = conn;
+                    updateCount();
+                });
 
                 conn.on('data', data => {
                     if (data.type === 's-img') {
-                        const imgEl = document.getElementById(`img-${conn.peer}`);
-                        if (imgEl) imgEl.src = data.img;
+                        const img = document.getElementById(`img-${conn.peer}`);
+                        const pkt = document.getElementById(`pkt-${conn.peer}`);
+                        if (img) img.src = data.img;
+                        if (pkt) pkt.innerText = parseInt(pkt.innerText) + 1; // データ受信数をカウント
                     }
                 });
-                conn.on('close', () => { card.remove(); delete activeConnections[conn.peer]; });
+
+                conn.on('close', () => {
+                    document.getElementById(`card-${conn.peer}`)?.remove();
+                    delete studentConns[conn.peer];
+                    updateCount();
+                });
             });
 
-            // 教員画面を全生徒へ送信
             worker.postMessage('start');
             worker.onmessage = () => {
                 if (video.readyState >= 2) {
                     canvas.width = 800; canvas.height = (video.videoHeight/video.videoWidth)*800;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     const img = canvas.toDataURL('image/jpeg', 0.4);
-                    Object.values(activeConnections).forEach(c => { if(c.open) c.send({type:'t-img', img}); });
+                    Object.values(studentConns).forEach(c => { if(c.open && c.bufferedAmount === 0) c.send({type:'t-img', img}); });
                 }
             };
-        } catch (e) { alert("共有を許可してください"); }
+        } catch (e) { alert("許可が必要です"); }
     }
 
-    // --- 【生徒】 ---
+    // --- 【生徒モード】 ---
     async function initStudent() {
         const tid = document.getElementById('input-id').value || window.location.hash.substring(1);
-        if(!tid) return alert("教員IDを入力してください");
+        if(!tid) return alert("IDを入力してください");
 
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' } });
             video.srcObject = stream;
             peer = new Peer();
-            peer.on('open', myId => {
-                document.getElementById('display-id').innerText = "接続先: " + tid;
+            peer.on('open', () => {
                 const conn = peer.connect(tid);
-                
                 conn.on('open', () => {
                     document.getElementById('setup-screen').classList.add('hidden');
                     document.getElementById('main-screen').classList.remove('hidden');
-                    lamp.classList.remove('hidden');
-                    lamp.classList.add('active-lamp'); // 送信中ランプ点灯
-
+                    
                     worker.postMessage('start');
                     worker.onmessage = () => {
-                        if (conn.open && video.readyState >= 2) {
-                            canvas.width = 300; canvas.height = (video.videoHeight/video.videoWidth)*300;
+                        // 【重要】c.bufferedAmount === 0 (送信待ちデータがない時だけ送る)
+                        if (conn.open && video.readyState >= 2 && conn.bufferedAmount === 0) {
+                            canvas.width = 280; // 監視用なのでさらに小さくして負荷軽減
+                            canvas.height = (video.videoHeight/video.videoWidth)*280;
                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            conn.send({ type: 's-img', img: canvas.toDataURL('image/jpeg', 0.3) });
+                            conn.send({ type: 's-img', img: canvas.toDataURL('image/jpeg', 0.2) }); // 画質もあえて落とす
                         }
                     };
                 });
-
-                conn.on('data', data => {
-                    if (data.type === 't-img') document.getElementById('main-screen').src = data.img;
-                });
+                conn.on('data', data => { if (data.type === 't-img') document.getElementById('main-screen').src = data.img; });
                 conn.on('close', () => location.reload());
             });
-            peer.on('error', () => alert("教員が見つかりません。IDを確認してください。"));
-        } catch (e) { alert("共有を許可してください"); }
+            peer.on('error', () => alert("教員に接続できません"));
+        } catch (e) { alert("許可が必要です"); }
     }
 
+    function updateCount() {
+        document.getElementById('connection-count').innerText = `接続: ${Object.keys(studentConns).length}名`;
+    }
     window.onload = () => { if(window.location.hash) document.getElementById('input-id').value = window.location.hash.substring(1); };
 </script>
 </body>
