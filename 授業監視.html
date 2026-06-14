@@ -3,125 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画面共有デバッグ版</title>
+    <title>双方向・画面共有システム</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; text-align: center; }
-        .box { background: #2a2a2a; padding: 20px; margin: 10px; border-radius: 10px; }
-        #log { background: #000; color: #0f0; text-align: left; padding: 10px; font-size: 12px; height: 100px; overflow-y: scroll; margin: 10px; border: 1px solid #444; }
-        video, img { width: 90%; max-width: 600px; border: 2px solid #00d1ff; margin-top: 10px; }
+        body { font-family: sans-serif; background: #121212; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #222; padding: 10px; text-align: center; border-bottom: 2px solid #444; }
+        
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
+        
+        /* 左側：メイン画面（生徒は教員の画面を見る、教員は自分のプレビュー） */
+        .primary-view { flex: 3; padding: 10px; display: flex; flex-direction: column; align-items: center; background: #000; }
+        .primary-view img, .primary-view video { max-width: 100%; max-height: 80vh; border: 2px solid #00d1ff; }
+
+        /* 右側：監視グリッド（教員側にのみ表示。生徒の画面が並ぶ） */
+        .monitor-sidebar { flex: 1; background: #1e1e1e; border-left: 2px solid #444; overflow-y: auto; padding: 10px; }
+        .student-card { background: #333; margin-bottom: 10px; padding: 5px; border-radius: 5px; font-size: 12px; }
+        .student-card img { width: 100%; background: #000; }
+
+        .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 100; }
+        .setup-box { background: #333; padding: 30px; border-radius: 15px; text-align: center; }
+        
+        button { padding: 12px 24px; cursor: pointer; font-weight: bold; border: none; border-radius: 5px; margin: 10px; }
+        .btn-teacher { background: #e84118; color: white; }
+        .btn-student { background: #0097e6; color: white; }
+        
+        #log { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); font-size: 11px; padding: 5px; max-height: 60px; overflow-y: auto; color: #0f0; pointer-events: none; }
         .hidden { display: none; }
-        input { font-size: 20px; width: 100px; text-align: center; }
-        button { padding: 10px 20px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <h2>画面共有システム（デバッグ表示付）</h2>
-    
-    <!-- ログ出力エリア -->
-    <div id="log">システム準備完了...</div>
+<header>
+    <span id="role-label">モードを選択してください</span> | 
+    ID: <span id="display-id">----</span>
+</header>
 
-    <div id="setup">
-        <button onclick="startTeacher()" style="background:#e84118; color:white;">👨‍🏫 教員として配信開始</button>
+<div class="main-layout">
+    <!-- メイン表示エリア -->
+    <div class="primary-view">
+        <h3 id="view-title">画面未接続</h3>
+        <img id="main-screen" class="hidden">
+        <video id="my-preview" autoplay playsinline muted class="hidden"></video>
+    </div>
+
+    <!-- 監視エリア（教員用） -->
+    <div id="teacher-monitor" class="monitor-sidebar hidden">
+        <h4 style="margin:0 0 10px 0;">生徒の画面一覧</h4>
+        <div id="student-grid"></div>
+    </div>
+</div>
+
+<!-- 初期設定画面 -->
+<div id="setup-screen" class="setup-overlay">
+    <div class="setup-box">
+        <h2>役割を選択</h2>
+        <div style="margin-bottom:20px;">
+            <button class="btn-teacher" onclick="initTeacher()">👨‍🏫 教員として開始<br>(生徒の画面を監視する)</button>
+        </div>
         <hr>
-        <input type="number" id="targetId" placeholder="ID">
-        <button onclick="startStudent()" style="background:#0097e6; color:white;">🎓 生徒として接続</button>
+        <div style="margin-top:20px;">
+            <input type="number" id="input-teacher-id" placeholder="教員のIDを入力" style="padding:10px; font-size:16px; width:150px;">
+            <button class="btn-student" onclick="initStudent()">🎓 生徒として参加<br>(教員に画面を送る)</button>
+        </div>
     </div>
+</div>
 
-    <div id="teacher-zone" class="hidden">
-        <h3>教員配信モード</h3>
-        <p>生徒に伝えるID: <span id="my-id" style="font-size:24px; color:#00d1ff;">----</span></p>
-        <video id="preview" autoplay playsinline muted></video>
-    </div>
-
-    <div id="student-zone" class="hidden">
-        <h3>生徒受信モード</h3>
-        <p id="status">接続待機中...</p>
-        <img id="display" src="" alt="画面が届くとここに表示されます">
-    </div>
-
-    <canvas id="work-canvas" class="hidden"></canvas>
+<div id="log">ログ: 準備完了</div>
+<canvas id="cap-canvas" class="hidden"></canvas>
 
 <script>
-    const logEl = document.getElementById('log');
-    function addLog(msg) {
-        const time = new Date().toLocaleTimeString();
-        logEl.innerHTML += `[${time}] ${msg}<br>`;
-        logEl.scrollTop = logEl.scrollHeight;
-        console.log(msg);
-    }
-
     let peer;
-    const canvas = document.getElementById('work-canvas');
+    const logEl = document.getElementById('log');
+    const canvas = document.getElementById('cap-canvas');
     const ctx = canvas.getContext('2d');
 
-    // --- 教員側 ---
-    async function startTeacher() {
-        addLog("教員モード開始...");
-        try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            addLog("画面キャプチャ成功");
-            document.getElementById('preview').srcObject = stream;
-            document.getElementById('setup').classList.add('hidden');
-            document.getElementById('teacher-zone').classList.remove('hidden');
-
-            const id = Math.floor(1000 + Math.random() * 9000).toString();
-            peer = new Peer(id);
-
-            peer.on('open', (id) => {
-                addLog("Peerサーバー接続完了。ID: " + id);
-                document.getElementById('my-id').innerText = id;
-            });
-
-            peer.on('connection', (conn) => {
-                addLog("生徒が接続してきました！送信を開始します。");
-                setInterval(() => {
-                    if (conn.open) {
-                        const video = document.getElementById('preview');
-                        canvas.width = 640; 
-                        canvas.height = 360;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        conn.send(canvas.toDataURL('image/jpeg', 0.5));
-                    }
-                }, 200);
-            });
-
-            peer.on('error', err => addLog("エラー発生: " + err.type));
-
-        } catch (err) {
-            addLog("エラー: 画面共有が許可されなかったか、HTTPS環境ではありません。");
-        }
+    function addLog(msg) {
+        logEl.innerHTML += ` / ${msg}`;
+        logEl.scrollTop = logEl.scrollHeight;
     }
 
-    // --- 生徒側 ---
-    function startStudent() {
-        const id = document.getElementById('targetId').value;
-        if (!id) return alert("IDを入力してください");
+    // --- 教員側の処理 ---
+    async function initTeacher() {
+        addLog("教員モード初期化中...");
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            document.getElementById('my-preview').srcObject = stream;
+            document.getElementById('my-preview').classList.remove('hidden');
+            document.getElementById('teacher-monitor').classList.remove('hidden');
+            document.getElementById('view-title').innerText = "自分の配信画面";
+            
+            const teacherId = Math.floor(1000 + Math.random() * 9000).toString();
+            peer = new Peer(teacherId);
 
-        addLog(`${id} への接続を試みます...`);
-        peer = new Peer();
-
-        peer.on('open', () => {
-            addLog("自身の接続準備完了。教員を探しています...");
-            const conn = peer.connect(id);
-
-            conn.on('open', () => {
-                addLog("教員と接続しました！画面データを受信します。");
-                document.getElementById('setup').classList.add('hidden');
-                document.getElementById('student-zone').classList.remove('hidden');
-                document.getElementById('status').innerText = "受信中...";
+            peer.on('open', id => {
+                document.getElementById('display-id').innerText = id;
+                document.getElementById('role-label').innerText = "教員モード";
+                document.getElementById('setup-screen').classList.add('hidden');
+                addLog("サーバー待機中...");
             });
 
-            conn.on('data', (data) => {
-                // ここでデータが届く
-                document.getElementById('display').src = data;
+            peer.on('connection', conn => {
+                addLog("生徒が接続しました: " + conn.peer);
+                setupTeacherReceiver(conn);
             });
 
-            conn.on('close', () => addLog("教員との接続が切れました。"));
+        } catch (e) { alert("画面共有を許可してください"); }
+    }
+
+    function setupTeacherReceiver(conn) {
+        // 生徒用のカードを作成
+        const grid = document.getElementById('student-grid');
+        const card = document.createElement('div');
+        card.className = 'student-card';
+        card.id = `card-${conn.peer}`;
+        card.innerHTML = `生徒:${conn.peer}<br><img id="img-${conn.peer}">`;
+        grid.appendChild(card);
+
+        conn.on('data', data => {
+            if (data.type === 'screen') {
+                document.getElementById(`img-${conn.peer}`).src = data.img;
+            }
         });
 
-        peer.on('error', err => addLog("接続エラー: " + err.type + " (IDが間違っている可能性があります)"));
+        // 教員の画面も生徒に送り返す
+        setInterval(() => {
+            if (conn.open) {
+                const video = document.getElementById('my-preview');
+                canvas.width = 800;
+                canvas.height = 450;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                conn.send({ type: 'teacher-screen', img: canvas.toDataURL('image/jpeg', 0.5) });
+            }
+        }, 300);
+
+        conn.on('close', () => card.remove());
+    }
+
+    // --- 生徒側の処理 ---
+    async function initStudent() {
+        const teacherId = document.getElementById('input-teacher-id').value;
+        if (!teacherId) return alert("教員のIDを入力してください");
+
+        addLog("生徒モード初期化中...");
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            document.getElementById('my-preview').srcObject = stream;
+            document.getElementById('my-preview').style.width = "200px"; // 自分は小さく表示
+            document.getElementById('my-preview').classList.remove('hidden');
+            document.getElementById('main-screen').classList.remove('hidden');
+            document.getElementById('view-title').innerText = "教員の画面";
+
+            peer = new Peer();
+            peer.on('open', (myId) => {
+                document.getElementById('display-id').innerText = myId;
+                document.getElementById('role-label').innerText = "生徒モード";
+                
+                const conn = peer.connect(teacherId);
+                conn.on('open', () => {
+                    addLog("教員に接続成功");
+                    document.getElementById('setup-screen').classList.add('hidden');
+
+                    // 自分の画面を教員に送信
+                    setInterval(() => {
+                        if (conn.open) {
+                            canvas.width = 400; // 監視用なのでサイズ小さめ
+                            canvas.height = 225;
+                            ctx.drawImage(document.getElementById('my-preview'), 0, 0, canvas.width, canvas.height);
+                            conn.send({ type: 'screen', img: canvas.toDataURL('image/jpeg', 0.4) });
+                        }
+                    }, 500);
+                });
+
+                conn.on('data', data => {
+                    if (data.type === 'teacher-screen') {
+                        document.getElementById('main-screen').src = data.img;
+                    }
+                });
+
+                conn.on('close', () => {
+                    alert("教員との接続が終了しました");
+                    location.reload();
+                });
+            });
+        } catch (e) { alert("画面共有を許可してください"); }
     }
 </script>
 </body>
