@@ -3,255 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>教育用 画面共有システム</title>
+    <title>画面共有デバッグ版</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { font-family: -apple-system, "Segoe UI", sans-serif; background: #121212; color: white; margin: 0; padding: 10px; }
-        .container { max-width: 1200px; margin: auto; text-align: center; }
-        h2 { color: #00d1ff; margin-bottom: 20px; }
-        
-        .setup-box { background: #2a2a2a; padding: 30px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        
-        button { 
-            padding: 15px 25px; margin: 10px; border: none; border-radius: 8px; 
-            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s;
-        }
-        .btn-teacher { background: #e84118; color: white; } /* 教員用：赤 */
-        .btn-student { background: #0097e6; color: white; } /* 生徒用：青 */
-        .btn-monitor { background: #7f8c8d; color: white; } /* 監視用：グレー */
-        .btn-sub { background: #444; color: white; }
-        
-        input { 
-            width: 200px; padding: 12px; border-radius: 8px; border: 1px solid #444; 
-            background: #000; color: #fff; font-size: 24px; text-align: center;
-        }
-
-        /* 配信側（教員）のUI */
-        #my-id-text { font-size: 60px; font-weight: bold; color: #00d1ff; letter-spacing: 5px; margin: 10px 0; }
-        #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; }
-
-        /* 受信側（生徒）の表示エリア */
-        #student-view { width: 100%; max-width: 1000px; margin: auto; }
-        .main-screen { width: 100%; border: 3px solid #00d1ff; border-radius: 10px; background: #000; }
-
-        /* 監視用グリッド */
-        #monitor-grid { 
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
-            gap: 15px; padding: 10px; 
-        }
-        .monitor-card { background: #1e1e1e; border: 2px solid #333; border-radius: 12px; padding: 10px; }
-        .monitor-card img { width: 100%; border-radius: 8px; }
-        
+        body { font-family: sans-serif; background: #121212; color: white; text-align: center; }
+        .box { background: #2a2a2a; padding: 20px; margin: 10px; border-radius: 10px; }
+        #log { background: #000; color: #0f0; text-align: left; padding: 10px; font-size: 12px; height: 100px; overflow-y: scroll; margin: 10px; border: 1px solid #444; }
+        video, img { width: 90%; max-width: 600px; border: 2px solid #00d1ff; margin-top: 10px; }
         .hidden { display: none; }
-        video { width: 100%; border-radius: 8px; margin-top: 10px; }
-        .status { margin-bottom: 10px; font-weight: bold; }
+        input { font-size: 20px; width: 100px; text-align: center; }
+        button { padding: 10px 20px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Screen Share for Class</h2>
+    <h2>画面共有システム（デバッグ表示付）</h2>
+    
+    <!-- ログ出力エリア -->
+    <div id="log">システム準備完了...</div>
 
-    <!-- モード選択画面 -->
-    <div id="mode-selection" class="setup-box">
-        <div style="margin-bottom: 20px;">
-            <button class="btn-teacher" onclick="initAsTeacher()">👨‍🏫 教員：画面を配信する</button>
-        </div>
-        <hr style="border: 0; border-top: 1px solid #444; margin: 20px 0;">
-        <div>
-            <button class="btn-student" onclick="showStudentInput()">🎓 生徒：教員の画面を見る</button>
-            <button class="btn-monitor" onclick="showMonitorDashboard()">🖥️ 管理者：全員を監視する</button>
-        </div>
+    <div id="setup">
+        <button onclick="startTeacher()" style="background:#e84118; color:white;">👨‍🏫 教員として配信開始</button>
+        <hr>
+        <input type="number" id="targetId" placeholder="ID">
+        <button onclick="startStudent()" style="background:#0097e6; color:white;">🎓 生徒として接続</button>
     </div>
 
-    <!-- 教員：配信中UI -->
-    <div id="teacher-ui" class="hidden setup-box">
-        <h3>配信中... 生徒にこのIDを伝えてください</h3>
-        <div id="my-id-text">----</div>
-        <div id="qrcode"></div>
-        <p>画面を閉じると配信が終了します</p>
-        <video id="teacher-preview" autoplay playsinline muted></video>
-        <canvas id="capture-canvas" class="hidden"></canvas>
-        <br>
-        <button class="btn-sub" onclick="location.reload()">配信を終了</button>
+    <div id="teacher-zone" class="hidden">
+        <h3>教員配信モード</h3>
+        <p>生徒に伝えるID: <span id="my-id" style="font-size:24px; color:#00d1ff;">----</span></p>
+        <video id="preview" autoplay playsinline muted></video>
     </div>
 
-    <!-- 生徒：視聴UI -->
-    <div id="student-ui" class="hidden">
-        <div class="setup-box">
-            <h3>教員の4桁IDを入力してください</h3>
-            <input type="number" id="teacher-id-input" placeholder="0000">
-            <button class="btn-student" onclick="connectAsStudent()">接続する</button>
-            <button class="btn-sub" onclick="location.reload()">戻る</button>
-        </div>
-        <div id="student-view" class="hidden">
-            <div class="status" id="student-status">接続待機中...</div>
-            <img id="main-display" class="main-screen" src="" alt="Teacher's Screen">
-            <audio id="main-audio" autoplay></audio>
-        </div>
+    <div id="student-zone" class="hidden">
+        <h3>生徒受信モード</h3>
+        <p id="status">接続待機中...</p>
+        <img id="display" src="" alt="画面が届くとここに表示されます">
     </div>
 
-    <!-- 監視者：ダッシュボード -->
-    <div id="monitor-dashboard" class="hidden">
-        <div class="setup-box">
-            <h3>監視する生徒のIDを追加</h3>
-            <input type="number" id="peer-id-input" placeholder="4桁ID">
-            <button class="btn-student" onclick="connectToNewPeer()">＋ 画面を追加</button>
-            <button class="btn-sub" onclick="location.reload()">戻る</button>
-        </div>
-        <div id="monitor-grid"></div>
-    </div>
-</div>
+    <canvas id="work-canvas" class="hidden"></canvas>
 
 <script>
+    const logEl = document.getElementById('log');
+    function addLog(msg) {
+        const time = new Date().toLocaleTimeString();
+        logEl.innerHTML += `[${time}] ${msg}<br>`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(msg);
+    }
+
     let peer;
-    let connections = {}; 
-    let localStream;      
-    
-    const INTERVAL = 150; // キャプチャ速度 (ms)
-    const IMG_WIDTH = 1000; // 生徒用は少し高画質に
-    const QUALITY = 0.5;
+    const canvas = document.getElementById('work-canvas');
+    const ctx = canvas.getContext('2d');
 
-    // 共通：UI切り替え
-    function showUI(uiId) {
-        ['mode-selection', 'teacher-ui', 'student-ui', 'monitor-dashboard'].forEach(id => {
-            document.getElementById(id).classList.add('hidden');
-        });
-        document.getElementById(uiId).classList.remove('hidden');
-    }
-
-    // --- 【教員モード】 ---
-    async function initAsTeacher() {
-        const video = document.getElementById('teacher-preview');
-        const canvas = document.getElementById('capture-canvas');
-        const ctx = canvas.getContext('2d');
-
+    // --- 教員側 ---
+    async function startTeacher() {
+        addLog("教員モード開始...");
         try {
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-            let micStream;
-            try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch(e){}
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            addLog("画面キャプチャ成功");
+            document.getElementById('preview').srcObject = stream;
+            document.getElementById('setup').classList.add('hidden');
+            document.getElementById('teacher-zone').classList.remove('hidden');
 
-            localStream = new MediaStream([...screenStream.getVideoTracks()]);
-            if (micStream) micStream.getAudioTracks().forEach(t => localStream.addTrack(t));
-            if (screenStream.getAudioTracks().length > 0) screenStream.getAudioTracks().forEach(t => localStream.addTrack(t));
+            const id = Math.floor(1000 + Math.random() * 9000).toString();
+            peer = new Peer(id);
 
-            video.srcObject = screenStream;
-            showUI('teacher-ui');
-            screenStream.getVideoTracks()[0].onended = () => location.reload();
+            peer.on('open', (id) => {
+                addLog("Peerサーバー接続完了。ID: " + id);
+                document.getElementById('my-id').innerText = id;
+            });
 
-            // 4桁のIDを生成してPeerJS開始
-            const setupPeer = () => {
-                const id = Math.floor(1000 + Math.random() * 9000).toString();
-                peer = new Peer(id);
-                peer.on('open', id => {
-                    document.getElementById('my-id-text').innerText = id;
-                    document.getElementById('qrcode').innerHTML = "";
-                    new QRCode(document.getElementById("qrcode"), { text: id, width: 150, height: 150 });
-                });
-                peer.on('error', err => { if(err.type==='unavailable-id') setupPeer(); });
-                
-                // 生徒（受信側）が接続してきたら
-                peer.on('connection', conn => {
-                    peer.call(conn.peer, localStream); // 音声を送る
-                    
-                    // 定期的に画面を画像として送る
-                    const timer = setInterval(() => {
-                        if (conn.open && video.readyState === video.HAVE_ENOUGH_DATA) {
-                            const ratio = video.videoHeight / video.videoWidth;
-                            canvas.width = IMG_WIDTH; canvas.height = IMG_WIDTH * ratio;
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            conn.send(canvas.toDataURL('image/jpeg', QUALITY)); 
-                        }
-                        if (!conn.open) clearInterval(timer);
-                    }, INTERVAL);
-                });
-            };
-            setupPeer();
-        } catch (e) { alert("画面共有に失敗しました: " + e); }
+            peer.on('connection', (conn) => {
+                addLog("生徒が接続してきました！送信を開始します。");
+                setInterval(() => {
+                    if (conn.open) {
+                        const video = document.getElementById('preview');
+                        canvas.width = 640; 
+                        canvas.height = 360;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        conn.send(canvas.toDataURL('image/jpeg', 0.5));
+                    }
+                }, 200);
+            });
+
+            peer.on('error', err => addLog("エラー発生: " + err.type));
+
+        } catch (err) {
+            addLog("エラー: 画面共有が許可されなかったか、HTTPS環境ではありません。");
+        }
     }
 
-    // --- 【生徒モード】 ---
-    function showStudentInput() {
-        showUI('student-ui');
-    }
+    // --- 生徒側 ---
+    function startStudent() {
+        const id = document.getElementById('targetId').value;
+        if (!id) return alert("IDを入力してください");
 
-    function connectAsStudent() {
-        const teacherId = document.getElementById('teacher-id-input').value;
-        if (!teacherId) return;
-
+        addLog(`${id} への接続を試みます...`);
         peer = new Peer();
+
         peer.on('open', () => {
-            const conn = peer.connect(teacherId);
-            document.getElementById('student-view').classList.remove('hidden');
-            document.getElementById('student-status').innerText = "教員に接続中...";
+            addLog("自身の接続準備完了。教員を探しています...");
+            const conn = peer.connect(id);
 
             conn.on('open', () => {
-                document.getElementById('student-status').innerText = "✅ 接続中（教員の画面を表示しています）";
+                addLog("教員と接続しました！画面データを受信します。");
+                document.getElementById('setup').classList.add('hidden');
+                document.getElementById('student-zone').classList.remove('hidden');
+                document.getElementById('status').innerText = "受信中...";
             });
 
-            conn.on('data', data => {
-                document.getElementById('main-display').src = data;
+            conn.on('data', (data) => {
+                // ここでデータが届く
+                document.getElementById('display').src = data;
             });
 
-            conn.on('close', () => {
-                alert("教員が配信を終了しました。");
-                location.reload();
-            });
+            conn.on('close', () => addLog("教員との接続が切れました。"));
         });
 
-        // 音声の受信
-        peer.on('call', call => {
-            call.answer();
-            call.on('stream', stream => {
-                document.getElementById('main-audio').srcObject = stream;
-            });
-        });
-    }
-
-    // --- 【監視モード】 (元の機能) ---
-    function showMonitorDashboard() {
-        showUI('monitor-dashboard');
-        peer = new Peer();
-        peer.on('call', call => {
-            call.answer();
-            call.on('stream', stream => {
-                const audioEl = document.getElementById(`audio-${call.peer}`);
-                if (audioEl) audioEl.srcObject = stream;
-            });
-        });
-    }
-
-    function connectToNewPeer() {
-        const id = document.getElementById('peer-id-input').value;
-        if (!id || connections[id]) return;
-        addMonitorCard(id);
-        const conn = peer.connect(id);
-        connections[id] = { conn: conn };
-        conn.on('data', data => {
-            const img = document.getElementById(`img-${id}`);
-            if (img) img.src = data;
-        });
-        conn.on('close', () => {
-            const card = document.getElementById(`card-${id}`);
-            if (card) card.remove();
-        });
-    }
-
-    function addMonitorCard(id) {
-        const grid = document.getElementById('monitor-grid');
-        const card = document.createElement('div');
-        card.className = 'monitor-card';
-        card.id = `card-${id}`;
-        card.innerHTML = `
-            <h4>生徒 ID: ${id} <button class="btn-sub" onclick="this.parentElement.parentElement.remove()" style="padding:2px 8px;">×</button></h4>
-            <img id="img-${id}" src="" alt="Waiting...">
-            <audio id="audio-${id}" autoplay></audio>
-        `;
-        grid.appendChild(card);
+        peer.on('error', err => addLog("接続エラー: " + err.type + " (IDが間違っている可能性があります)"));
     }
 </script>
-
 </body>
 </html>
