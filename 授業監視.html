@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画面共有システム (安定接続版)</title>
+    <title>マイク対応・画面共有システム</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -13,15 +13,14 @@
         
         .main-layout { display: flex; flex: 1; overflow: hidden; }
         .primary-view { flex: 3; display: flex; justify-content: center; align-items: center; background: #111; position: relative; }
-        video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+        /* 生徒側：教員の映像と音声を流すビデオ */
+        video#main-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
         
-        /* 監視グリッド */
         .monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; width: 100%; height: 100%; padding: 10px; overflow-y: auto; }
         .student-card { background: #222; border: 1px solid #444; border-radius: 8px; padding: 5px; }
-        .student-card video { height: auto; aspect-ratio: 16/9; }
+        .student-card video { height: auto; aspect-ratio: 16/9; width: 100%; }
 
-        /* サイドバー */
-        .sidebar { width: 250px; background: #1a1a1a; border-left: 1px solid #444; overflow-y: auto; padding: 10px; }
+        .sidebar { width: 250px; background: #1a1a1a; border-left: 2px solid #444; overflow-y: auto; padding: 10px; }
 
         .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .setup-box { background: #333; padding: 30px; border-radius: 15px; text-align: center; width: 320px; }
@@ -31,24 +30,28 @@
         .btn-s { background: #0097e6; color: white; }
         input { padding: 12px; font-size: 20px; width: 100%; border-radius: 8px; border: 1px solid #555; background: #000; color: white; text-align: center; margin-bottom: 10px; box-sizing: border-box; }
         
-        .hidden { display: none !important; }
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin-top: 10px; }
+        .hidden { display: none !important; }
+        #mic-status { color: #ffeb3b; font-size: 11px; margin-bottom: 5px; }
     </style>
 </head>
 <body>
 
 <header>
-    <div id="role-display">モードを選択してください</div>
+    <div id="role-display">役割を選択してください</div>
     <div id="status-msg" class="status">準備完了</div>
 </header>
 
 <div class="main-layout">
     <div class="primary-view">
-        <video id="main-video" class="hidden" autoplay playsinline muted></video>
+        <!-- 生徒が教員の映像（音声付）を見るビデオ。ミュートは解除して表示。 -->
+        <video id="main-video" class="hidden" autoplay playsinline></video>
         <div id="monitor-area" class="monitor-grid hidden"></div>
+        
         <div id="info-panel" class="hidden" style="text-align:center;">
             <div id="qrcode"></div>
             <p>ID: <span id="id-val" style="font-weight:bold; color:#00fbff;">----</span></p>
+            <div id="mic-status" class="hidden">🎤 マイク有効</div>
         </div>
     </div>
     <div id="sidebar" class="sidebar hidden">
@@ -57,16 +60,17 @@
     </div>
 </div>
 
-<video id="local-video" autoplay playsinline muted class="hidden"></video>
+<!-- 自分のプレビュー（教員・生徒共通）※ハウリング防止のため自分のは必ずミュート -->
+<video id="local-preview" autoplay playsinline muted class="hidden"></video>
 
 <div id="setup-screen" class="setup-overlay">
     <div class="setup-box">
-        <h2 style="margin:0 0 15px 0;">画面共有システム</h2>
+        <h2 style="margin:0 0 15px 0;">画面共有 ＆ 音声配信</h2>
         <input type="number" id="room-id" placeholder="ルームID (4桁)">
-        <button class="btn-t1" onclick="start('t-share')">👨‍🏫 教員：画面を配信</button>
-        <button class="btn-t2" onclick="start('t-mon')">🖥️ 教員：生徒を監視</button>
+        <button class="btn-t1" onclick="start('t-share')">👨‍🏫 教員：画面＋マイク配信</button>
+        <button class="btn-t2" onclick="start('t-mon')">🖥️ 教員：監視のみ</button>
         <button class="btn-s" onclick="start('student')">🎓 生徒：参加する</button>
-        <p style="font-size:11px; color:#aaa;">※全員同じIDを入力してください</p>
+        <p style="font-size:11px; color:#aaa;">※教員・生徒で同じIDを入力</p>
     </div>
 </div>
 
@@ -84,38 +88,48 @@
         if (!rid) return alert("IDを入力してください");
 
         try {
-            // 画面キャプチャが必要な場合
+            // --- 教員配信または生徒参加の場合、映像・音声を取得 ---
             if (role === 't-share' || role === 'student') {
-                log("画面共有を許可してください...");
-                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                document.getElementById('local-video').srcObject = localStream;
+                log("共有許可待ち...");
+                
+                // 1. 画面共有を取得
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: true, 
+                    audio: true // システム音も含む
+                });
+
+                // 2. マイク音声を取得（教員のみマイクを必須にする）
+                let combinedTracks = [...screenStream.getTracks()];
+                if (role === 't-share') {
+                    try {
+                        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        combinedTracks = [...combinedTracks, ...micStream.getAudioTracks()];
+                        document.getElementById('mic-status').classList.remove('hidden');
+                    } catch (e) {
+                        alert("マイクが許可されませんでした。映像のみ配信します。");
+                    }
+                }
+
+                localStream = new MediaStream(combinedTracks);
+                document.getElementById('local-preview').srcObject = localStream;
             }
 
-            // Peer作成
             const peerId = (role === 't-share') ? rid : (role === 't-mon' ? "MON-" + rid : null);
             peer = peerId ? new Peer(peerId) : new Peer();
 
             peer.on('open', (id) => {
-                log("サーバー接続成功。ルームID: " + rid);
+                log("接続成功！ ID: " + rid);
                 document.getElementById('setup-screen').classList.add('hidden');
                 setupUI(rid);
                 if (role === 'student') connectToTeacher(rid);
             });
 
-            // コール受信時の処理
             peer.on('call', call => {
-                log("映像信号を受信...");
-                // 教員共有：生徒に自分の映像を返しながら、生徒の映像を見る
-                // 監視：見るだけ
-                call.answer(localStream); 
+                // 着信時、自分のストリームを添えて応答（教員はマイク付、生徒は画面のみ）
+                call.answer(localStream);
                 call.on('stream', stream => {
                     handleRemoteStream(call.peer, stream);
                 });
-            });
-
-            peer.on('error', err => {
-                if (err.type === 'unavailable-id') alert("そのIDは使用中です。");
-                log("エラー: " + err.type);
             });
 
         } catch (e) {
@@ -124,20 +138,16 @@
         }
     }
 
-    // 生徒から教員へ接続しにいく
     function connectToTeacher(rid) {
-        log("教員に接続を試みています...");
-        
-        // 教員(rid)と監視員(MON-rid)にそれぞれ電話をかける
+        log("教員を探しています...");
+        // 教員と監視員の両方に発信
         const call1 = peer.call(rid, localStream);
-        if (call1) {
-            call1.on('stream', stream => handleRemoteStream(rid, stream));
-        }
+        if (call1) call1.on('stream', stream => handleRemoteStream(rid, stream));
 
         const call2 = peer.call("MON-" + rid, localStream);
         
-        // 5秒おきに再試行（教員が後から入った場合のため）
-        setTimeout(() => { if (!mainVideo.srcObject) connectToTeacher(rid); }, 5000);
+        // 5秒おきに接続確認（見つかるまで）
+        setTimeout(() => { if (!document.getElementById('main-video').srcObject) connectToTeacher(rid); }, 5000);
     }
 
     function handleRemoteStream(peerId, stream) {
@@ -145,9 +155,12 @@
             const mv = document.getElementById('main-video');
             mv.srcObject = stream;
             mv.classList.remove('hidden');
-            mv.play(); // 強制再生
+            // 重要：ブラウザの自動再生ポリシー対策。クリックしないと音が出ない場合があるため
+            mv.play().catch(() => {
+                log("画面をクリックして音声を有効にしてください");
+                window.onclick = () => { mv.play(); };
+            });
             document.getElementById('info-panel').classList.add('hidden');
-            log("教員の映像を表示中");
         } else {
             addStudentVideo(peerId, stream);
         }
@@ -156,7 +169,7 @@
     function setupUI(rid) {
         const roleDisp = document.getElementById('role-display');
         if (myRole === 't-share') {
-            roleDisp.innerText = "👨‍🏫 教員：配信モード";
+            roleDisp.innerText = "👨‍🏫 教員：配信モード (マイクON)";
             document.getElementById('info-panel').classList.remove('hidden');
             document.getElementById('sidebar').classList.remove('hidden');
             new QRCode(document.getElementById("qrcode"), { text: window.location.href.split('#')[0] + "#" + rid, width: 140, height: 140 });
@@ -177,10 +190,7 @@
         card.id = `card-${id}`;
         card.innerHTML = `<div style="font-size:10px">ID:${id.substring(0,5)}</div><video id="v-${id}" autoplay playsinline muted></video>`;
         targetGrid.appendChild(card);
-        
-        const v = document.getElementById(`v-${id}`);
-        v.srcObject = stream;
-        v.play();
+        document.getElementById(`v-${id}`).srcObject = stream;
     }
 </script>
 </body>
