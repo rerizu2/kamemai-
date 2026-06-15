@@ -3,201 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高画質動画共有 (iPhone対応版)</title>
+    <title>教育用 画面共有・監視システム</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #000; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { font-family: -apple-system, sans-serif; background: #000; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #222; padding: 10px; text-align: center; border-bottom: 2px solid #444; font-size: 14px; z-index: 100; display: flex; justify-content: space-between; align-items: center; }
         .main-layout { display: flex; flex: 1; overflow: hidden; }
         .primary-view { flex: 3; display: flex; justify-content: center; align-items: center; background: #000; position: relative; }
         
-        /* iPhoneでも自動再生されるように設定 */
         video { background: #000; }
-        video#main-video { width: 100%; height: 100%; object-fit: contain; }
+        #main-video { width: 100%; height: 100%; object-fit: contain; }
         
-        .fs-button { position: absolute; bottom: 20px; right: 20px; background: rgba(0, 151, 230, 0.8); color: white; padding: 12px 20px; border-radius: 30px; cursor: pointer; border: none; z-index: 200; font-weight: bold; }
-
-        .monitor-sidebar { width: 280px; background: #1a1a1a; border-left: 2px solid #444; overflow-y: auto; padding: 10px; }
-        .student-card { background: #333; padding: 5px; border-radius: 8px; border: 1px solid #555; margin-bottom: 10px; }
-        .student-card video { width: 100%; border-radius: 4px; display: block; min-height: 150px; }
-
-        #teacher-preview-area { position: absolute; bottom: 10px; left: 10px; width: 150px; border: 1px solid #00d1ff; background: #000; padding: 5px; border-radius: 5px; font-size: 10px; z-index: 50; }
-        #teacher-preview-area video { width: 100%; }
-
-        .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .setup-box { background: #333; padding: 30px; border-radius: 15px; text-align: center; width: 320px; }
-        button { padding: 15px; cursor: pointer; font-weight: bold; border: none; border-radius: 8px; margin: 10px 0; width: 100%; font-size: 16px; }
-        .btn-teacher { background: #e84118; color: white; }
+        /* ボタン類 */
+        button { padding: 12px 20px; cursor: pointer; font-weight: bold; border: none; border-radius: 8px; margin: 5px; font-size: 14px; transition: 0.2s; }
+        button:active { transform: scale(0.95); }
+        .btn-main { background: #007bff; color: white; }
+        .btn-teacher-share { background: #e84118; color: white; }
+        .btn-teacher-monitor { background: #f39c12; color: white; }
         .btn-student { background: #0097e6; color: white; }
-        input { padding: 15px; font-size: 24px; width: 100%; border-radius: 8px; border: 1px solid #555; background: #111; color: white; text-align: center; box-sizing: border-box; }
-        #qrcode { background: white; padding: 10px; border-radius: 5px; display: inline-block; }
+        .btn-sub { background: #444; color: white; }
+
+        /* サイドバー */
+        .monitor-sidebar { width: 300px; background: #1a1a1a; border-left: 2px solid #444; overflow-y: auto; padding: 10px; }
+        .student-card { background: #333; padding: 8px; border-radius: 10px; border: 1px solid #555; margin-bottom: 12px; }
+        .student-card video { width: 100%; border-radius: 5px; min-height: 150px; }
+
+        /* オーバーレイ */
+        .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .setup-box { background: #333; padding: 30px; border-radius: 20px; text-align: center; width: 340px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        input { padding: 15px; font-size: 24px; width: 100%; border-radius: 10px; border: 1px solid #555; background: #111; color: white; text-align: center; box-sizing: border-box; margin-bottom: 10px; }
+        
+        #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin-top: 10px; }
         .hidden { display: none !important; }
-        .note { font-size: 11px; color: #aaa; margin-top: 10px; }
+        .status-msg { font-size: 12px; color: #00d1ff; }
     </style>
 </head>
 <body>
 
 <header>
     <div id="role-display">モード選択</div>
-    <div id="teacher-tools" class="hidden">
-        <button onclick="openMonitorWindow()" style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:4px; font-size:11px;">別窓で監視</button>
+    <div id="status-msg" class="status-msg">待機中</div>
+    <div id="header-tools" class="hidden">
+        <button class="btn-sub" onclick="openMonitorWindow()" id="popout-btn">別窓で監視</button>
+        <button class="btn-sub" onclick="location.reload()">終了</button>
     </div>
-    <div id="status-msg">待機中</div>
 </header>
 
 <div class="main-layout">
     <div class="primary-view" id="screen-container">
-        <div id="teacher-panel" class="hidden" style="text-align:center;">
+        <!-- 案内パネル -->
+        <div id="info-panel" class="hidden" style="text-align:center;">
             <div id="qrcode"></div>
-            <p>ID: <span id="teacher-id-val" style="color:#00d1ff; font-weight:bold;">----</span></p>
+            <p style="margin:5px 0 0;">教員ID: <span id="id-val" style="color:#00d1ff; font-weight:bold; font-size:24px;">----</span></p>
+            <p id="info-text" style="font-size:12px; color:#aaa;"></p>
         </div>
         
-        <!-- iPhone対応: playsinline を追加 -->
         <video id="main-video" class="hidden" autoplay playsinline></video>
-        <button id="fs-btn" class="fs-button hidden" onclick="toggleFullScreen()">📺 全画面</button>
+        <button id="fs-btn" class="hidden" onclick="mainVideo.requestFullscreen()" style="position:absolute; bottom:20px; right:20px; background:rgba(0,0,0,0.5); color:#fff; border-radius:30px;">全画面</button>
 
-        <div id="teacher-preview-area" class="hidden">
-            <video id="local-preview" autoplay playsinline muted></video>
-            <div>配信プレビュー</div>
+        <div id="local-preview-area" class="hidden" style="position:absolute; bottom:10px; left:10px; width:150px; border:1px solid #00d1ff; background:#000; padding:5px; border-radius:5px; font-size:10px;">
+            <video id="local-video" autoplay playsinline muted style="width:100%;"></video>
+            <div>自分の画面</div>
         </div>
     </div>
 
     <div id="teacher-monitor" class="monitor-sidebar hidden">
-        <p style="font-size:12px; font-weight:bold; color:#00d1ff;">🎓 生徒の画面</p>
+        <p style="font-size:12px; font-weight:bold;">🎓 生徒の画面</p>
         <div id="student-grid"></div>
     </div>
 </div>
 
+<!-- 初期画面 -->
 <div id="setup-screen" class="setup-overlay">
-    <div class="setup-box">
-        <h2 style="margin:0;">画面共有</h2>
-        <button class="btn-teacher" onclick="initTeacher()">👨‍🏫 教員として開始</button>
-        <hr style="border:0; border-top:1px solid #555; margin:20px 0;">
+    <div class="setup-box" id="mode-selector">
+        <h2 style="margin-top:0;">開始モードを選択</h2>
+        <button class="btn-main" style="width:100%;" onclick="showTeacherSubMenu()">👨‍🏫 教員として利用</button>
+        <button class="btn-student" style="width:100%;" onclick="showStudentInput()">🎓 生徒として利用</button>
+    </div>
+
+    <!-- 教員用サブメニュー -->
+    <div class="setup-box hidden" id="teacher-submenu">
+        <h2 style="margin-top:0;">教員メニュー</h2>
+        <button class="btn-teacher-share" style="width:100%;" onclick="initTeacher('share')">💻 自分の画面を配信する</button>
+        <p style="font-size:11px; color:#aaa; margin:5px 0 15px;">生徒に自分の画面を見せます</p>
+        
+        <button class="btn-teacher-monitor" style="width:100%;" onclick="initTeacher('monitor')">🖥️ 生徒の画面を監視する</button>
+        <p style="font-size:11px; color:#aaa; margin:5px 0 15px;">自分の画面は送らず、生徒のみ見ます</p>
+        
+        <button class="btn-sub" style="width:100%;" onclick="showMainMenu()">戻る</button>
+    </div>
+
+    <!-- 生徒用入力 -->
+    <div class="setup-box hidden" id="student-input">
+        <h2 style="margin-top:0;">生徒として参加</h2>
         <input type="number" id="input-tid" placeholder="教員ID">
-        <button class="btn-student" onclick="initStudent()">🎓 生徒として参加</button>
-        <div class="note">※iPhoneの方はSafariを使用し、<br>ブロードキャストを開始してください。</div>
+        <button class="btn-student" style="width:100%;" onclick="initStudent()">接続して画面共有</button>
+        <button class="btn-sub" style="width:100%;" onclick="showMainMenu()">戻る</button>
     </div>
 </div>
 
 <script>
     let peer;
     let localStream;
-    let monitorWindow = null;
     let activeStreams = {};
-
     const mainVideo = document.getElementById('main-video');
-    const localPreview = document.getElementById('local-preview');
-    const statusEl = document.getElementById('status-msg');
+    const localVideo = document.getElementById('local-video');
 
-    function log(m) { statusEl.innerText = m; }
-
-    function toggleFullScreen() {
-        const container = document.getElementById('screen-container');
-        if (!document.fullscreenElement) container.requestFullscreen();
-        else document.exitFullscreen();
+    function showTeacherSubMenu() {
+        document.getElementById('mode-selector').classList.add('hidden');
+        document.getElementById('teacher-submenu').classList.remove('hidden');
+    }
+    function showStudentInput() {
+        document.getElementById('mode-selector').classList.add('hidden');
+        document.getElementById('student-input').classList.remove('hidden');
+    }
+    function showMainMenu() {
+        document.getElementById('teacher-submenu').classList.add('hidden');
+        document.getElementById('student-input').classList.add('hidden');
+        document.getElementById('mode-selector').classList.remove('hidden');
     }
 
-    // iPhone/iOS対応: 全てのビデオ要素に playsinline を適用
-    function setupVideoElement(el) {
-        el.setAttribute('playsinline', '');
-        el.setAttribute('webkit-playsinline', '');
+    // iPhone/Safari対策
+    function fixVideo(v) {
+        v.setAttribute('playsinline', '');
+        v.setAttribute('webkit-playsinline', '');
     }
 
-    // --- 【教員】 ---
-    async function initTeacher() {
+    // --- 【教員モード】 ---
+    async function initTeacher(subMode) {
         try {
-            log("画面取得中...");
-            // iOS対応のため制約をシンプルに
-            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-            localPreview.srcObject = localStream;
-            setupVideoElement(localPreview);
-
-            document.getElementById('teacher-preview-area').classList.remove('hidden');
-            document.getElementById('teacher-monitor').classList.remove('hidden');
-            document.getElementById('teacher-panel').classList.remove('hidden');
-            document.getElementById('teacher-tools').classList.remove('hidden');
             document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('header-tools').classList.remove('hidden');
+            document.getElementById('info-panel').classList.remove('hidden');
+
+            if (subMode === 'share') {
+                document.getElementById('role-display').innerText = "👨‍🏫 配信モード";
+                document.getElementById('info-text').innerText = "生徒にQRを見せてください。自分の画面を配信中。";
+                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+                document.getElementById('local-preview-area').classList.remove('hidden');
+            } else {
+                document.getElementById('role-display').innerText = "🖥️ 監視専用モード";
+                document.getElementById('info-text').innerText = "生徒にIDを教えてください。監視画面のみ表示します。";
+                document.getElementById('popout-btn').classList.remove('hidden');
+            }
+
+            document.getElementById('teacher-monitor').classList.remove('hidden');
 
             const id = Math.floor(1000 + Math.random() * 9000).toString();
             peer = new Peer(id);
             peer.on('open', tid => {
-                document.getElementById('teacher-id-val').innerText = tid;
-                new QRCode(document.getElementById("qrcode"), { text: window.location.href.split('#')[0] + "#" + tid, width: 140, height: 140 });
-                log("配信中: ID " + tid);
+                document.getElementById('id-val').innerText = tid;
+                new QRCode(document.getElementById("qrcode"), { text: window.location.href.split('#')[0] + "#" + tid, width: 150, height: 150 });
+                document.getElementById('status-msg').innerText = "待機中: " + tid;
             });
 
             peer.on('call', call => {
-                call.answer();
-                call.on('stream', remoteStream => {
-                    activeStreams[call.peer] = remoteStream;
-                    addStudentMonitor(call.peer, remoteStream);
+                call.answer(); // 受信専用
+                call.on('stream', stream => {
+                    activeStreams[call.peer] = stream;
+                    addStudentMonitor(call.peer, stream);
                 });
             });
 
             peer.on('connection', conn => {
-                peer.call(conn.peer, localStream);
+                if (localStream) peer.call(conn.peer, localStream);
             });
-        } catch (e) { alert("Safariを使用し、HTTPSで接続してください。"); }
+
+        } catch (e) { alert("エラー: Safari/HTTPSを使用してください。"); location.reload(); }
     }
 
-    // --- 【生徒】 ---
+    // --- 【生徒モード】 ---
     async function initStudent() {
         const tid = document.getElementById('input-tid').value || window.location.hash.substring(1);
         if(!tid) return alert("IDを入力してください");
 
         try {
-            log("画面取得中...");
-            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            localPreview.srcObject = localStream;
-            setupVideoElement(localPreview);
+            localStream = await navigator.mediaDevices.getDisplayMedia({ video: { width: 640 } });
+            localVideo.srcObject = localStream;
+            document.getElementById('local-preview-area').classList.remove('hidden');
+            document.getElementById('setup-screen').classList.add('hidden');
 
             peer = new Peer();
             peer.on('open', myId => {
                 peer.connect(tid);
-                peer.call(tid, localStream);
+                peer.call(tid, localStream); // 教員に画面を送る
                 peer.on('call', call => {
                     call.answer();
-                    call.on('stream', remoteStream => {
-                        mainVideo.srcObject = remoteStream;
+                    call.on('stream', stream => {
+                        mainVideo.srcObject = stream;
                         mainVideo.classList.remove('hidden');
                         document.getElementById('fs-btn').classList.remove('hidden');
-                        document.getElementById('setup-screen').classList.add('hidden');
-                        document.getElementById('teacher-preview-area').classList.remove('hidden');
-                        setupVideoElement(mainVideo);
-                        log("受信中");
+                        document.getElementById('info-panel').classList.add('hidden');
+                        document.getElementById('role-display').innerText = "🎓 授業視聴中";
+                        fixVideo(mainVideo);
                     });
                 });
             });
-        } catch (e) { alert("Safariを使用し、HTTPSで接続してください。"); }
+        } catch (e) { alert("共有設定を完了してください。"); location.reload(); }
     }
 
     function addStudentMonitor(id, stream) {
         const grid = document.getElementById('student-grid');
-        let videoEl = document.getElementById(`v-${id}`);
-        if (!videoEl) {
-            const card = document.createElement('div');
-            card.className = 'student-card';
-            card.innerHTML = `<div style="font-size:10px">ID:${id.substring(0,5)}</div><video id="v-${id}" autoplay playsinline muted></video>`;
-            grid.appendChild(card);
-            videoEl = document.getElementById(`v-${id}`);
-            setupVideoElement(videoEl);
-        }
-        videoEl.srcObject = stream;
+        if (document.getElementById(`v-${id}`)) return;
+        const card = document.createElement('div');
+        card.className = 'student-card';
+        card.innerHTML = `<div style="font-size:10px">ID:${id.substring(0,5)}</div><video id="v-${id}" autoplay playsinline muted></video>`;
+        grid.appendChild(card);
+        const v = document.getElementById(`v-${id}`);
+        v.srcObject = stream;
+        fixVideo(v);
     }
 
     function openMonitorWindow() {
-        const win = window.open("", "Monitor", "width=400,height=600");
-        win.document.body.innerHTML = `<div id="g" style="background:#000;color:#fff;display:grid;gap:10px;padding:10px;"></div>`;
+        const win = window.open("", "Monitor", "width=500,height=700");
+        win.document.body.innerHTML = `
+            <body style="background:#000;color:#fff;font-family:sans-serif;margin:0;padding:10px;">
+                <h3>🎓 生徒監視ウィンドウ</h3>
+                <div id="g" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+            </body>`;
         for (const id in activeStreams) {
             const v = win.document.createElement('video');
-            v.style.width = "100%";
-            v.autoplay = true;
-            v.playsinline = true;
+            v.style.width = "100%"; v.autoplay = true; v.setAttribute('playsinline','');
             v.srcObject = activeStreams[id];
             win.document.getElementById('g').appendChild(v);
         }
     }
+
+    window.onload = () => { if(window.location.hash) document.getElementById('input-tid').value = window.location.hash.substring(1); };
 </script>
 </body>
 </html>
