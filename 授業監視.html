@@ -3,67 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画面監視・配信システム（全画面監視版）</title>
+    <title>画面共有・一括監視システム</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #000; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        header { background: #222; padding: 10px; text-align: center; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        header { background: #222; padding: 10px; text-align: center; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; }
         .status { color: #00fbff; font-size: 11px; }
         
         .main-layout { display: flex; flex: 1; overflow: hidden; }
         .primary-view { flex: 1; display: flex; flex-direction: column; background: #111; position: relative; overflow: hidden; }
         
-        /* 【重要】監視用グリッド：生徒の画面をタイル状に並べる */
+        /* 先生側の監視用グリッド（タイル状に並ぶ） */
         .monitor-grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
             gap: 15px; width: 100%; height: 100%; padding: 20px; box-sizing: border-box;
             overflow-y: auto; align-content: start;
         }
+        .student-card { background: #222; border: 2px solid #444; border-radius: 10px; padding: 8px; text-align: center; }
+        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 5px; }
+        .student-label { font-size: 12px; color: #aaa; margin-bottom: 5px; font-weight: bold; }
 
-        .student-card { background: #222; border: 2px solid #444; border-radius: 10px; padding: 8px; text-align: center; transition: 0.3s; }
-        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 5px; display: block; }
-        .student-label { font-size: 13px; color: #aaa; margin-bottom: 6px; font-weight: bold; }
+        /* 生徒側のメイン画面（先生の映像） */
+        #teacher-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
 
-        /* 生徒が見る教員のビデオ画面 */
-        video#main-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-
-        /* 設定画面（初期オーバーレイ） */
         .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .setup-box { background: #333; padding: 30px; border-radius: 20px; text-align: center; width: 340px; }
         button { padding: 12px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; margin: 8px 0; width: 100%; font-size: 15px; }
         .btn-teacher { background: #f39c12; color: white; }
         .btn-student { background: #0097e6; color: white; }
         input { padding: 12px; font-size: 20px; width: 100%; border-radius: 10px; border: 1px solid #555; background: #000; color: white; text-align: center; margin-bottom: 15px; box-sizing: border-box; }
-        
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
 <header>
-    <div id="role-display">モード選択</div>
-    <div id="status-msg" class="status">準備中...</div>
+    <div id="role-display">モードを選択してください</div>
+    <div id="status-msg" class="status">準備中</div>
     <button onclick="location.reload()" style="background:#444; color:#fff; border:none; padding:5px 10px; border-radius:5px; font-size:10px;">終了</button>
 </header>
 
 <div class="main-layout">
     <div class="primary-view">
-        <!-- 先生側：監視エリア（生徒が並ぶ） -->
+        <!-- 先生用：監視グリッド -->
         <div id="monitor-area" class="monitor-grid hidden"></div>
-        
-        <!-- 生徒側：先生の画面が映るエリア -->
-        <video id="main-video" class="hidden" autoplay playsinline></video>
+        <!-- 生徒用：先生の画面 -->
+        <video id="teacher-video" class="hidden" autoplay playsinline></video>
     </div>
 </div>
 
-<!-- 自分の共有用ビデオ（プレビュー） -->
-<video id="local-video" autoplay playsinline muted class="hidden"></video>
-
 <div id="setup-screen" class="setup-overlay">
     <div class="setup-box">
-        <h2 style="margin:0 0 15px 0; color:#00fbff;">画面共有システム</h2>
+        <h2 style="margin:0 0 15px 0; color:#00fbff;">画面監視システム</h2>
         <input type="number" id="room-id" placeholder="ルーム番号を入力">
         <button class="btn-teacher" onclick="start('teacher')">🖥️ 監視を開始する（全画面）</button>
         <button class="btn-student" onclick="start('student')">🎓 生徒：参加する</button>
@@ -71,103 +63,86 @@
 </div>
 
 <script>
-    let peerStream, peerMon, localStream, myRole = "";
+    let peer, localStream;
 
     function log(m) { document.getElementById('status-msg').innerText = m; }
 
     async function start(role) {
-        myRole = role;
         const rid = document.getElementById('room-id').value;
         if (!rid) return alert("ルーム番号を入力してください");
 
         try {
-            // 先生も生徒も、まず自分の画面共有を許可する
-            // （先生が共有しないと生徒の画面に何も映らないため）
+            // 1. 自分の画面共有を開始（双方向で映像を送るため必須）
+            log("画面共有の準備中...");
             localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-            document.getElementById('local-video').srcObject = localStream;
 
             if (role === 'teacher') {
-                // 先生側：配信(CLASS-)と監視受信(MON-)の両方を起動
-                peerStream = new Peer("CLASS-" + rid);
-                peerMon = new Peer("MON-" + rid);
-                setupTeacherHandlers(peerStream, peerMon);
-                
-                document.getElementById('role-display').innerText = "🖥️ 監視中（全画面表示）";
+                // 先生は固定のID（ROOM-ルーム番号）で起動
+                peer = new Peer("ROOM-" + rid);
+                document.getElementById('role-display').innerText = "🖥️ 先生：監視モード";
                 document.getElementById('monitor-area').classList.remove('hidden');
+                
+                peer.on('open', () => log("生徒の接続を待っています..."));
+                
+                // 生徒からの着信に応答する
+                peer.on('call', call => {
+                    // 自分の画面（先生の画面）を返しながら、生徒の画面を受け取る
+                    call.answer(localStream);
+                    call.on('stream', remoteStream => {
+                        addStudentVideo(call.peer, remoteStream);
+                    });
+                });
+
             } else {
-                // 生徒側
-                peerStream = new Peer();
-                setupStudentHandlers(peerStream, rid);
+                // 生徒はランダムなIDで起動
+                peer = new Peer();
                 document.getElementById('role-display').innerText = "🎓 生徒：参加中";
-                document.getElementById('main-video').classList.remove('hidden');
+                document.getElementById('teacher-video').classList.remove('hidden');
+
+                peer.on('open', (id) => {
+                    log("先生に接続中...");
+                    // 先生（ROOM-rid）に自分の映像を送る。同時に先生の映像を要求する。
+                    const call = peer.call("ROOM-" + rid, localStream);
+                    
+                    call.on('stream', remoteStream => {
+                        log("先生の画面を受信しました");
+                        document.getElementById('teacher-video').srcObject = remoteStream;
+                    });
+                    
+                    call.on('error', e => alert("先生が見つかりません。番号を確認してください。"));
+                });
             }
 
             document.getElementById('setup-screen').classList.add('hidden');
-        } catch (e) { 
-            alert("エラー: 画面共有が許可されませんでした。"); 
-            location.reload(); 
+        } catch (e) {
+            alert("画面共有が許可されませんでした。");
+            location.reload();
         }
     }
 
-    function setupTeacherHandlers(pStream, pMon) {
-        pStream.on('open', () => log("配信準備完了。生徒の接続を待っています..."));
-
-        // 生徒が接続してきたら、自分の画面(localStream)を生徒に送る
-        pStream.on('connection', conn => {
-            pStream.call(conn.peer, localStream);
-        });
-
-        // 生徒からの映像(監視用)を受信してグリッドに追加
-        pMon.on('call', call => {
-            call.answer();
-            call.on('stream', stream => {
-                addStudentVideo(call.peer, stream);
-            });
-        });
-    }
-
-    function setupStudentHandlers(p, rid) {
-        p.on('open', (id) => {
-            log("接続中...");
-            // 1. 先生の配信を受信するために接続
-            p.connect("CLASS-" + rid);
-            // 2. 自分の画面を先生の監視用IDに送る
-            p.call("MON-" + rid, localStream);
-        });
-
-        // 先生からの映像を受信して表示
-        p.on('call', call => {
-            call.answer();
-            call.on('stream', stream => {
-                document.getElementById('main-video').srcObject = stream;
-                log("先生の画面を受信中");
-            });
-        });
-    }
-
-    function addStudentVideo(id, stream) {
+    function addStudentVideo(peerId, stream) {
         const target = document.getElementById('monitor-area');
-        if (document.getElementById(`card-${id}`)) return;
+        if (document.getElementById(`card-${peerId}`)) return;
 
         const card = document.createElement('div');
         card.className = 'student-card';
-        card.id = `card-${id}`;
+        card.id = `card-${peerId}`;
         
-        // IDの下4桁を表示名にする
-        const labelName = "生徒:" + id.substring(id.length - 4);
-        card.innerHTML = `<div class="student-label">${labelName}</div><video id="v-${id}" autoplay playsinline muted></video>`;
+        // 生徒の表示名を生成
+        const name = "生徒参加中";
+        card.innerHTML = `<div class="student-label">${name}</div><video id="v-${peerId}" autoplay playsinline muted></video>`;
         
         target.appendChild(card);
-        document.getElementById(`v-${id}`).srcObject = stream;
+        const video = document.getElementById(`v-${peerId}`);
+        video.srcObject = stream;
 
-        // 生徒が画面共有を停止したり、ブラウザを閉じたら削除
+        // 切断検知
         stream.getVideoTracks()[0].onended = () => {
-            const el = document.getElementById(`card-${id}`);
-            if (el) el.remove();
+            if (document.getElementById(`card-${peerId}`)) {
+                document.getElementById(`card-${peerId}`).remove();
+            }
         };
     }
-
-    window.onload = () => { if(window.location.hash) document.getElementById('room-id').value = window.location.hash.substring(1); };
 </script>
 </body>
 </html>
