@@ -3,237 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>監視・配信システム（コマンド対応版）</title>
+    <title>監視システム・決定版</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #000; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        header { background: #222; padding: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; }
-        .status { color: #00fbff; font-size: 11px; }
-        .main-layout { display: flex; flex: 1; overflow: hidden; }
+        header { background: #222; padding: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; z-index: 100; }
+        .status-bar { display: flex; gap: 15px; font-size: 11px; color: #00fbff; }
         
-        .sidebar { width: 180px; background: #1a1a1a; border-right: 1px solid #444; display: flex; flex-direction: column; padding: 10px; }
-        #student-roster { flex: 1; overflow-y: auto; }
-        .roster-item { background: #333; margin-bottom: 5px; padding: 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
-
-        .primary-view { flex: 1; display: flex; flex-direction: column; background: #111; overflow-y: auto; padding: 10px; }
-        .monitor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
-        .student-card { background: #222; border: 1px solid #444; border-radius: 8px; padding: 5px; }
-        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; display: block; }
+        .main-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
         
-        #teacher-video { width: 100%; height: 100%; object-fit: contain; }
+        /* 監視グリッド（先生用） */
+        .monitor-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+            gap: 15px; width: 100%; height: 100%; padding: 20px; box-sizing: border-box;
+            overflow-y: auto; align-content: start;
+        }
+        .student-card { background: #222; border: 1px solid #444; border-radius: 10px; padding: 8px; text-align: center; }
+        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 5px; display: block; }
+        .student-label { font-size: 12px; color: #aaa; margin-bottom: 5px; }
 
+        /* 先生ビデオ（生徒用） */
+        #teacher-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+
+        /* サイドバー */
+        .sidebar { width: 180px; background: #1a1a1a; border-right: 1px solid #444; padding: 10px; overflow-y: auto; }
+        .roster-item { background: #333; margin-bottom: 5px; padding: 8px; border-radius: 5px; font-size: 11px; display: flex; justify-content: space-between; }
+
+        /* セットアップ */
         .setup-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .setup-box { background: #222; padding: 30px; border-radius: 20px; text-align: center; width: 320px; }
-        button { padding: 12px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; width: 100%; font-size: 14px; margin: 5px 0; }
+        .setup-box { background: #222; padding: 30px; border-radius: 20px; text-align: center; width: 320px; border: 1px solid #333; }
         input { padding: 12px; font-size: 18px; width: 100%; border-radius: 10px; border: 1px solid #444; background: #111; color: white; text-align: center; margin-bottom: 15px; box-sizing: border-box; }
-        .hidden { display: none !important; }
-
-        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 2000; }
-        .modal-content { background: white; padding: 20px; border-radius: 15px; text-align: center; color: black; }
+        button { padding: 12px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; width: 100%; font-size: 14px; margin: 5px 0; }
         
-        #remote-start-ui { position: fixed; inset: 0; background: #000; z-index: 3000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; }
+        .hidden { display: none !important; }
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 2000; }
     </style>
 </head>
 <body>
 
 <header>
-    <div id="role-display">モード選択</div>
-    <div id="status-msg" class="status">準備中</div>
-    <button onclick="location.reload()" style="background:#444; color:#fff; border:none; width:60px; font-size:10px;">終了</button>
+    <div>モード: <span id="mode-text">選択中</span></div>
+    <div class="status-bar">
+        <div id="status-msg">待機中...</div>
+        <div id="count-display">接続数: 0</div>
+    </div>
+    <button onclick="location.reload()" style="background:#444; color:#fff; border:none; width:60px; font-size:10px; cursor:pointer;">終了</button>
 </header>
-
-<div id="remote-start-ui" class="hidden">
-    <h2 style="color: #00fbff;">遠隔監視モード</h2>
-    <p>準備が整いました。</p>
-    <button onclick="activateRemote()" style="background:#f39c12; color:white; font-size:20px; padding:20px;">監視を開始する</button>
-</div>
 
 <div class="main-layout">
     <div id="sidebar" class="sidebar hidden">
-        <h3 style="font-size:12px; color:#aaa;">👥 生徒リスト</h3>
+        <h3 style="font-size:12px; color:#666;">生徒リスト</h3>
         <div id="student-roster"></div>
     </div>
-    <div class="primary-view">
+    <div class="primary-view" style="flex:1; position:relative;">
         <div id="monitor-area" class="monitor-grid hidden"></div>
         <video id="teacher-video" class="hidden" autoplay playsinline muted></video>
     </div>
 </div>
 
-<div id="teacher-controls" class="controls hidden" style="padding:10px; background:#222; display:flex; gap:10px; justify-content:center; border-top:1px solid #444;">
-    <button id="broadcast-toggle" onclick="toggleBroadcast()" style="background:#e84118; color:white;">配信を停止</button>
-    <button onclick="showRemoteQR()" style="background:#f39c12; color:white;">スマホで監視</button>
-</div>
-
-<div id="qr-modal" class="modal hidden" onclick="this.classList.add('hidden')">
-    <div class="modal-content" onclick="event.stopPropagation()">
-        <h3>スマホでスキャン</h3>
-        <div id="qrcode"></div>
-        <button onclick="document.getElementById('qr-modal').classList.add('hidden')" style="width:100%; border:none; background:#eee; padding:10px; border-radius:8px;">閉じる</button>
-    </div>
+<!-- 下部操作パネル -->
+<div id="teacher-controls" class="hidden" style="background:#222; padding:10px; display:flex; gap:10px; justify-content:center; border-top:1px solid #444;">
+    <button id="broadcast-btn" onclick="toggleBroadcast()" style="background:#e84118; color:white; width:150px;">📡 配信を停止</button>
+    <button onclick="showRemoteQR()" style="background:#f39c12; color:white; width:150px;">📱 スマホで監視</button>
 </div>
 
 <div id="setup-screen" class="setup-overlay">
     <div class="setup-box">
-        <h2 style="color:#00fbff; margin-bottom:20px;">授業システム</h2>
-        <input type="number" id="room-id" placeholder="ルーム番号を入力" oninput="checkSecretCode()">
+        <h2 style="color:#00fbff; margin-bottom:20px;">画面共有システム</h2>
+        <input type="number" id="room-id" placeholder="ルーム番号を入力" oninput="checkCode()">
         <button style="background:#f39c12; color:white;" onclick="start('teacher')">先生として開始</button>
         <button style="background:#0097e6; color:white;" onclick="start('student')">生徒として参加</button>
-        
-        <!-- 隠しボタン：コマンド入力で出現 -->
-        <button id="secret-monitor-btn" class="hidden" style="background:#8e44ad; color:white; border: 2px solid #ce93d8;" onclick="start('remote')">🔍 生徒監視（隠しモード）</button>
+        <button id="secret-btn" class="hidden" style="background:#8e44ad; color:white;" onclick="start('remote')">🔍 生徒監視（隠しモード）</button>
+    </div>
+</div>
+
+<div id="qr-modal" class="modal hidden" onclick="this.classList.add('hidden')">
+    <div style="background:white; padding:20px; border-radius:15px; text-align:center; color:black;">
+        <h3>スマホ監視用QR</h3>
+        <div id="qrcode"></div>
+        <button onclick="document.getElementById('qr-modal').classList.add('hidden')" style="margin-top:10px; background:#ddd;">閉じる</button>
     </div>
 </div>
 
 <script>
     let peer, localStream, myRole = "", currentRid = "";
     let isBroadcasting = true;
+    let studentCount = 0;
     const studentStreams = {};
-    let inputSequence = ""; // 数字コマンド用のバッファ
 
     function log(m) { document.getElementById('status-msg').innerText = m; }
+    function updateCount() { document.getElementById('count-display').innerText = "接続数: " + studentCount; }
 
-    // 隠しボタンを表示する関数
-    function revealSecretButton() {
-        const btn = document.getElementById('secret-monitor-btn');
-        if (btn.classList.contains('hidden')) {
-            btn.classList.remove('hidden');
-            log("隠しモードが解除されました");
-        }
+    // 隠しコマンド
+    function checkCode() {
+        if (document.getElementById('room-id').value === "200977") reveal();
     }
-
-    // 入力欄の値を監視する関数
-    function checkSecretCode() {
-        const val = document.getElementById('room-id').value;
-        if (val === "200977") {
-            revealSecretButton();
-        }
-    }
-
-    // 全局キーボードイベントの検知
-    window.addEventListener('keydown', (e) => {
-        // 1. Ctrl + Alt + I の検知
-        if (e.ctrlKey && e.altKey && (e.key === 'i' || e.key === 'I')) {
-            e.preventDefault();
-            revealSecretButton();
-        }
-
-        // 2. 数字シーケンス "200977" の検知
-        if (/[0-9]/.test(e.key)) {
-            inputSequence += e.key;
-            if (inputSequence.includes("200977")) {
-                revealSecretButton();
-                inputSequence = ""; // 一致したらリセット
-            }
-            // 長くなりすぎないよう最新の10文字に制限
-            if (inputSequence.length > 10) inputSequence = inputSequence.substring(1);
-        } else {
-            inputSequence = ""; // 数字以外が打たれたらリセット
-        }
+    window.addEventListener('keydown', e => {
+        if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'i') reveal();
     });
+    function reveal() { document.getElementById('secret-btn').classList.remove('hidden'); log("隠しボタン有効"); }
 
-    async function start(role, ridFromUrl) {
+    async function start(role) {
         myRole = role;
-        currentRid = ridFromUrl || document.getElementById('room-id').value;
+        currentRid = document.getElementById('room-id').value;
         if (!currentRid) return alert("番号を入力してください");
-
         document.getElementById('setup-screen').classList.add('hidden');
 
         try {
+            // 映像取得
             if (role === 'teacher' || role === 'student') {
                 localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
             }
 
             const peerId = (role === 'teacher' ? "T-PC-" : (role === 'remote' ? "T-MB-" : "")) + currentRid;
-            peer = role === 'student' ? new Peer() : new Peer(peerId);
+            peer = (role === 'student') ? new Peer() : new Peer(peerId);
 
-            peer.on('open', (id) => {
-                log("接続完了");
+            peer.on('open', () => {
+                log("サーバー接続成功");
+                document.getElementById('mode-text').innerText = (role==='teacher'?"先生": (role==='remote'?"監視のみ":"生徒"));
+
                 if (role === 'teacher' || role === 'remote') {
                     document.getElementById('monitor-area').classList.remove('hidden');
-                    document.getElementById('role-display').innerText = (role === 'teacher' ? "🖥️ 先生モード" : "🔍 監視モード");
                     if (role === 'teacher') {
                         document.getElementById('sidebar').classList.remove('hidden');
                         document.getElementById('teacher-controls').classList.remove('hidden');
                     }
-                } else if (role === 'student') {
-                    document.getElementById('role-display').innerText = "🎓 生徒モード";
-                    const c1 = peer.call("T-PC-" + currentRid, localStream);
-                    handleTeacherCall(c1);
-                    const c2 = peer.call("T-MB-" + currentRid, localStream.clone());
-                    handleTeacherCall(c2);
+                } else {
+                    document.getElementById('teacher-video').classList.remove('hidden');
+                    // 生徒は両方の可能性を考えて呼び出す
+                    callTeacher("T-PC-" + currentRid);
+                    callTeacher("T-MB-" + currentRid);
                 }
             });
 
+            // 着信処理（先生側）
             peer.on('call', call => {
                 call.answer(role === 'teacher' && isBroadcasting ? localStream : null);
                 call.on('stream', stream => {
-                    studentStreams[call.peer] = stream;
-                    if (role === 'teacher') updateRoster(call.peer);
-                    else addVideoToGrid(call.peer, stream);
+                    if (!studentStreams[call.peer]) {
+                        studentStreams[call.peer] = stream;
+                        studentCount++;
+                        updateCount();
+                        if (role === 'teacher') addRoster(call.peer);
+                        else addVideo(call.peer, stream); // 監視モードなら即表示
+                    }
                 });
             });
 
-        } catch (e) { alert("エラー: " + e.message); location.reload(); }
+        } catch (e) { alert("失敗: " + e.message); location.reload(); }
     }
 
-    function handleTeacherCall(call) {
+    function callTeacher(targetId) {
+        const call = peer.call(targetId, localStream);
         call.on('stream', stream => {
             const v = document.getElementById('teacher-video');
-            v.classList.remove('hidden');
             v.srcObject = stream;
-            v.play().catch(()=>{});
+            v.onloadedmetadata = () => v.play();
         });
     }
 
-    function activateRemote() {
-        document.getElementById('remote-start-ui').classList.add('hidden');
-        const hash = window.location.hash.replace("#remote-", "");
-        start('remote', hash);
-    }
-
-    function showRemoteQR() {
-        const modal = document.getElementById('qr-modal');
-        const qrContainer = document.getElementById('qrcode');
-        qrContainer.innerHTML = "";
-        const url = window.location.origin + window.location.pathname + "#remote-" + currentRid;
-        new QRCode(qrContainer, { text: url, width: 180, height: 180 });
-        modal.classList.remove('hidden');
-    }
-
-    function updateRoster(id) {
-        if (document.getElementById(`roster-${id}`)) return;
+    function addRoster(id) {
         const div = document.createElement('div');
         div.className = 'roster-item';
         div.id = `roster-${id}`;
-        div.innerHTML = `<span>生徒:${id.substring(id.length-4)}</span><button onclick="addVideoToGrid('${id}')" style="background:#44bd32; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:10px;">表示</button>`;
+        div.innerHTML = `<span>ID:${id.slice(-4)}</span><button onclick="addVideo('${id}')" style="background:#44bd32; color:white; padding:2px 5px; border-radius:3px; border:none; cursor:pointer;">表示</button>`;
         document.getElementById('student-roster').appendChild(div);
     }
 
-    function addVideoToGrid(id, optionalStream) {
+    function addVideo(id, manualStream) {
         if (document.getElementById(`card-${id}`)) return;
-        const stream = optionalStream || studentStreams[id];
+        const stream = manualStream || studentStreams[id];
         const card = document.createElement('div');
         card.className = 'student-card';
         card.id = `card-${id}`;
-        card.innerHTML = `<div style="font-size:10px; color:#aaa;">生徒:${id.substring(id.length-4)}</div><video id="v-${id}" autoplay playsinline muted></video>`;
+        card.innerHTML = `<div class="student-label">生徒:${id.slice(-4)}</div><video id="vid-${id}" autoplay playsinline muted></video>`;
         document.getElementById('monitor-area').appendChild(card);
-        const v = document.getElementById(`v-${id}`);
+        
+        const v = document.getElementById(`vid-${id}`);
         v.srcObject = stream;
-        v.play().catch(()=>{});
+        v.onloadedmetadata = () => v.play();
+        
+        // 終了検知
+        stream.getVideoTracks()[0].onended = () => {
+            card.remove();
+            if (document.getElementById(`roster-${id}`)) document.getElementById(`roster-${id}`).remove();
+            studentCount--;
+            updateCount();
+            delete studentStreams[id];
+        };
     }
 
     function toggleBroadcast() {
         isBroadcasting = !isBroadcasting;
         localStream.getVideoTracks().forEach(t => t.enabled = isBroadcasting);
-        document.getElementById('broadcast-toggle').innerText = isBroadcasting ? "配信を停止" : "配信を開始";
-        document.getElementById('broadcast-toggle').style.background = isBroadcasting ? "#e84118" : "#44bd32";
+        document.getElementById('broadcast-btn').innerText = isBroadcasting ? "📡 配信を停止" : "📡 配信を開始";
+        document.getElementById('broadcast-btn').style.background = isBroadcasting ? "#e84118" : "#44bd32";
+    }
+
+    function showRemoteQR() {
+        const modal = document.getElementById('qr-modal');
+        const container = document.getElementById('qrcode');
+        container.innerHTML = "";
+        const url = window.location.origin + window.location.pathname + "#remote-" + currentRid;
+        new QRCode(container, { text: url, width: 150, height: 150 });
+        modal.classList.remove('hidden');
     }
 
     window.onload = () => {
         if (window.location.hash.startsWith("#remote-")) {
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('remote-start-ui').classList.remove('hidden');
+            const rid = window.location.hash.replace("#remote-", "");
+            if (confirm("遠隔監視モードを起動しますか？")) start('remote', rid);
         }
     };
 </script>
