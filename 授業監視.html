@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画面共有・監視システム（待機可能版）</title>
+    <title>監視・配信システム（別ウィンドウ監視対応）</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -32,7 +32,6 @@
         button { padding: 12px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; width: 100%; font-size: 14px; margin: 5px 0; }
         .hidden { display: none !important; }
         
-        /* 生徒用再接続ボタン */
         #reconnect-btn { position: fixed; bottom: 20px; right: 20px; background: #f39c12; color: white; padding: 10px 20px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; z-index: 500; }
     </style>
 </head>
@@ -63,14 +62,14 @@
     <div class="primary-view">
         <div id="monitor-area" class="monitor-grid hidden"></div>
         <video id="teacher-video" class="hidden" autoplay playsinline muted></video>
-        <!-- 生徒のみ表示される再接続案内 -->
         <button id="reconnect-btn" class="hidden" onclick="retryConnection()">先生を探す(再接続)</button>
     </div>
 </div>
 
 <div id="teacher-controls" class="hidden" style="background:#222; padding:10px; display:flex; gap:10px; justify-content:center; border-top:1px solid #444;">
-    <button id="broadcast-btn" onclick="toggleBroadcast()" style="background:#e84118; color:white; width:150px;">📡 配信を停止</button>
-    <button onclick="showRemoteQR()" style="background:#f39c12; color:white; width:150px;">📱 スマホで監視</button>
+    <button id="broadcast-btn" onclick="toggleBroadcast()" style="background:#e84118; color:white; flex:1; max-width:150px;">📡 配信を停止</button>
+    <button onclick="openMonitorWindow()" style="background:#8e44ad; color:white; flex:1; max-width:150px;">🔲 別窓で監視</button>
+    <button onclick="showRemoteQR()" style="background:#f39c12; color:white; flex:1; max-width:150px;">📱 スマホで監視</button>
 </div>
 
 <div id="setup-screen" class="setup-overlay">
@@ -90,14 +89,10 @@
     const studentStreams = {};
 
     function log(m) { document.getElementById('status-msg').innerText = m; }
-    function updateCount() { document.getElementById('conn-count') ? null : null; document.getElementById('count-display').innerText = "接続数: " + studentCount; }
+    function updateCount() { document.getElementById('count-display').innerText = "接続数: " + studentCount; }
 
-    function checkCode() {
-        if (document.getElementById('room-id').value === "200977") reveal();
-    }
-    window.addEventListener('keydown', e => {
-        if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'i') reveal();
-    });
+    function checkCode() { if (document.getElementById('room-id').value === "200977") reveal(); }
+    window.addEventListener('keydown', e => { if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'i') reveal(); });
     function reveal() { document.getElementById('secret-btn').classList.remove('hidden'); }
 
     async function start(role) {
@@ -117,7 +112,6 @@
                 localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
             }
 
-            // 【ここが重要】先生がいなくてもセットアップ画面を隠して進む
             document.getElementById('setup-screen').classList.add('hidden');
 
             const peerId = (role === 'teacher' ? "T-PC-" : (role === 'remote' ? "T-MB-" : "")) + currentRid;
@@ -137,16 +131,14 @@
                     }
                 } else {
                     document.getElementById('teacher-video').classList.remove('hidden');
-                    document.getElementById('reconnect-btn').classList.remove('hidden'); // 生徒に再接続ボタン表示
-                    retryConnection(); // 接続試行
+                    document.getElementById('reconnect-btn').classList.remove('hidden');
+                    retryConnection();
                 }
             });
 
             peer.on('error', err => {
                 console.warn("Peer Error:", err.type);
-                if (err.type === 'peer-unavailable') {
-                    log("先生がまだ開始していません。待機中...");
-                }
+                if (err.type === 'peer-unavailable') log("先生がまだ開始していません。待機中...");
             });
 
             peer.on('call', call => {
@@ -162,34 +154,24 @@
                 });
             });
 
-        } catch (e) { 
-            console.error(e);
-            alert("画面共有が許可されませんでした。"); 
-            location.reload(); 
-        }
+        } catch (e) { alert("画面共有が許可されませんでした。"); location.reload(); }
     }
 
-    // 生徒が先生を呼ぶ処理（ボタンからも手動で呼べる）
     function retryConnection() {
         if (!currentRid || myRole !== 'student') return;
         log("先生(ID:" + currentRid + ")を探しています...");
-        const call = peer.call("T-PC-" + currentRid, localStream);
-        
-        call.on('stream', stream => {
-            log("先生の映像を受信中");
-            const v = document.getElementById('teacher-video');
-            v.srcObject = stream;
-            v.onloadedmetadata = () => v.play().catch(()=>{});
-            document.getElementById('reconnect-btn').style.background = "#2ecc71"; // 成功したら色を変える
-            document.getElementById('reconnect-btn').innerText = "接続済み";
-        });
+        // メインPCと監視用PCの両方を呼び出す
+        peer.call("T-PC-" + currentRid, localStream).on('stream', stream => showTeacherStream(stream));
+        peer.call("T-MB-" + currentRid, localStream); // 監視用ウィンドウにも送る
+    }
 
-        // 5秒後にまだ接続できていなければ自動で再送を試みる（任意）
-        setTimeout(() => {
-            if (document.getElementById('teacher-video').srcObject === null) {
-                log("待機中...先生が開始したら自動で繋がります");
-            }
-        }, 3000);
+    function showTeacherStream(stream) {
+        log("先生の映像を受信中");
+        const v = document.getElementById('teacher-video');
+        v.srcObject = stream;
+        v.onloadedmetadata = () => v.play().catch(()=>{});
+        document.getElementById('reconnect-btn').style.background = "#2ecc71";
+        document.getElementById('reconnect-btn').innerText = "接続済み";
     }
 
     function addRoster(id) {
@@ -228,6 +210,12 @@
         document.getElementById('broadcast-btn').style.background = isBroadcasting ? "#e84118" : "#44bd32";
     }
 
+    // 別ウィンドウで監視を開く
+    function openMonitorWindow() {
+        const url = window.location.origin + window.location.pathname + "#remote-" + currentRid;
+        window.open(url, '_blank', 'width=1000,height=700');
+    }
+
     function showRemoteQR() {
         const url = window.location.origin + window.location.pathname + "#remote-" + currentRid;
         const container = document.getElementById('qrcode');
@@ -235,12 +223,20 @@
         new QRCode(container, { text: url, width: 180, height: 180 });
         document.getElementById('qr-modal').classList.remove('hidden');
     }
+
+    window.onload = () => {
+        if (window.location.hash.startsWith("#remote-")) {
+            const rid = window.location.hash.replace("#remote-", "");
+            // 遠隔モード（別窓）の場合は、開始ボタンなしで即開始
+            setTimeout(() => { start('remote'); }, 500); 
+        }
+    };
 </script>
 
 <div id="qr-modal" class="modal hidden" onclick="this.classList.add('hidden')" style="position:fixed; inset:0; background:rgba(0,0,0,0.9); display:flex; justify-content:center; align-items:center; z-index:2000;">
-    <div style="background:white; padding:20px; border-radius:15px; text-align:center; color:black;">
-        <div id="qrcode"></div>
-        <button onclick="document.getElementById('qr-modal').classList.add('hidden')" style="margin-top:10px; background:#ddd; border:none; padding:10px; border-radius:8px; cursor:pointer;">閉じる</button>
+    <div style="background:white; padding:20px; border-radius:15px; text-align:center; color:black;" onclick="event.stopPropagation()">
+        <div id="qrcode" style="margin-bottom:10px;"></div>
+        <button onclick="document.getElementById('qr-modal').classList.add('hidden')" style="width:100%; background:#ddd; border:none; padding:10px; border-radius:8px;">閉じる</button>
     </div>
 </div>
 
