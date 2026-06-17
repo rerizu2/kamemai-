@@ -3,198 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>監視・配信コントロールシステム</title>
+    <title>監視・配信コントロールシステム（マルチデバイス対応）</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #000; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #222; padding: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; }
         .status { color: #00fbff; font-size: 11px; }
-        
         .main-layout { display: flex; flex: 1; overflow: hidden; }
         
-        /* サイドバー：生徒管理リスト */
-        .sidebar { width: 220px; background: #1a1a1a; border-right: 1px solid #444; display: flex; flex-direction: column; padding: 10px; }
-        .sidebar h3 { font-size: 14px; margin: 0 0 10px; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        /* サイドバー */
+        .sidebar { width: 200px; background: #1a1a1a; border-right: 1px solid #444; display: flex; flex-direction: column; padding: 10px; }
+        .sidebar h3 { font-size: 14px; margin: 0 0 10px; color: #aaa; }
         #student-roster { flex: 1; overflow-y: auto; }
-        .roster-item { background: #333; margin-bottom: 5px; padding: 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
-        .toggle-btn { padding: 4px 8px; font-size: 10px; cursor: pointer; border-radius: 4px; border: none; font-weight: bold; }
+        .roster-item { background: #333; margin-bottom: 5px; padding: 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+        .toggle-btn { padding: 4px 8px; font-size: 10px; cursor: pointer; border-radius: 4px; border: none; }
         .btn-on { background: #44bd32; color: white; }
         .btn-off { background: #7f8c8d; color: white; }
 
         /* メイン監視エリア */
-        .primary-view { flex: 1; display: flex; flex-direction: column; background: #111; position: relative; overflow-y: auto; padding: 20px; }
-        .monitor-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
-            gap: 15px; align-content: start;
-        }
-        .student-card { background: #222; border: 2px solid #00fbff; border-radius: 10px; padding: 8px; text-align: center; }
-        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 5px; }
-        .student-label { font-size: 12px; margin-bottom: 5px; font-weight: bold; }
-
-        /* 生徒用全画面ビデオ */
-        #teacher-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-
-        /* 設定画面 */
-        .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .setup-box { background: #333; padding: 30px; border-radius: 20px; text-align: center; width: 340px; }
-        button.main-btn { padding: 12px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; margin: 8px 0; width: 100%; font-size: 15px; }
-        input { padding: 12px; font-size: 20px; width: 100%; border-radius: 10px; border: 1px solid #555; background: #000; color: white; text-align: center; margin-bottom: 15px; box-sizing: border-box; }
+        .primary-view { flex: 1; display: flex; flex-direction: column; background: #111; overflow-y: auto; padding: 15px; }
+        .monitor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
+        .student-card { background: #222; border: 1px solid #444; border-radius: 8px; padding: 5px; text-align: center; }
+        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; }
         
+        #teacher-video { width: 100%; height: 100%; object-fit: contain; }
+
+        /* モーダル（QRコード用） */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-content { background: white; padding: 20px; border-radius: 15px; text-align: center; color: black; max-width: 90%; }
+        #qrcode { margin: 15px auto; }
+
+        /* セットアップ・コントロール */
+        .setup-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .setup-box { background: #222; padding: 30px; border-radius: 20px; text-align: center; width: 320px; border: 1px solid #444; }
+        button.main-btn { padding: 12px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; margin: 8px 0; width: 100%; font-size: 14px; }
+        input { padding: 12px; font-size: 18px; width: 100%; border-radius: 10px; border: 1px solid #444; background: #111; color: white; text-align: center; margin-bottom: 15px; box-sizing: border-box; }
+        .controls { background: #222; padding: 10px; border-top: 1px solid #444; display: flex; justify-content: center; gap: 10px; }
         .hidden { display: none !important; }
-        .controls { background: #222; padding: 10px; border-top: 1px solid #444; text-align: center; }
     </style>
 </head>
 <body>
 
 <header>
     <div id="role-display">モード選択</div>
-    <div id="status-msg" class="status">Peer準備中...</div>
+    <div id="status-msg" class="status">準備中</div>
     <button onclick="location.reload()" style="background:#444; color:#fff; border:none; padding:5px 10px; border-radius:5px; font-size:10px;">終了</button>
 </header>
 
 <div class="main-layout">
-    <!-- 教員用：サイドバー（生徒の表示/非表示選択） -->
     <div id="sidebar" class="sidebar hidden">
-        <h3>👥 接続中の生徒</h3>
+        <h3>👥 生徒リスト</h3>
         <div id="student-roster"></div>
-        <div style="margin-top:10px; font-size:10px; color:#666;">※ボタンで表示/非表示を切替</div>
     </div>
-
     <div class="primary-view">
-        <!-- 教員用：選択された生徒の画面が並ぶ -->
         <div id="monitor-area" class="monitor-grid hidden"></div>
-        <!-- 生徒用：先生の画面 -->
         <video id="teacher-video" class="hidden" autoplay playsinline></video>
     </div>
 </div>
 
-<!-- 操作パネル -->
 <div id="teacher-controls" class="controls hidden">
-    <button id="broadcast-toggle" onclick="toggleBroadcast()" style="background:#e84118; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">📡 配信を停止する</button>
-    <span style="font-size:12px; margin-left:15px; color:#aaa;">※配信を止めると生徒側に先生の画面が映らなくなります</span>
+    <button id="broadcast-toggle" onclick="toggleBroadcast()" style="background:#e84118; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">📡 配信を停止</button>
+    <button onclick="showRemoteQR()" style="background:#f39c12; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">📱 別の端末で監視</button>
+</div>
+
+<!-- QRコード表示用モーダル -->
+<div id="qr-modal" class="modal hidden" onclick="this.classList.add('hidden')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h3 style="margin:0;">スマホでスキャン</h3>
+        <p style="font-size:12px; color:#666;">別の端末で生徒の画面を監視できます</p>
+        <div id="qrcode"></div>
+        <button onclick="document.getElementById('qr-modal').classList.add('hidden')" style="width:100%; padding:10px; border-radius:8px; border:none; background:#eee; cursor:pointer;">閉じる</button>
+    </div>
 </div>
 
 <div id="setup-screen" class="setup-overlay">
     <div class="setup-box">
-        <h2 style="margin:0 0 15px 0; color:#00fbff;">監視・配信システム</h2>
+        <h2 style="margin:0 0 20px; color:#00fbff;">授業システム</h2>
         <input type="number" id="room-id" placeholder="ルーム番号を入力">
-        <button class="main-btn" style="background:#f39c12; color:white;" onclick="start('teacher')">🖥️ 先生：監視・配信を開始</button>
-        <button class="main-btn" style="background:#0097e6; color:white;" onclick="start('student')">🎓 生徒：参加する</button>
+        <button class="main-btn" style="background:#f39c12; color:white;" onclick="start('teacher')">🖥️ 先生として開始</button>
+        <button class="main-btn" style="background:#0097e6; color:white;" onclick="start('student')">🎓 生徒として参加</button>
     </div>
 </div>
 
 <script>
-    let peer, localStream, myRole = "";
+    let peer, localStream, myRole = "", currentRid = "";
     let isBroadcasting = true;
-    const studentStreams = {}; // 生徒IDごとのストリーム保存用
+    const studentStreams = {};
 
     function log(m) { document.getElementById('status-msg').innerText = m; }
 
-    async function start(role) {
+    async function start(role, ridFromUrl) {
         myRole = role;
-        const rid = document.getElementById('room-id').value;
-        if (!rid) return alert("ルーム番号を入力してください");
+        currentRid = ridFromUrl || document.getElementById('room-id').value;
+        if (!currentRid) return alert("番号を入力してください");
 
         try {
-            log("画面共有を取得中...");
-            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            // 先生または生徒の場合のみ画面共有を取得（スマホ監視モードでは取得しない）
+            if (role === 'teacher' || role === 'student') {
+                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            }
+
             document.getElementById('setup-screen').classList.add('hidden');
 
-            if (role === 'teacher') {
-                peer = new Peer("ROOM-ID-" + rid);
-                document.getElementById('role-display').innerText = "🖥️ 先生モード";
-                document.getElementById('sidebar').classList.remove('hidden');
+            if (role === 'teacher' || role === 'remote') {
+                // 先生は「ROOM-ID-」で起動、スマホ監視は「REMOTE-ID-」で起動
+                const peerId = (role === 'teacher' ? "ROOM-ID-" : "REMOTE-ID-") + currentRid;
+                peer = new Peer(peerId);
+                
+                document.getElementById('role-display').innerText = (role === 'teacher' ? "🖥️ 先生" : "📱 遠隔監視");
                 document.getElementById('monitor-area').classList.remove('hidden');
-                document.getElementById('teacher-controls').classList.remove('hidden');
+                if (role === 'teacher') {
+                    document.getElementById('sidebar').classList.remove('hidden');
+                    document.getElementById('teacher-controls').classList.remove('hidden');
+                }
 
-                peer.on('open', () => log("待機中... 生徒に番号を教えてください"));
+                peer.on('open', () => log("待機中..."));
                 peer.on('call', call => {
-                    // 配信ONなら自分の画面を送り、OFFなら映像なしで応答
-                    call.answer(isBroadcasting ? localStream : null);
+                    // 先生なら自分の画面を送る。スマホ(remote)なら何も送らず応答のみ。
+                    call.answer(role === 'teacher' && isBroadcasting ? localStream : null);
                     call.on('stream', stream => {
                         studentStreams[call.peer] = stream;
-                        updateRoster(call.peer);
+                        if (role === 'teacher') updateRoster(call.peer);
+                        else toggleStudentDisplay(call.peer); // スマホ監視は自動ですべて表示
                     });
                 });
-            } else {
+            } else if (role === 'student') {
                 peer = new Peer();
-                document.getElementById('role-display').innerText = "🎓 生徒モード";
+                document.getElementById('role-display').innerText = "🎓 生徒";
                 document.getElementById('teacher-video').classList.remove('hidden');
                 
                 peer.on('open', (id) => {
                     log("先生に接続中...");
-                    const call = peer.call("ROOM-ID-" + rid, localStream);
-                    call.on('stream', stream => {
-                        log("先生の画面を受信中");
+                    // メインの先生を呼ぶ
+                    const callMain = peer.call("ROOM-ID-" + currentRid, localStream);
+                    callMain.on('stream', stream => {
                         document.getElementById('teacher-video').srcObject = stream;
                     });
+                    // サブ監視（スマホ）がいれば、そちらにも映像を送る
+                    peer.call("REMOTE-ID-" + currentRid, localStream);
                 });
             }
-        } catch (e) {
-            alert("画面共有が許可されませんでした。");
-            location.reload();
-        }
+        } catch (e) { alert("エラー: " + e.message); location.reload(); }
     }
 
-    // 教員側：生徒リストを更新
+    // 教員：QRコードを表示
+    function showRemoteQR() {
+        const modal = document.getElementById('qr-modal');
+        const qrContainer = document.getElementById('qrcode');
+        qrContainer.innerHTML = "";
+        const url = window.location.origin + window.location.pathname + "#remote-" + currentRid;
+        new QRCode(qrContainer, { text: url, width: 180, height: 180 });
+        modal.classList.remove('hidden');
+    }
+
+    // 教員：生徒リストの管理
     function updateRoster(id) {
         if (document.getElementById(`roster-${id}`)) return;
-        const roster = document.getElementById('student-roster');
         const div = document.createElement('div');
         div.className = 'roster-item';
         div.id = `roster-${id}`;
-        div.innerHTML = `
-            <span>生徒:${id.substring(0,5)}</span>
-            <button class="toggle-btn btn-off" id="btn-${id}" onclick="toggleStudentDisplay('${id}')">表示</button>
-        `;
-        roster.appendChild(div);
+        div.innerHTML = `<span>生徒:${id.substring(id.length-4)}</span><button class="toggle-btn btn-off" id="btn-${id}" onclick="toggleStudentDisplay('${id}')">表示</button>`;
+        document.getElementById('student-roster').appendChild(div);
     }
 
-    // 教員側：個別の生徒画面を表示/非表示
     function toggleStudentDisplay(id) {
         const btn = document.getElementById(`btn-${id}`);
-        const area = document.getElementById('monitor-area');
         const existingCard = document.getElementById(`card-${id}`);
-
         if (existingCard) {
-            // すでに表示されているなら消す
             existingCard.remove();
-            btn.innerText = "表示";
-            btn.className = "toggle-btn btn-off";
+            if (btn) { btn.innerText = "表示"; btn.className = "toggle-btn btn-off"; }
         } else {
-            // 表示する
             const card = document.createElement('div');
             card.className = 'student-card';
             card.id = `card-${id}`;
-            card.innerHTML = `<div class="student-label">生徒:${id.substring(0,5)}</div><video id="v-${id}" autoplay playsinline muted></video>`;
-            area.appendChild(card);
+            card.innerHTML = `<div style="font-size:10px;color:#aaa;">生徒:${id.substring(id.length-4)}</div><video id="v-${id}" autoplay playsinline muted></video>`;
+            document.getElementById('monitor-area').appendChild(card);
             document.getElementById(`v-${id}`).srcObject = studentStreams[id];
-            btn.innerText = "非表示";
-            btn.className = "toggle-btn btn-on";
+            if (btn) { btn.innerText = "非表示"; btn.className = "toggle-btn btn-on"; }
         }
     }
 
-    // 教員側：自分の配信をON/OFF
     function toggleBroadcast() {
         isBroadcasting = !isBroadcasting;
         const btn = document.getElementById('broadcast-toggle');
-        
-        if (isBroadcasting) {
-            btn.innerText = "📡 配信を停止する";
-            btn.style.background = "#e84118";
-            log("配信を再開しました（生徒側に映ります）");
-            // 注意：PeerJSの仕様上、通信中の映像ON/OFFは複雑なため、
-            // 簡易的に「配信フラグ」として扱います。
-        } else {
-            btn.innerText = "📡 配信を開始する";
-            btn.style.background = "#44bd32";
-            log("配信を停止しました（生徒側には映りません）");
-        }
-        
-        // 既存のビデオトラックを停止/有効化して制御
-        localStream.getVideoTracks().forEach(track => track.enabled = isBroadcasting);
+        localStream.getVideoTracks().forEach(t => t.enabled = isBroadcasting);
+        btn.innerText = isBroadcasting ? "📡 配信を停止" : "📡 配信を開始";
+        btn.style.background = isBroadcasting ? "#e84118" : "#44bd32";
     }
+
+    // URLのハッシュ（#remote-1234）がある場合は自動起動
+    window.onload = () => {
+        const hash = window.location.hash;
+        if (hash.startsWith("#remote-")) {
+            const rid = hash.replace("#remote-", "");
+            if (confirm("別の端末での監視モードを起動しますか？")) {
+                start('remote', rid);
+            }
+        }
+    };
 </script>
 </body>
 </html>
