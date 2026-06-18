@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>監視・配信システム（別ウィンドウ監視対応）</title>
+    <title>画面共有・監視システム（共有ソース表示付）</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -15,13 +15,21 @@
         /* サイドバー */
         .sidebar { width: 220px; background: #1a1a1a; border-right: 1px solid #444; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
         .room-info-card { background: #333; padding: 10px; border-radius: 8px; text-align: center; border: 2px solid #00fbff; }
-        .my-preview-area { background: #000; border: 1px solid #444; border-radius: 8px; padding: 5px; }
-        .my-preview-area video { width: 100%; border-radius: 4px; background: #222; }
+        .my-preview-area { background: #000; border: 1px solid #444; border-radius: 8px; padding: 5px; position: relative; }
+        .my-preview-area video { width: 100%; border-radius: 4px; background: #222; display: block; }
+        
+        /* 共有ソース表示バッジ */
+        .sharing-badge {
+            position: absolute; top: 10px; left: 10px; background: rgba(0, 251, 255, 0.8);
+            color: #000; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;
+            pointer-events: none; z-index: 10;
+        }
+
         .roster-item { background: #333; padding: 8px; border-radius: 5px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 
         .primary-view { flex: 1; position: relative; background: #111; overflow: hidden; }
         .monitor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; width: 100%; height: 100%; padding: 20px; box-sizing: border-box; overflow-y: auto; align-content: start; }
-        .student-card { background: #222; border: 1px solid #444; border-radius: 10px; padding: 8px; text-align: center; }
+        .student-card { background: #222; border: 1px solid #444; border-radius: 10px; padding: 8px; text-align: center; position: relative; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 5px; display: block; }
         #teacher-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
 
@@ -47,20 +55,26 @@
 </header>
 
 <div class="main-layout">
+    <!-- サイドバー -->
     <div id="sidebar" class="sidebar hidden">
         <div class="room-info-card">
             <div style="font-size: 10px; color: #00fbff;">生徒に教える参加ID</div>
             <div id="display-room-id" style="font-size: 36px; font-weight: bold; letter-spacing: 3px;">----</div>
         </div>
         <div class="my-preview-area">
+            <div id="my-share-label" class="sharing-badge hidden">取得中...</div>
             <h3 style="font-size:11px; color:#aaa; margin:0 0 5px;">🔴 自分の画面プレビュー</h3>
             <video id="my-local-preview" autoplay playsinline muted></video>
         </div>
         <h3 style="font-size:12px; color:#aaa; margin:10px 0 5px;">👥 生徒リスト</h3>
         <div id="student-roster"></div>
     </div>
+
     <div class="primary-view">
         <div id="monitor-area" class="monitor-grid hidden"></div>
+        <div id="student-only-info" class="hidden" style="position:absolute; top:10px; left:10px; z-index:10; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:4px;">
+            <span id="student-share-label" style="color:#00fbff; font-size:12px; font-weight:bold;"></span>
+        </div>
         <video id="teacher-video" class="hidden" autoplay playsinline muted></video>
         <button id="reconnect-btn" class="hidden" onclick="retryConnection()">先生を探す(再接続)</button>
     </div>
@@ -103,13 +117,14 @@
             currentRid = Math.floor(1000 + Math.random() * 9000).toString();
         } else {
             currentRid = inputRid;
-            if (!currentRid) return alert("番号を入力してください");
+            if (!currentRid && role !== 'remote') return alert("番号を入力してください");
         }
 
         try {
             if (role === 'teacher' || role === 'student') {
                 log("画面共有の許可を待っています...");
                 localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                updateSharingLabel(localStream);
             }
 
             document.getElementById('setup-screen').classList.add('hidden');
@@ -131,13 +146,13 @@
                     }
                 } else {
                     document.getElementById('teacher-video').classList.remove('hidden');
+                    document.getElementById('student-only-info').classList.remove('hidden');
                     document.getElementById('reconnect-btn').classList.remove('hidden');
                     retryConnection();
                 }
             });
 
             peer.on('error', err => {
-                console.warn("Peer Error:", err.type);
                 if (err.type === 'peer-unavailable') log("先生がまだ開始していません。待機中...");
             });
 
@@ -154,24 +169,44 @@
                 });
             });
 
-        } catch (e) { alert("画面共有が許可されませんでした。"); location.reload(); }
+        } catch (e) { alert("失敗: " + e.message); location.reload(); }
+    }
+
+    // 共有ソース（全画面、ウィンドウ、タブ）を判別して表示する関数
+    function updateSharingLabel(stream) {
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        
+        // monitor=全画面, window=ウィンドウ, browser=タブ
+        const surfaceNames = {
+            'monitor': '🖥️ 全画面を共有中',
+            'window': '🗔 ウィンドウを共有中',
+            'browser': '🌐 ブラウザのタブを共有中'
+        };
+
+        const typeText = surfaceNames[settings.displaySurface] || '📽️ 画面共有中';
+        
+        // 教員用サイドバーのラベル
+        const badge = document.getElementById('my-share-label');
+        badge.innerText = typeText;
+        badge.classList.remove('hidden');
+
+        // 生徒用メイン画面のラベル
+        const studentLabel = document.getElementById('student-share-label');
+        studentLabel.innerText = "自分の共有状態: " + typeText;
     }
 
     function retryConnection() {
         if (!currentRid || myRole !== 'student') return;
         log("先生(ID:" + currentRid + ")を探しています...");
-        // メインPCと監視用PCの両方を呼び出す
-        peer.call("T-PC-" + currentRid, localStream).on('stream', stream => showTeacherStream(stream));
-        peer.call("T-MB-" + currentRid, localStream); // 監視用ウィンドウにも送る
-    }
-
-    function showTeacherStream(stream) {
-        log("先生の映像を受信中");
-        const v = document.getElementById('teacher-video');
-        v.srcObject = stream;
-        v.onloadedmetadata = () => v.play().catch(()=>{});
-        document.getElementById('reconnect-btn').style.background = "#2ecc71";
-        document.getElementById('reconnect-btn').innerText = "接続済み";
+        peer.call("T-PC-" + currentRid, localStream).on('stream', stream => {
+            const v = document.getElementById('teacher-video');
+            v.srcObject = stream;
+            v.onloadedmetadata = () => v.play().catch(()=>{});
+            document.getElementById('reconnect-btn').style.background = "#2ecc71";
+            document.getElementById('reconnect-btn').innerText = "接続済み";
+        });
+        peer.call("T-MB-" + currentRid, localStream);
     }
 
     function addRoster(id) {
@@ -210,7 +245,6 @@
         document.getElementById('broadcast-btn').style.background = isBroadcasting ? "#e84118" : "#44bd32";
     }
 
-    // 別ウィンドウで監視を開く
     function openMonitorWindow() {
         const url = window.location.origin + window.location.pathname + "#remote-" + currentRid;
         window.open(url, '_blank', 'width=1000,height=700');
@@ -227,8 +261,7 @@
     window.onload = () => {
         if (window.location.hash.startsWith("#remote-")) {
             const rid = window.location.hash.replace("#remote-", "");
-            // 遠隔モード（別窓）の場合は、開始ボタンなしで即開始
-            setTimeout(() => { start('remote'); }, 500); 
+            setTimeout(() => { currentRid = rid; start('remote'); }, 500); 
         }
     };
 </script>
