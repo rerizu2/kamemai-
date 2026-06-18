@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画面共有・監視システム（共有ソース表示付）</title>
+    <title>監視・配信システム（共有ソース可視化版）</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -20,17 +20,27 @@
         
         /* 共有ソース表示バッジ */
         .sharing-badge {
-            position: absolute; top: 10px; left: 10px; background: rgba(0, 251, 255, 0.8);
-            color: #000; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;
-            pointer-events: none; z-index: 10;
+            position: absolute; top: 8px; left: 8px; background: rgba(0, 251, 255, 0.9);
+            color: #000; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;
+            pointer-events: none; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
         .roster-item { background: #333; padding: 8px; border-radius: 5px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 
         .primary-view { flex: 1; position: relative; background: #111; overflow: hidden; }
         .monitor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; width: 100%; height: 100%; padding: 20px; box-sizing: border-box; overflow-y: auto; align-content: start; }
+        
+        /* 生徒カード */
         .student-card { background: #222; border: 1px solid #444; border-radius: 10px; padding: 8px; text-align: center; position: relative; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 5px; display: block; }
+        
+        /* 生徒カード内のバッジ */
+        .student-surface-tag {
+            position: absolute; bottom: 35px; right: 15px; background: rgba(255, 255, 255, 0.2);
+            color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(2px);
+        }
+
         #teacher-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
 
         /* セットアップ */
@@ -55,7 +65,6 @@
 </header>
 
 <div class="main-layout">
-    <!-- サイドバー -->
     <div id="sidebar" class="sidebar hidden">
         <div class="room-info-card">
             <div style="font-size: 10px; color: #00fbff;">生徒に教える参加ID</div>
@@ -72,9 +81,6 @@
 
     <div class="primary-view">
         <div id="monitor-area" class="monitor-grid hidden"></div>
-        <div id="student-only-info" class="hidden" style="position:absolute; top:10px; left:10px; z-index:10; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:4px;">
-            <span id="student-share-label" style="color:#00fbff; font-size:12px; font-weight:bold;"></span>
-        </div>
         <video id="teacher-video" class="hidden" autoplay playsinline muted></video>
         <button id="reconnect-btn" class="hidden" onclick="retryConnection()">先生を探す(再接続)</button>
     </div>
@@ -101,6 +107,7 @@
     let isBroadcasting = true;
     let studentCount = 0;
     const studentStreams = {};
+    const studentSurfaces = {}; // 生徒ごとの共有ソース情報を保持
 
     function log(m) { document.getElementById('status-msg').innerText = m; }
     function updateCount() { document.getElementById('count-display').innerText = "接続数: " + studentCount; }
@@ -112,30 +119,22 @@
     async function start(role) {
         myRole = role;
         const inputRid = document.getElementById('room-id').value;
-
-        if (role === 'teacher') {
-            currentRid = Math.floor(1000 + Math.random() * 9000).toString();
-        } else {
-            currentRid = inputRid;
-            if (!currentRid && role !== 'remote') return alert("番号を入力してください");
-        }
+        if (role === 'teacher') currentRid = Math.floor(1000 + Math.random() * 9000).toString();
+        else currentRid = inputRid;
 
         try {
             if (role === 'teacher' || role === 'student') {
                 log("画面共有の許可を待っています...");
                 localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                updateSharingLabel(localStream);
             }
 
             document.getElementById('setup-screen').classList.add('hidden');
-
             const peerId = (role === 'teacher' ? "T-PC-" : (role === 'remote' ? "T-MB-" : "")) + currentRid;
             peer = (role === 'student') ? new Peer() : new Peer(peerId);
 
             peer.on('open', () => {
                 log("サーバー接続成功");
                 document.getElementById('mode-text').innerText = (role==='teacher'?"先生": (role==='remote'?"監視員":"生徒"));
-
                 if (role === 'teacher' || role === 'remote') {
                     document.getElementById('monitor-area').classList.remove('hidden');
                     if (role === 'teacher') {
@@ -143,17 +142,23 @@
                         document.getElementById('sidebar').classList.remove('hidden');
                         document.getElementById('teacher-controls').classList.remove('hidden');
                         document.getElementById('my-local-preview').srcObject = localStream;
+                        updateMyShareLabel(localStream);
                     }
                 } else {
                     document.getElementById('teacher-video').classList.remove('hidden');
-                    document.getElementById('student-only-info').classList.remove('hidden');
                     document.getElementById('reconnect-btn').classList.remove('hidden');
                     retryConnection();
                 }
             });
 
-            peer.on('error', err => {
-                if (err.type === 'peer-unavailable') log("先生がまだ開始していません。待機中...");
+            // データ通信の受信（教員側）
+            peer.on('connection', conn => {
+                conn.on('data', data => {
+                    if (data.type === 'SURFACE_INFO') {
+                        studentSurfaces[conn.peer] = data.surface;
+                        updateSurfaceBadge(conn.peer, data.surface);
+                    }
+                });
             });
 
             peer.on('call', call => {
@@ -172,40 +177,35 @@
         } catch (e) { alert("失敗: " + e.message); location.reload(); }
     }
 
-    // 共有ソース（全画面、ウィンドウ、タブ）を判別して表示する関数
-    function updateSharingLabel(stream) {
-        const videoTrack = stream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-        
-        // monitor=全画面, window=ウィンドウ, browser=タブ
-        const surfaceNames = {
-            'monitor': '🖥️ 全画面を共有中',
-            'window': '🗔 ウィンドウを共有中',
-            'browser': '🌐 ブラウザのタブを共有中'
-        };
-
-        const typeText = surfaceNames[settings.displaySurface] || '📽️ 画面共有中';
-        
-        // 教員用サイドバーのラベル
+    // 自分の共有状態ラベルを更新
+    function updateMyShareLabel(stream) {
+        const surface = stream.getVideoTracks()[0].getSettings().displaySurface;
+        const names = { 'monitor': '🖥️ 全画面', 'window': '🗔 ウィンドウ', 'browser': '🌐 タブ' };
         const badge = document.getElementById('my-share-label');
-        badge.innerText = typeText;
+        badge.innerText = names[surface] || '📽️ 共有中';
         badge.classList.remove('hidden');
-
-        // 生徒用メイン画面のラベル
-        const studentLabel = document.getElementById('student-share-label');
-        studentLabel.innerText = "自分の共有状態: " + typeText;
     }
 
+    // 生徒が先生に接続して情報を送る
     function retryConnection() {
         if (!currentRid || myRole !== 'student') return;
-        log("先生(ID:" + currentRid + ")を探しています...");
-        peer.call("T-PC-" + currentRid, localStream).on('stream', stream => {
+        const teacherId = "T-PC-" + currentRid;
+        
+        // 1. 映像を送る
+        peer.call(teacherId, localStream).on('stream', stream => {
             const v = document.getElementById('teacher-video');
             v.srcObject = stream;
             v.onloadedmetadata = () => v.play().catch(()=>{});
-            document.getElementById('reconnect-btn').style.background = "#2ecc71";
-            document.getElementById('reconnect-btn').innerText = "接続済み";
         });
+
+        // 2. 共有ソース情報を送る（データ通信）
+        const conn = peer.connect(teacherId);
+        conn.on('open', () => {
+            const surface = localStream.getVideoTracks()[0].getSettings().displaySurface;
+            conn.send({ type: 'SURFACE_INFO', surface: surface });
+        });
+
+        // 監視員（別窓/スマホ）へも映像を送る
         peer.call("T-MB-" + currentRid, localStream);
     }
 
@@ -224,18 +224,41 @@
         const card = document.createElement('div');
         card.className = 'student-card';
         card.id = `card-${id}`;
-        card.innerHTML = `<div style="font-size:10px; color:#aaa; margin-bottom:4px;">生徒:${id.slice(-4)}</div><video id="vid-${id}" autoplay playsinline muted></video>`;
+        
+        // 共有ソース名（まだデータが届いていない場合は空）
+        const surfaceText = getSurfaceName(studentSurfaces[id]);
+
+        card.innerHTML = `
+            <div id="badge-${id}" class="student-surface-tag">${surfaceText}</div>
+            <div style="font-size:10px; color:#aaa; margin-bottom:4px;">生徒:${id.slice(-4)}</div>
+            <video id="vid-${id}" autoplay playsinline muted></video>`;
+        
         document.getElementById('monitor-area').appendChild(card);
         const v = document.getElementById(`vid-${id}`);
         v.srcObject = stream;
         v.onloadedmetadata = () => v.play().catch(()=>{});
+        
         stream.getVideoTracks()[0].onended = () => {
             card.remove();
             if (document.getElementById(`roster-${id}`)) document.getElementById(`roster-${id}`).remove();
             studentCount = Math.max(0, studentCount - 1);
             updateCount();
             delete studentStreams[id];
+            delete studentSurfaces[id];
         };
+    }
+
+    // 教員側：生徒カードのバッジを後から更新
+    function updateSurfaceBadge(id, surface) {
+        const badge = document.getElementById(`badge-${id}`);
+        if (badge) {
+            badge.innerText = getSurfaceName(surface);
+        }
+    }
+
+    function getSurfaceName(type) {
+        const names = { 'monitor': '🖥️ 全画面', 'window': '🗔 ウィンドウ', 'browser': '🌐 タブ' };
+        return names[type] || '';
     }
 
     function toggleBroadcast() {
