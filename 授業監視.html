@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>監視・配信システム（氏名表示版）</title>
+    <title>監視・配信システム（氏名固定版）</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -44,6 +44,10 @@
         .setup-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .setup-box { background: #222; padding: 30px; border-radius: 20px; text-align: center; width: 320px; border: 1px solid #333; }
         input { padding: 12px; font-size: 18px; width: 100%; border-radius: 10px; border: 1px solid #444; background: #111; color: white; text-align: center; margin-bottom: 15px; box-sizing: border-box; }
+        
+        /* 変更不可の入力欄用スタイル */
+        input:read-only { background: #333; color: #aaa; border-color: #555; cursor: not-allowed; }
+
         button { padding: 12px; cursor: pointer; font-weight: bold; border: none; border-radius: 10px; width: 100%; font-size: 14px; margin: 5px 0; }
         .hidden { display: none !important; }
         
@@ -85,15 +89,14 @@
 
 <div id="teacher-controls" class="hidden" style="background:#222; padding:10px; display:flex; gap:10px; justify-content:center; border-top:1px solid #444;">
     <button id="broadcast-btn" onclick="toggleBroadcast()" style="background:#e84118; color:white; flex:1; max-width:150px;">📡 配信を停止</button>
-    <button onclick="openMonitorWindow()" style="background:#8e44ad; color:white; flex:1; max-width:150px;">🔲 別窓で監視</button>
+    <button onclick="openMonitorWindow()" style="background:#8e44ad; color:white; flex:1; max-width:150px;">🗔 別窓で監視</button>
     <button onclick="showRemoteQR()" style="background:#f39c12; color:white; flex:1; max-width:150px;">📱 スマホで監視</button>
 </div>
 
 <div id="setup-screen" class="setup-overlay">
     <div class="setup-box">
         <h2 style="color:#00fbff; margin-bottom:20px;">授業システム</h2>
-        <!-- 氏名入力欄の追加 -->
-        <input type="text" id="user-name" placeholder="氏名を入力（生徒のみ必須）">
+        <input type="text" id="user-name" placeholder="氏名を入力（一度入力すると固定）">
         <input type="number" id="room-id" placeholder="生徒：番号を入力" oninput="checkCode()">
         
         <button style="background:#f39c12; color:white;" onclick="start('teacher')">先生として開始</button>
@@ -107,7 +110,7 @@
     let isBroadcasting = true;
     let studentCount = 0;
     const studentStreams = {};
-    const studentInfo = {}; // 生徒ごとの氏名と共有ソース情報を保持
+    const studentInfo = {};
 
     function log(m) { document.getElementById('status-msg').innerText = m; }
     function updateCount() { document.getElementById('count-display').innerText = "接続数: " + studentCount; }
@@ -117,12 +120,19 @@
     function reveal() { document.getElementById('secret-btn').classList.remove('hidden'); }
 
     async function start(role) {
+        const nameInput = document.getElementById('user-name');
         myRole = role;
-        myName = document.getElementById('user-name').value;
+        myName = nameInput.value;
         const inputRid = document.getElementById('room-id').value;
 
         if (role === 'student' && !myName) {
             return alert("氏名を入力してください");
+        }
+
+        // 氏名を固定して保存
+        if (myName) {
+            localStorage.setItem('savedUserName', myName);
+            nameInput.readOnly = true;
         }
 
         if (role === 'teacher') currentRid = Math.floor(1000 + Math.random() * 9000).toString();
@@ -157,7 +167,6 @@
                 }
             });
 
-            // データ通信の受信（教員側）
             peer.on('connection', conn => {
                 conn.on('data', data => {
                     if (data.type === 'STUDENT_INFO') {
@@ -201,7 +210,6 @@
             v.onloadedmetadata = () => v.play().catch(()=>{});
         });
 
-        // 氏名と共有ソース情報を送る
         const conn = peer.connect(teacherId);
         conn.on('open', () => {
             const surface = localStream.getVideoTracks()[0].getSettings().displaySurface;
@@ -216,7 +224,6 @@
         const div = document.createElement('div');
         div.className = 'roster-item';
         div.id = `roster-${id}`;
-        // 初期状態はID表示、データが来たら氏名に書き換わる
         const displayName = studentInfo[id] ? studentInfo[id].name : `ID:${id.slice(-4)}`;
         div.innerHTML = `<span id="roster-name-${id}">${displayName}</span><button onclick="addVideo('${id}')" style="background:#44bd32; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer;">監視</button>`;
         document.getElementById('student-roster').appendChild(div);
@@ -252,20 +259,13 @@
         };
     }
 
-    // 生徒の情報が届いたときに表示を更新する
     function updateStudentDisplay(id) {
         const info = studentInfo[id];
         if (!info) return;
-
-        // リストの氏名を更新
         const rosterSpan = document.getElementById(`roster-name-${id}`);
         if (rosterSpan) rosterSpan.innerText = info.name;
-
-        // ビデオカードのラベルを更新
         const labelName = document.getElementById(`label-name-${id}`);
         if (labelName) labelName.innerText = info.name;
-
-        // バッジを更新
         const badge = document.getElementById(`badge-${id}`);
         if (badge) badge.innerText = getSurfaceName(info.surface);
     }
@@ -296,6 +296,14 @@
     }
 
     window.onload = () => {
+        // 保存された氏名を復元
+        const savedName = localStorage.getItem('savedUserName');
+        if (savedName) {
+            const nameInput = document.getElementById('user-name');
+            nameInput.value = savedName;
+            nameInput.readOnly = true; // 編集不可にする
+        }
+
         if (window.location.hash.startsWith("#remote-")) {
             const rid = window.location.hash.replace("#remote-", "");
             setTimeout(() => { currentRid = rid; start('remote'); }, 500); 
