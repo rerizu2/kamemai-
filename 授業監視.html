@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>統合授業支援システム - High Quality & Sync</title>
+    <title>授業支援・マルチ同期配信システム</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { --accent: #00fbff; --bg: #000; --panel: #1a1a1a; --text: #eee; }
@@ -13,50 +13,49 @@
         .main-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
         
         /* サイドバー */
-        .sidebar { width: 250px; background: var(--panel); border-right: 1px solid #444; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .sidebar { width: 250px; background: var(--panel); border-right: 1px solid #444; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
         .room-card { background: #333; padding: 10px; border-radius: 8px; text-align: center; border: 2px solid var(--accent); }
-        .roster-item { background: #333; padding: 10px; border-radius: 8px; font-size: 11px; border: 1px solid #444; }
+        .roster-item { background: #333; padding: 8px; border-radius: 8px; font-size: 11px; border: 1px solid #444; margin-bottom: 5px; }
 
-        /* 履歴パネル */
-        .chat-panel { width: 260px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; transition: 0.3s; z-index: 80; }
+        /* メッセージ履歴 */
+        .chat-panel { width: 260px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; z-index: 80; }
         .chat-header { background: #333; padding: 10px; font-size: 12px; font-weight: bold; border-bottom: 1px solid #444; display: flex; justify-content: space-between; }
         #chat-history { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .chat-msg { font-size: 11px; padding: 8px; border-radius: 6px; background: #262626; border-left: 3px solid var(--accent); line-height: 1.4; word-break: break-all; }
+        .chat-msg { font-size: 11px; padding: 8px; border-radius: 6px; background: #262626; border-left: 3px solid var(--accent); line-height: 1.4; }
         .chat-msg.private { border-left-color: #ff9f43; background: #3d2b1a; }
-        .chat-msg .time { font-size: 9px; color: #888; display: block; }
 
         /* メインビュー */
         .primary-view { flex: 1; display: flex; flex-direction: column; background: #111; position: relative; overflow: hidden; }
         .split-container { display: flex; width: 100%; height: 100%; transition: 0.5s; }
         .teacher-mode .split-container { height: 55%; border-bottom: 2px solid #333; }
         
-        .view-section { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; border: 1px solid #222; background: #000; overflow: hidden; }
+        .view-section { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; border: 1px solid #222; background: #000; }
         video.main-video { width: 100%; height: 100%; object-fit: contain; }
 
         /* ホワイトボード */
         #wb-section { display: none; background: white; flex-direction: column; }
         .wb-active #wb-section { display: flex; }
         .wb-hidden-local #wb-section { display: none !important; }
-        .wb-tools { background: #f0f0f0; padding: 8px; display: flex; gap: 10px; border-bottom: 1px solid #ccc; color: #000; align-items: center; flex-wrap: wrap; }
-        .color-opt { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 2px #000; }
+        .wb-tools { background: #f0f0f0; padding: 8px; display: flex; gap: 10px; border-bottom: 1px solid #ccc; color: #000; align-items: center; }
+        .color-opt { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid #fff; }
         .color-opt.active { transform: scale(1.2); border-color: #000; }
         canvas { background: white; flex: 1; cursor: crosshair; touch-action: none; }
 
-        /* 監視グリッド */
-        .monitor-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 10px; overflow-y: auto; }
+        /* 監視グリッド（先生のみ） */
+        .monitor-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 10px; overflow-y: auto; }
         .student-card { background: #1a1a1a; border: 1px solid #444; border-radius: 8px; padding: 4px; text-align: center; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; }
 
-        /* 操作ボタン */
-        .teacher-controls { background: #222; padding: 10px; border-top: 1px solid #444; display: flex; gap: 10px; justify-content: center; }
+        /* UIボタン */
+        .controls { background: #222; padding: 10px; border-top: 1px solid #444; display: flex; gap: 10px; justify-content: center; }
         #student-options { position: fixed; bottom: 20px; right: 280px; display: flex; flex-direction: column; gap: 8px; z-index: 1000; }
         .btn-ui { background: rgba(50,50,50,0.9); color: white; border: 1px solid #666; padding: 10px; border-radius: 8px; font-size: 11px; cursor: pointer; }
-        .btn-improve { background: #0097e6; border-color: var(--accent); font-weight: bold; }
-        .btn-reset { background: #f39c12; color: white; font-size: 11px; width: 100%; margin-top: 5px; }
+        .btn-improve { background: #0097e6; border-color: var(--accent); }
+        .btn-reset { background: #f39c12; width: 100%; margin-top: 5px; }
 
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 5000; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 5000; }
         .modal { background: #222; padding: 30px; border-radius: 20px; text-align: center; width: 320px; border: 1px solid #444; }
-        input { padding: 12px; width: 100%; border-radius: 10px; border: 1px solid #444; background: #111; color: #fff; margin-bottom: 12px; box-sizing: border-box; text-align: center; }
+        input { padding: 12px; width: 100%; border-radius: 10px; border: 1px solid #444; background: #111; color: #fff; margin-bottom: 12px; text-align: center; }
         button { padding: 10px 15px; cursor: pointer; border-radius: 6px; border: none; font-weight: bold; }
         
         #comment-overlay { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); background: rgba(0, 151, 230, 0.9); padding: 20px 40px; border-radius: 20px; font-size: 24px; font-weight: bold; z-index: 9999; opacity: 0; transition: 0.5s; pointer-events: none; text-align: center; max-width: 80%; }
@@ -82,15 +81,16 @@
             <div id="display-id" style="font-size: 32px; font-weight: bold;">----</div>
         </div>
         <button id="global-reset-btn" class="btn-ui btn-reset hidden" onclick="resetToTeacher()">⬅️ 先生の画面に戻す</button>
-        <div id="roster-list" style="margin-top:10px;"></div>
+        <div id="roster-list"></div>
     </div>
 
-    <!-- メインビュー -->
+    <!-- メイン映像 -->
     <div class="primary-view">
         <div class="split-container" id="main-view-split">
             <div class="view-section" id="video-section">
                 <video id="main-video-display" class="main-video" autoplay playsinline muted></video>
             </div>
+            <!-- ホワイトボード -->
             <div class="view-section" id="wb-section">
                 <div class="wb-tools">
                     <div id="wb-teacher-tools" class="hidden" style="display:flex; gap:8px; align-items:center;">
@@ -99,10 +99,8 @@
                         <div class="color-opt" style="background:blue;" onclick="setWbMode('pen','blue',this)"></div>
                         <button onclick="setWbMode('eraser','white',this)" style="font-size:10px;">消しゴム</button>
                         <button onclick="clearWb()" style="font-size:10px; color:red;">全消去</button>
-                        <input type="range" id="pen-size" min="1" max="30" value="3" style="width:60px;">
                     </div>
-                    <button id="wb-close-teacher" class="hidden" onclick="stopWhiteboard()" style="margin-left:auto; background:#444; color:white; font-size:10px;">ボード終了</button>
-                    <span id="wb-student-info" class="hidden" style="margin-left:auto; font-size:11px; color:#666;">（表示中）</span>
+                    <button id="wb-close-teacher" class="hidden" onclick="stopWhiteboard()" style="margin-left:auto; background:#444; color:white; font-size:10px;">終了</button>
                 </div>
                 <canvas id="wb-canvas"></canvas>
             </div>
@@ -119,25 +117,20 @@
 
     <!-- 履歴パネル -->
     <div class="chat-panel" id="chat-panel">
-        <div class="chat-header">
-            <span>💬 メッセージ履歴</span>
-            <button id="clear-log-btn" onclick="clearLog()" style="background:none; color:#888; font-size:10px;">消去</button>
-        </div>
+        <div class="chat-header"><span>💬 履歴</span><button onclick="clearLog()" style="background:none; color:#888; font-size:10px;">消去</button></div>
         <div id="chat-history"></div>
     </div>
 </div>
 
-<!-- 先生用コントロール -->
-<div id="teacher-controls" class="teacher-controls hidden">
-    <input type="text" id="msg-input" style="flex:1; max-width:400px; margin:0;" placeholder="全員にメッセージ...">
+<div id="teacher-controls" class="controls hidden">
+    <input type="text" id="msg-input" style="flex:1; max-width:400px; margin:0;" placeholder="全員に指示...">
     <button onclick="sendToAll()" style="background:#0097e6; color:white;">全員送信</button>
     <button onclick="toggleMenu()" style="background:#555; color:white;">🛠️ ツール</button>
 </div>
 
-<!-- セットアップ -->
 <div id="setup-screen" class="overlay">
     <div class="modal">
-        <h2 style="color:var(--accent); margin-bottom:20px;">授業支援システム</h2>
+        <h2 style="color:var(--accent);">授業システム</h2>
         <input type="text" id="user-name" placeholder="氏名">
         <input type="number" id="room-id" placeholder="ID（生徒のみ）">
         <button style="background:#f39c12; color:white; width:100%; margin-bottom:10px;" onclick="initSystem('teacher')">先生として開始</button>
@@ -145,14 +138,12 @@
     </div>
 </div>
 
-<!-- 先生メニュー -->
 <div id="teacher-menu" class="overlay hidden" onclick="toggleMenu()">
     <div class="modal" onclick="event.stopPropagation()">
-        <h3 style="margin-top:0;">管理メニュー</h3>
         <button onclick="startWhiteboard()" style="width:100%; margin-bottom:10px;">ボード開始</button>
         <button onclick="changeSource()" style="width:100%; margin-bottom:10px;">画面共有の変更</button>
-        <button onclick="kickAll()" style="width:100%; background:#333; color:red;">全員退出</button>
-        <button onclick="toggleMenu()" style="width:100%; margin-top:15px; background:#444;">閉じる</button>
+        <button onclick="kickAll()" style="width:100%; color:red;">全員退出</button>
+        <button onclick="toggleMenu()" style="width:100%; margin-top:20px; background:#444;">閉じる</button>
     </div>
 </div>
 
@@ -166,22 +157,19 @@
         audio: true
     };
 
-    function logStatus() {
-        document.getElementById('status-msg').innerText = `稼働中 | 接続: ${Object.keys(dataConnections).length}`;
-    }
-
     async function initSystem(role) {
         myRole = role; myName = document.getElementById('user-name').value;
-        if (!myName) return alert("氏名を入力してください");
+        if (!myName) return alert("氏名を入力");
         currentRid = (role === 'teacher') ? Math.floor(1000 + Math.random() * 9000).toString() : document.getElementById('room-id').value;
-        if (!currentRid) return alert("IDが必要です");
 
         try {
             localStream = await navigator.mediaDevices.getDisplayMedia(QUALITY_CONFIG);
-            applyVideoSettings(localStream);
+            const track = localStream.getVideoTracks()[0];
+            if (track && 'contentHint' in track) track.contentHint = 'detail';
+
             document.getElementById('setup-screen').classList.add('hidden');
+            wbCanvas = document.getElementById('wb-canvas'); wbCtx = wbCanvas.getContext('2d');
             
-            initWb();
             const pId = (role === 'teacher' ? "TEACHER-ROOM-" : "") + currentRid;
             peer = new Peer(role === 'student' ? undefined : pId);
 
@@ -198,7 +186,6 @@
                     document.getElementById('main-video-display').srcObject = localStream;
                 } else {
                     document.getElementById('student-options').classList.remove('hidden');
-                    document.getElementById('wb-student-info').classList.remove('hidden');
                     connectToTeacher();
                 }
             });
@@ -207,27 +194,22 @@
                 dataConnections[conn.peer] = conn;
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
-                logStatus();
+                updateStatus();
             });
 
             peer.on('call', call => {
                 mediaCalls[call.peer] = call;
-                call.answer(localStream);
+                call.answer(localStream); // 全生徒に現在の配信映像を送る
                 call.on('stream', s => { 
                     if(role === 'teacher') { 
                         studentStreams[call.peer] = s;
-                        addRoster(call.peer); 
-                        addMonitorVideo(call.peer, s); 
+                        addRoster(call.peer); addMonitorVideo(call.peer, s); 
                     } 
                 });
             });
 
-        } catch (e) { alert("失敗しました"); location.reload(); }
-    }
-
-    function applyVideoSettings(stream) {
-        const track = stream.getVideoTracks()[0];
-        if (track && 'contentHint' in track) track.contentHint = 'detail';
+            initWbLogic();
+        } catch (e) { location.reload(); }
     }
 
     function connectToTeacher() {
@@ -241,64 +223,43 @@
         call.on('stream', s => document.getElementById('main-video-display').srcObject = s);
     }
 
-    // --- 画質改善 ---
-    function improveQuality() {
-        const tId = "TEACHER-ROOM-" + currentRid;
-        if (mediaCalls[tId]) mediaCalls[tId].close();
-        const call = peer.call(tId, localStream, {
-            sdpTransform: (sdp) => sdp.replace(/a=mid:video\r\n/g, 'a=mid:video\r\nb=AS:10000\r\n')
-        });
-        mediaCalls[tId] = call;
-        call.on('stream', s => {
-            document.getElementById('main-video-display').srcObject = s;
-            showComment("画質を最適化しました");
-        });
-    }
-
-    // --- 共有リセット（先生の画面に戻す） ---
+    // --- 共有のリセット & スポットライト ---
     function resetToTeacher() {
-        const teacherTrack = localStream.getVideoTracks()[0];
-        applyVideoSettings(localStream);
-        
-        Object.values(mediaCalls).forEach(call => {
-            if (call.peerConnection) {
-                const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                if (sender) sender.replaceTrack(teacherTrack);
-            }
-        });
+        const track = localStream.getVideoTracks()[0];
+        updateBroadcast(track);
         document.getElementById('main-video-display').srcObject = localStream;
         document.getElementById('global-reset-btn').classList.add('hidden');
-        showComment("先生の画面に戻しました");
     }
 
     function spotlight(id) {
         const track = studentStreams[id]?.getVideoTracks()[0];
-        if(!track) return alert("映像が見つかりません");
-        
+        if(!track) return;
+        updateBroadcast(track);
+        document.getElementById('main-video-display').srcObject = new MediaStream([track]);
+        document.getElementById('global-reset-btn').classList.remove('hidden');
+    }
+
+    function updateBroadcast(track) {
+        // 全ての接続先生徒に対して映像トラックを差し替える（これで全員同じ画面になる）
         Object.values(mediaCalls).forEach(call => {
             if (call.peerConnection) {
                 const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
                 if (sender) sender.replaceTrack(track);
             }
         });
-        document.getElementById('main-video-display').srcObject = new MediaStream([track]);
-        document.getElementById('global-reset-btn').classList.remove('hidden');
     }
 
-    // --- ホワイトボードロジック ---
-    function initWb() {
-        wbCanvas = document.getElementById('wb-canvas'); wbCtx = wbCanvas.getContext('2d');
+    // --- ホワイトボード ---
+    function initWbLogic() {
         wbCanvas.addEventListener('pointerdown', e => {
             if (myRole !== 'teacher') return;
             wbDrawing = true; wbCanvas.setPointerCapture(e.pointerId);
-            const p = getWbPos(e);
-            startStroke(p.x, p.y, wbColor, document.getElementById('pen-size').value, wbMode);
-            broadcast({ type: 'WB_DRAW', x: p.x, y: p.y, color: wbColor, size: document.getElementById('pen-size').value, mode: wbMode, start: true });
+            const p = getWbPos(e); startStroke(p.x, p.y, wbColor, 3, wbMode);
+            broadcast({ type: 'WB_DRAW', x: p.x, y: p.y, color: wbColor, size: 3, mode: wbMode, start: true });
         });
         wbCanvas.addEventListener('pointermove', e => {
             if (!wbDrawing) return;
-            const p = getWbPos(e);
-            drawLine(p.x, p.y);
+            const p = getWbPos(e); drawLine(p.x, p.y);
             broadcast({ type: 'WB_DRAW', x: p.x, y: p.y, start: false });
         });
         wbCanvas.addEventListener('pointerup', () => { wbDrawing = false; wbCtx.beginPath(); });
@@ -311,13 +272,10 @@
     }
     function drawLine(x, y) { wbCtx.lineTo(x * wbCanvas.width, y * wbCanvas.height); wbCtx.stroke(); }
     function drawRemote(d) { if (d.start) startStroke(d.x, d.y, d.color, d.size, d.mode); else drawLine(d.x, d.y); }
-    function setWbMode(m, c, el) { wbMode = m; wbColor = c; document.querySelectorAll('.color-opt').forEach(o => o.classList.remove('active')); if(el.classList.contains('color-opt')) el.classList.add('active'); }
-    function startWhiteboard() { toggleMenu(); document.getElementById('root-layout').classList.add('wb-active'); setTimeout(resizeCanvas, 300); broadcast({type:'WB_START'}); }
-    function stopWhiteboard() { document.getElementById('root-layout').classList.remove('wb-active'); broadcast({type:'WB_STOP'}); }
     function resizeCanvas() { const r = wbCanvas.getBoundingClientRect(); wbCanvas.width = r.width; wbCanvas.height = r.height; wbCtx.lineCap = 'round'; }
-    function clearWb() { if(confirm("消去？")){ wbCtx.clearRect(0,0,wbCanvas.width,wbCanvas.height); broadcast({type:'WB_CLEAR'}); }}
+    function clearWb() { wbCtx.clearRect(0,0,wbCanvas.width,wbCanvas.height); broadcast({type:'WB_CLEAR'}); }
 
-    // --- 通信ハンドリング ---
+    // --- 通信 ---
     function handleData(id, data) {
         if (data.type === 'JOIN') { studentInfo[id] = { name: data.name }; updateStudentUI(id); }
         else if (data.type === 'MSG') { addLog(data.from, data.msg, data.isPrivate); showComment(data.msg); }
@@ -330,9 +288,8 @@
 
     function addLog(from, msg, isP) {
         const h = document.getElementById('chat-history');
-        const d = document.createElement('div');
-        d.className = `chat-msg ${isP ? 'private' : ''}`;
-        d.innerHTML = `<span class="time">${from}${isP ? ' (個別)' : ''}</span>${msg}`;
+        const d = document.createElement('div'); d.className = `chat-msg ${isP ? 'private' : ''}`;
+        d.innerHTML = `<strong>${from}${isP ? ' (個別)' : ''}</strong>: ${msg}`;
         h.prepend(d);
     }
     function sendToAll() {
@@ -350,11 +307,23 @@
         setTimeout(() => o.classList.remove('show'), 5000);
     }
 
+    // --- 補助機能 ---
     function broadcast(data) { Object.values(dataConnections).forEach(c => c.send(data)); }
+    function updateStatus() { document.getElementById('status-msg').innerText = `稼働中 | 接続: ${Object.keys(dataConnections).length}`; }
     function toggleMenu() { document.getElementById('teacher-menu').classList.toggle('hidden'); }
+    function startWhiteboard() { toggleMenu(); document.getElementById('root-layout').classList.add('wb-active'); setTimeout(resizeCanvas, 300); broadcast({type:'WB_START'}); }
+    function stopWhiteboard() { document.getElementById('root-layout').classList.remove('wb-active'); broadcast({type:'WB_STOP'}); }
+    function setWbMode(m, c, el) { wbMode = m; wbColor = c; document.querySelectorAll('.color-opt').forEach(o => o.classList.remove('active')); if(el.classList.contains('color-opt')) el.classList.add('active'); }
     function toggleWbLocal() { document.getElementById('root-layout').classList.toggle('wb-hidden-local'); }
     function toggleChatLocal() { document.getElementById('chat-panel').classList.toggle('hidden'); }
     function clearLog() { document.getElementById('chat-history').innerHTML = ""; }
+    function improveQuality() { /* 既存の再接続ロジック */
+        const tId = "TEACHER-ROOM-" + currentRid;
+        if(mediaCalls[tId]) mediaCalls[tId].close();
+        const call = peer.call(tId, localStream, { sdpTransform: (sdp) => sdp.replace(/a=mid:video\r\n/g, 'a=mid:video\r\nb=AS:10000\r\n') });
+        mediaCalls[tId] = call;
+        call.on('stream', s => { document.getElementById('main-video-display').srcObject = s; showComment("画質をリカバリしました"); });
+    }
 
     function addRoster(id) {
         if(document.getElementById(`roster-${id}`)) return;
@@ -367,7 +336,7 @@
     function addMonitorVideo(id, s) {
         if(document.getElementById(`card-${id}`)) return;
         const c = document.createElement('div'); c.className = 'student-card'; c.id = `card-${id}`;
-        c.innerHTML = `<div id="vname-${id}" style="font-size:10px; color:#aaa;"></div><video id="vid-${id}" autoplay playsinline muted></video>`;
+        c.innerHTML = `<div id="vname-${id}" style="font-size:10px;"></div><video id="vid-${id}" autoplay playsinline muted></video>`;
         document.getElementById('monitor-area').appendChild(c); document.getElementById(`vid-${id}`).srcObject = s;
         updateStudentUI(id);
     }
@@ -379,18 +348,12 @@
     function removeStudent(id) {
         if(document.getElementById(`roster-${id}`)) document.getElementById(`roster-${id}`).remove();
         if(document.getElementById(`card-${id}`)) document.getElementById(`card-${id}`).remove();
-        delete dataConnections[id]; logStatus();
+        delete dataConnections[id]; updateStatus();
     }
     function kickAll() { if(confirm("全員退出？")) broadcast({type:'KICK'}); }
     async function changeSource() {
         const s = await navigator.mediaDevices.getDisplayMedia(QUALITY_CONFIG);
-        applyVideoSettings(s); localStream = s;
-        document.getElementById('main-video-display').srcObject = s;
-        Object.values(mediaCalls).forEach(call => {
-            const sender = call.peerConnection?.getSenders().find(s => s.track.kind === 'video');
-            if(sender) sender.replaceTrack(s.getVideoTracks()[0]);
-        });
-        toggleMenu();
+        localStream = s; resetToTeacher(); toggleMenu();
     }
 </script>
 </body>
