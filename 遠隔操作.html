@@ -2,126 +2,124 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web P2P リモートデスクトップ(模擬)</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <title>P2P Remote Debug</title>
+    <!-- ライブラリの読み込み先を変更(安定版) -->
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; font-family: sans-serif; background: #1a1a1a; color: white; overflow: hidden; }
-        #setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; }
-        .view { display: none; width: 100vw; height: 100vh; position: relative; }
-        
-        /* 操作される側のスタイル */
-        #remote-cursor {
-            position: absolute; width: 20px; height: 20px;
-            background: red; border-radius: 50%; pointer-events: none;
-            z-index: 9999; border: 2px solid white; transform: translate(-50%, -50%);
-        }
-        
-        /* 操作する側のスタイル */
-        video { width: 100%; height: 100%; object-fit: contain; background: black; cursor: crosshair; }
-        #status-bar { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 5px 10px; pointer-events: none; }
-        
-        button { padding: 12px 24px; font-size: 16px; cursor: pointer; border-radius: 5px; border: none; background: #007bff; color: white; }
-        input { padding: 10px; width: 250px; border-radius: 5px; border: none; }
+        body { background: #222; color: white; font-family: sans-serif; padding: 20px; }
+        #log { background: #000; padding: 10px; border: 1px solid #444; color: #0f0; height: 100px; overflow-y: scroll; font-family: monospace; font-size: 12px; margin-bottom: 20px; }
+        .box { border: 1px solid #555; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+        button { padding: 10px 20px; cursor: pointer; }
+        #host-area, #guest-area { display: none; }
     </style>
 </head>
 <body>
 
-    <!-- 初期メニュー -->
-    <div id="setup">
-        <h1>Remote Control Demo</h1>
-        <div style="border: 1px solid #444; padding: 20px; border-radius: 10px;">
-            <h3>1. 操作される側 (被操作端末)</h3>
-            <button onclick="startHost()">画面共有を開始する</button>
-        </div>
-        <div style="border: 1px solid #444; padding: 20px; border-radius: 10px;">
-            <h3>2. 操作する側 (操作端末)</h3>
-            <input type="text" id="target-id" placeholder="相手のIDを入力">
-            <button style="background: #28a745;" onclick="startGuest()">接続して操作する</button>
-        </div>
+    <h2>P2P Debug Console</h2>
+    <div id="log">--- システムログ ---<br></div>
+
+    <div id="menu">
+        <button onclick="setupPeer('host')">1. 操作される側（IDを発行）</button>
+        <button onclick="setupPeer('guest')">2. 操作する側（IDを入力）</button>
     </div>
 
-    <!-- 操作される側 (Host) の画面 -->
-    <div id="host-view" class="view">
-        <div id="status-bar">モード: 操作される側 / ID: <span id="my-id">発行中...</span></div>
-        <div id="remote-cursor"></div>
-        <p style="text-align:center; margin-top:200px;">画面共有中...<br>相手がクリックした場所に赤い点が動きます。</p>
+    <!-- ホスト画面 -->
+    <div id="host-area" class="box">
+        <h3>あなたのID: <span id="my-id" style="color: yellow; font-size: 20px;">接続中...</span></h3>
+        <p>このIDを相手に伝えてください。</p>
+        <div id="cursor" style="position:fixed; width:20px; height:20px; background:red; border-radius:50%; display:none; pointer-events:none; z-index:1000;"></div>
     </div>
 
-    <!-- 操作する側 (Guest) の画面 -->
-    <div id="guest-view" class="view">
-        <div id="status-bar">モード: 操作する側 / 映像をクリックして操作</div>
-        <video id="remote-video" autoplay playsinline></video>
+    <!-- ゲスト画面 -->
+    <div id="guest-area" class="box">
+        <input type="text" id="target-id" placeholder="相手のIDを入力">
+        <button onclick="connectToHost()">接続開始</button>
+        <video id="remote-video" autoplay style="width: 100%; margin-top: 10px; border: 1px solid #fff;"></video>
     </div>
 
 <script>
-    let peer = new Peer();
+    let peer = null;
     let conn = null;
 
-    // --- 操作される側 (Host) の処理 ---
-    async function startHost() {
-        document.getElementById('setup').style.display = 'none';
-        document.getElementById('host-view').style.display = 'block';
+    function addLog(msg) {
+        const log = document.getElementById('log');
+        log.innerHTML += "> " + msg + "<br>";
+        log.scrollTop = log.scrollHeight;
+    }
 
-        // 自分のIDを表示
-        peer.on('open', id => {
-            document.getElementById('my-id').innerText = id;
+    function setupPeer(mode) {
+        addLog("PeerJSを初期化中...");
+        // PeerJSサーバーに接続
+        peer = new Peer();
+
+        peer.on('open', (id) => {
+            addLog("ID取得成功: " + id);
+            if (mode === 'host') {
+                document.getElementById('menu').style.display = 'none';
+                document.getElementById('host-area').style.display = 'block';
+                document.getElementById('my-id').innerText = id;
+                startScreenShare();
+            } else {
+                document.getElementById('menu').style.display = 'none';
+                document.getElementById('guest-area').style.display = 'block';
+            }
         });
 
-        // 接続（データ）待機
-        peer.on('connection', c => {
-            conn = c;
-            conn.on('data', data => {
-                if (data.type === 'click') {
-                    const cursor = document.getElementById('remote-cursor');
-                    cursor.style.left = (data.x * window.innerWidth) + 'px';
-                    cursor.style.top = (data.y * window.innerHeight) + 'px';
-                }
+        peer.on('error', (err) => {
+            addLog("エラーが発生しました: " + err.type);
+            console.error(err);
+        });
+
+        // ホスト側のデータ受信設定
+        peer.on('connection', (c) => {
+            addLog("相手がデータ接続しました");
+            c.on('data', (data) => {
+                const cursor = document.getElementById('cursor');
+                cursor.style.display = 'block';
+                cursor.style.left = (data.x * window.innerWidth) + "px";
+                cursor.style.top = (data.y * window.innerHeight) + "px";
             });
         });
+    }
 
-        // 映像配信（画面キャプチャ）
+    async function startScreenShare() {
         try {
+            addLog("画面共有の許可を求めています...");
             const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            peer.on('call', call => {
-                call.answer(stream); // 相手に映像を返す
+            addLog("画面キャプチャ成功。着信を待機します。");
+            peer.on('call', (call) => {
+                addLog("着信あり。映像を送信します。");
+                call.answer(stream);
             });
-        } catch (err) {
-            alert("画面共有をキャンセルしたか、エラーが発生しました: " + err);
-            location.reload();
+        } catch (e) {
+            addLog("画面共有エラー: " + e.message);
         }
     }
 
-    // --- 操作する側 (Guest) の処理 ---
-    function startGuest() {
-        const targetId = document.getElementById('target-id').value;
-        if (!targetId) return alert("IDを入力してください");
+    function connectToHost() {
+        const id = document.getElementById('target-id').value;
+        if (!id) return;
 
-        document.getElementById('setup').style.display = 'none';
-        document.getElementById('guest-view').style.display = 'block';
+        addLog(id + " へ接続を試みています...");
+        
+        // 1. データ接続
+        conn = peer.connect(id);
+        conn.on('open', () => addLog("データ通信確立！"));
 
-        // 1. データ接続（クリック送信チャネル）
-        conn = peer.connect(targetId);
-
-        // 2. 映像接続（画面受信）
-        // PeerJSの仕様上、自分から空のストリームで発信して映像をもらう形にする
-        const call = peer.call(targetId, new MediaStream());
-        call.on('stream', remoteStream => {
+        // 2. 映像接続
+        const call = peer.call(id, new MediaStream());
+        call.on('stream', (remoteStream) => {
+            addLog("映像を受信しました。");
             const video = document.getElementById('remote-video');
             video.srcObject = remoteStream;
-        });
-
-        // 3. クリックイベントの取得と送信
-        const videoElement = document.getElementById('remote-video');
-        videoElement.addEventListener('click', e => {
-            if (!conn) return;
             
-            // ビデオ要素内での相対座標(0.0 ~ 1.0)を計算
-            const rect = videoElement.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / rect.width;
-            const y = (e.clientY - rect.top) / rect.height;
-
-            conn.send({ type: 'click', x: x, y: y });
+            // ビデオ上でのクリックイベント
+            video.onclick = (e) => {
+                const rect = video.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                conn.send({ x: x, y: y });
+            };
         });
     }
 </script>
