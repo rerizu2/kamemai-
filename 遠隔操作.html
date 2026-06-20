@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P リモートコントローラー</title>
+    <!-- PeerJSライブラリの読み込み -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { margin: 0; font-family: sans-serif; background: #222; color: white; overflow: hidden; }
+        
+        /* 共通：メニュー画面 */
+        #menu { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; }
+        .btn-blue { background: #007bff; color: white; }
+        .btn-green { background: #28a745; color: white; }
+
+        /* 操作される側（受信側）のスタイル */
+        #receiver-view { display: none; height: 100vh; width: 100vw; position: relative; }
+        #ball { width: 60px; height: 60px; background: #00ffcc; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); transition: 0.1s linear; box-shadow: 0 0 20px #00ffcc; }
+        #id-display { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; }
+
+        /* 操作する側（送信側）のスタイル */
+        #controller-view { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        .d-pad { display: grid; grid-template-columns: 80px 80px 80px; gap: 15px; margin-top: 20px; }
+        .btn-ctrl { width: 80px; height: 80px; background: #444; color: white; font-size: 24px; }
+        .btn-ctrl:active { background: #00ffcc; color: #222; }
+        input { padding: 10px; font-size: 16px; border-radius: 5px; border: none; width: 200px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <!-- モード選択画面 -->
+    <div id="menu">
+        <h1>モードを選択してください</h1>
+        <button class="btn-blue" onclick="initReceiver()">操作される側 (Display)</button>
+        <button class="btn-green" onclick="showControllerSetup()">操作する側 (Remote)</button>
+    </div>
+
+    <!-- 操作される側 (Receiver) -->
+    <div id="receiver-view">
+        <div id="id-display">あなたのID: <span id="my-id">発行中...</span></div>
+        <div id="ball"></div>
+    </div>
+
+    <!-- 操作する側 (Controller) -->
+    <div id="controller-view">
+        <div id="setup-ui">
+            <p>相手のIDを入力してください</p>
+            <input type="text" id="target-id-input" placeholder="IDを入力">
+            <button class="btn-green" onclick="initController()">接続</button>
+        </div>
+        <div id="pad-ui" style="display:none;">
+            <div class="d-pad">
+                <div style="grid-column: 2"><button class="btn-ctrl" onclick="sendMove('up')">↑</button></div>
+                <div style="grid-column: 1"><button class="btn-ctrl" onclick="sendMove('left')">←</button></div>
+                <div style="grid-column: 3"><button class="btn-ctrl" onclick="sendMove('right')">→</button></div>
+                <div style="grid-column: 2"><button class="btn-ctrl" onclick="sendMove('down')">↓</button></div>
+            </div>
+            <p id="status">接続済み</p>
+        </div>
+    </div>
+
+    <script>
+        let peer = null;
+        let conn = null;
+
+        // --- 操作される側 (Receiver) のロジック ---
+        function initReceiver() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('receiver-view').style.display = 'block';
+
+            peer = new Peer();
+            const ball = document.getElementById('ball');
+            let x = window.innerWidth / 2;
+            let y = window.innerHeight / 2;
+
+            peer.on('open', (id) => {
+                document.getElementById('my-id').innerText = id;
+            });
+
+            peer.on('connection', (connection) => {
+                connection.on('data', (data) => {
+                    const step = 40;
+                    if (data === 'up')    y -= step;
+                    if (data === 'down')  y += step;
+                    if (data === 'left')  x -= step;
+                    if (data === 'right') x += step;
+                    ball.style.left = x + 'px';
+                    ball.style.top = y + 'px';
+                });
+            });
+        }
+
+        // --- 操作する側 (Controller) のロジック ---
+        function showControllerSetup() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('controller-view').style.display = 'flex';
+        }
+
+        function initController() {
+            const targetId = document.getElementById('target-id-input').value;
+            if (!targetId) return alert("IDを入力してください");
+
+            peer = new Peer();
+            peer.on('open', () => {
+                conn = peer.connect(targetId);
+                conn.on('open', () => {
+                    document.getElementById('setup-ui').style.display = 'none';
+                    document.getElementById('pad-ui').style.display = 'block';
+                });
+                conn.on('error', (err) => alert("接続失敗: " + err));
+            });
+        }
+
+        function sendMove(dir) {
+            if (conn && conn.open) {
+                conn.send(dir);
+            }
+        }
+    </script>
+</body>
+</html>
