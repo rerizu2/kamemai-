@@ -3,196 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>授業支援 Pro Ultimate</title>
+    <title>EDU-OS Pro Infinity</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         :root { 
-            --accent: #00fbff; --bg: #0a0a0a; --panel: #1e1e1e; --danger: #ff4757;
-            --success: #27ae60; --warning: #f39c12; --info: #3498db; --monitor-height: 40vh; 
+            --accent: #00fbff; --bg: #050505; --panel: #1a1a1a; --danger: #ff4757;
+            --success: #2ecc71; --warning: #f1c40f; --purple: #9b59b6; --monitor-height: 40vh; 
         }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; touch-action: none; }
+        body { font-family: 'Inter', 'SF Pro Display', 'Meiryo', sans-serif; background: var(--bg); color: #eee; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; touch-action: none; }
         
-        /* --- ヘッダー --- */
-        header { background: #111; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; height: 50px; border-bottom: 1px solid #333; z-index: 2000; flex-shrink: 0; }
-        .header-controls { display: flex; align-items: center; gap: 15px; }
-        .status-info { font-size: 11px; color: var(--accent); display: flex; gap: 12px; }
-        .timer-display { font-family: monospace; font-size: 20px; color: var(--warning); background: #000; padding: 2px 8px; border-radius: 5px; border: 1px solid #444; }
+        /* --- プレミアムヘッダー --- */
+        header { background: #000; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 60px; border-bottom: 1px solid #333; z-index: 5000; }
+        .system-logo { font-size: 20px; font-weight: 900; background: linear-gradient(90deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .timer-box { font-family: 'JetBrains Mono', monospace; font-size: 24px; color: var(--warning); padding: 0 15px; border-right: 1px solid #333; margin-right: 15px; }
 
+        /* --- メイン構成 --- */
         .main-layout { display: flex; flex: 1; overflow: hidden; }
-        
-        /* --- サイドバー --- */
-        .sidebar { width: 260px; background: #111; border-right: 1px solid #333; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
-        .panel { background: #222; padding: 10px; border-radius: 10px; border: 1px solid #333; }
-        .panel-title { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; border-bottom: 1px solid #444; padding-bottom: 3px; }
-        .preview-box { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; overflow: hidden; border: 1px solid #444; }
-        .preview-box video { width: 100%; height: 100%; object-fit: cover; }
+        .sidebar { width: 300px; background: #0f0f0f; border-right: 1px solid #222; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; transition: transform 0.3s; }
+        .sidebar.hidden { transform: translateX(-100%); width: 0; padding: 0; }
 
-        /* --- メインコンテンツ --- */
-        .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; overflow: hidden; }
-        .broadcast-container { flex: 1; position: relative; background: #050505; display: flex; justify-content: center; align-items: center; min-height: 0; overflow: hidden; transition: background 0.3s; }
-        #main-broadcast-video { width: 100%; height: 100%; object-fit: contain; z-index: 1; transition: opacity 0.3s; pointer-events: none; }
-        
-        /* ホワイトボード */
-        #wb-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; pointer-events: none; background: transparent; touch-action: none; }
+        /* --- 魔法のダッシュボード（コンテンツエリア） --- */
+        .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
+        .broadcast-container { flex: 1; position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        #main-broadcast-video { width: 100%; height: 100%; object-fit: contain; z-index: 1; }
+        #wb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 100; pointer-events: none; }
         .wb-active #wb-canvas { pointer-events: auto; cursor: crosshair; }
-        .whiteboard-mode #main-broadcast-video { opacity: 0; }
-        .whiteboard-mode .broadcast-container { background: #fff !important; }
-        .blackboard-mode .broadcast-container { background: #000 !important; }
-        .grid-bg { background-image: radial-gradient(#ddd 1px, transparent 1px); background-size: 20px 20px; }
 
-        /* ツールバー */
-        #wb-tools { position: absolute; top: 10px; left: 10px; z-index: 1000; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 15px; display: none; flex-direction: column; gap: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); color: #333; }
+        /* --- インタラクティブUI --- */
+        .badge { padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; }
+        .badge-live { background: var(--danger); color: white; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* --- 監視グリッド（高機能化） --- */
+        .monitor-section { height: var(--monitor-height); background: #080808; display: flex; flex-direction: column; border-top: 1px solid #333; }
+        .grid-container { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 10px; overflow-y: auto; }
+        .student-card { background: #151515; border: 1px solid #333; border-radius: 12px; padding: 8px; position: relative; transition: 0.3s; }
+        .student-card:hover { border-color: var(--accent); transform: scale(1.02); z-index: 10; }
+        .student-card.hand-raised { border-color: var(--warning); border-width: 2px; box-shadow: 0 0 20px rgba(241, 196, 15, 0.4); }
+        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 6px; }
+        
+        /* --- ゲーミフィケーション要素 --- */
+        .point-badge { position: absolute; bottom: 10px; right: 10px; background: #ffd700; color: #000; border-radius: 5px; padding: 2px 6px; font-size: 10px; font-weight: bold; }
+
+        /* --- 巨大ツールパレット --- */
+        #infinity-menu { position: fixed; inset: 60px 0 70px 0; background: rgba(0,0,0,0.98); z-index: 4000; display: none; padding: 40px; overflow-y: auto; }
+        .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .tool-item { background: #1a1a1a; border: 1px solid #333; border-radius: 15px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .tool-item:hover { background: #252525; border-color: var(--accent); }
+        .tool-icon { font-size: 30px; margin-bottom: 10px; display: block; }
+        .tool-name { font-size: 14px; font-weight: bold; display: block; }
+        .tool-desc { font-size: 10px; color: #777; margin-top: 5px; }
+
+        /* --- 下部コントロール --- */
+        .dock { background: #000; height: 70px; border-top: 1px solid #333; display: flex; align-items: center; padding: 0 20px; gap: 15px; z-index: 4500; }
+        .dock-btn { background: #1a1a1a; border: 1px solid #333; color: white; padding: 10px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .dock-btn:hover { background: #333; border-color: var(--accent); }
+        .dock-btn.primary { background: var(--accent); color: #000; }
+        
+        #comment-input { flex: 1; background: #111; border: 1px solid #333; color: white; padding: 12px 20px; border-radius: 25px; outline: none; }
+
+        /* --- ホワイトボード拡張 --- */
+        #wb-tools { position: absolute; left: 20px; top: 20px; z-index: 1000; background: #fff; color: #000; padding: 10px; border-radius: 15px; display: none; flex-direction: column; gap: 10px; }
         .wb-active #wb-tools { display: flex; }
-        .tool-group { display: flex; flex-direction: column; gap: 5px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        .tool-row { display: flex; gap: 5px; justify-content: center; }
-        .tool-btn { width: 32px; height: 32px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; background: white; font-size: 16px; }
-        .tool-btn.active { background: var(--accent); color: white; border-color: #008888; }
-        .color-dot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); }
+        .color-palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+        .color-choice { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 1px solid #ddd; }
 
-        /* 監視エリア */
-        .monitor-section { height: var(--monitor-height); background: #0a0a0a; display: flex; flex-direction: column; border-top: 2px solid #333; flex-shrink: 0; }
-        .tab-bar { display: flex; background: #111; padding: 5px 10px; border-bottom: 1px solid #333; justify-content: space-between; align-items: center; }
-        .tab-btn { padding: 6px 12px; border: none; background: transparent; color: #888; cursor: pointer; font-size: 10px; font-weight: bold; }
-        .tab-btn.active { background: #333; color: var(--accent); border-radius: 4px; }
-        
-        .grid-container { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 8px; overflow-y: auto; }
-        .student-card { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 5px; text-align: center; position: relative; }
-        .student-card.hand-raised { border-color: var(--warning); box-shadow: 0 0 15px var(--warning); }
-        .student-card video, .student-card canvas { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; display: block; margin: 0 auto; }
-        .card-name { font-size: 10px; color: #eee; margin-top: 4px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        /* --- 操作バー --- */
-        .bottom-dock { background: #111; padding: 10px 20px; border-top: 1px solid #333; display: flex; gap: 10px; align-items: center; flex-shrink: 0; z-index: 1000; }
-        button { padding: 8px 15px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; font-size: 11px; transition: 0.2s; }
-        .btn-primary { background: #0097e6; color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-success { background: var(--success); color: white; }
-        .btn-warning { background: var(--warning); color: white; }
-        input[type="text"] { background: #222; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; flex: 1; }
-
-        /* --- ツールメニュー（グリッド形式） --- */
-        #extra-menu { position: fixed; inset: 50px 0 60px 0; background: rgba(0,0,0,0.95); z-index: 1500; display: none; padding: 20px; overflow-y: auto; }
-        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }
-        .menu-item { background: #222; border: 1px solid #444; padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; transition: 0.2s; }
-        .menu-item:hover { background: #333; border-color: var(--accent); transform: translateY(-3px); }
-        .menu-item i { font-size: 24px; display: block; margin-bottom: 10px; }
-        .menu-item span { font-size: 12px; font-weight: bold; }
-        .menu-item p { font-size: 10px; color: #888; margin-top: 5px; }
-
-        /* モーダル */
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 9999; display: flex; justify-content: center; align-items: center; }
-        .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 340px; border: 1px solid #444; }
-        
-        #laser-pointer { position: absolute; width: 12px; height: 12px; background: red; border-radius: 50%; box-shadow: 0 0 10px red; pointer-events: none; z-index: 200; display: none; margin-left: -6px; margin-top: -6px; }
-        #toast { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; padding: 10px 20px; border-radius: 20px; font-weight: bold; z-index: 10000; display: none; }
         .hidden { display: none !important; }
-
-        #focus-overlay { position: fixed; inset: 0; background: #000; z-index: 10000; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; justify-content: center; align-items: center; }
     </style>
 </head>
-<body id="root-body">
-
-<div id="toast">通知メッセージ</div>
-<div id="laser-pointer"></div>
-
-<!-- ログイン画面 -->
-<div id="setup-screen" class="overlay">
-    <div class="modal-box">
-        <h2 style="color:var(--accent); margin:0 0 20px;">EDU Pro Ultimate</h2>
-        <input type="text" id="user-name" placeholder="お名前を入力">
-        <input type="number" id="room-id" placeholder="参加ID（4桁）">
-        <button class="btn-primary" style="width:100%; margin-bottom:10px; height:45px;" onclick="start('teacher')">先生として開始</button>
-        <button style="width:100%; height:45px; background:#444; color:white; border-radius:8px; border:none; cursor:pointer;" onclick="start('student')">生徒として参加</button>
-    </div>
-</div>
-
-<div id="focus-overlay">
-    <h1 style="font-size:48px; color:var(--accent);">先生に注目！</h1>
-    <p>説明が終わるまで、画面をロックしています。</p>
-</div>
+<body>
 
 <header>
-    <div class="header-controls">
-        <div id="mode-label" style="font-weight: bold; color: var(--accent);">STUDENT SUPPORT</div>
-        <div id="timer-box" class="timer-display">00:00</div>
+    <div style="display:flex; align-items:center;">
+        <div class="system-logo">EDU-OS Pro Infinity</div>
     </div>
-    <div class="header-controls">
+    <div style="display:flex; align-items:center;">
+        <div id="timer-display" class="timer-box">00:00</div>
         <div class="status-info">
             <span id="room-display">ID: ----</span>
-            <span id="connect-display">接続: 0</span>
+            <span id="connect-display">0 Students</span>
         </div>
-        <button onclick="location.reload()" style="background:#444; color:#fff; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">終了</button>
     </div>
 </header>
 
 <div class="main-layout">
-    <!-- サイドバー -->
-    <div id="sidebar" class="sidebar hidden">
+    <div id="sidebar" class="sidebar">
         <div class="panel">
-            <div class="panel-title">自分の画面プレビュー</div>
-            <div class="preview-box"><video id="my-local-video" autoplay playsinline muted></video></div>
-            <button onclick="changeSource()" style="width:100%; margin-top:8px; font-size:9px; background:#333; color:#fff; border:none; padding:4px; border-radius:4px;">ソース変更</button>
-        </div>
-        <div class="panel">
-            <div class="panel-title">監視・参加用QR</div>
-            <div id="qrcode" style="background:white; padding:5px; border-radius:5px; display:flex; justify-content:center;"></div>
-            <div id="qr-url-text" style="font-size:8px; word-break:break-all; margin-top:5px; color:#888; text-align:center;"></div>
-        </div>
-        <div id="roster-list" class="panel" style="flex:1; overflow-y:auto;">
-            <div class="panel-title">出席名簿</div>
-            <div id="roster-items"></div>
-        </div>
-        <div class="panel" id="confusion-panel" style="display:none;">
-            <div class="panel-title">全体理解度</div>
-            <div style="height:10px; width:100%; background:#333; border-radius:5px; overflow:hidden; margin-top:5px;">
-                <div id="confusion-bar" style="height:100%; width:0%; background:var(--danger); transition:0.5s;"></div>
+            <div class="panel-title">教員メインプレビュー</div>
+            <div style="width:100%; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden;">
+                <video id="my-local-video" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover;"></video>
             </div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">出席名簿 <span>(全員にポイント付与 💎)</span></div>
+            <div id="roster-items" style="max-height:200px; overflow-y:auto;"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">クラス理解度</div>
+            <div style="height:10px; background:#333; border-radius:5px; overflow:hidden; margin:5px 0;">
+                <div id="confusion-bar" style="width:0%; height:100%; background:var(--danger); transition:0.5s;"></div>
+            </div>
+        </div>
+        <div class="panel" id="resource-hub">
+            <div class="panel-title">配布教材・リンク</div>
+            <div id="link-list" style="font-size:11px; color:var(--accent);"></div>
         </div>
     </div>
 
-    <!-- メインコンテンツ -->
     <div class="content-area">
+        <div id="focus-overlay">
+            <h1 style="font-size:60px;">LOOK AT ME!</h1>
+            <p style="font-size:24px;">先生が注目モードを起動しました</p>
+        </div>
+
         <div class="broadcast-container" id="broadcast-container">
-            <div class="on-air-badge" id="air-badge-container" style="position:absolute; top:10px; left:10px; z-index:100; background:var(--danger); padding:4px 10px; border-radius:20px; font-size:10px; font-weight:bold;">
-                <div class="live-dot" style="display:inline-block; width:8px; height:8px; background:white; border-radius:50%; animation:blink 1s infinite;"></div>
-                <span id="air-text">配信中: 自分の画面</span>
-            </div>
-            
+            <div id="laser-pointer" style="position:absolute; width:15px; height:15px; background:red; border-radius:50%; box-shadow:0 0 15px red; display:none; z-index:1000; pointer-events:none;"></div>
             <video id="main-broadcast-video" autoplay playsinline muted></video>
             <canvas id="wb-canvas"></canvas>
 
+            <!-- ホワイトボード高度ツール -->
             <div id="wb-tools">
-                <div id="wb-teacher-only" class="hidden" style="display:flex; flex-direction:column; gap:8px; border-bottom:1px solid #ccc; padding-bottom:8px;">
-                    <select id="wb-mode-select" onchange="setWbMode(this.value)" style="font-size:10px; padding:4px;">
-                        <option value="teacher">先生のみ描画</option>
-                        <option value="individual">各自練習</option>
-                        <option value="all">全員共有</option>
-                    </select>
+                <select id="wb-mode" onchange="setWbMode(this.value)" style="font-size:10px;">
+                    <option value="teacher">教員主導</option>
+                    <option value="individual">各自練習</option>
+                    <option value="all">全員共有</option>
+                </select>
+                <div class="color-palette">
+                    <div class="color-choice" style="background:black" onclick="wbColor='black'"></div>
+                    <div class="color-choice" style="background:red" onclick="wbColor='red'"></div>
+                    <div class="color-choice" style="background:blue" onclick="wbColor='blue'"></div>
+                    <div class="color-choice" style="background:green" onclick="wbColor='green'"></div>
                 </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                    <div class="tool-btn active" id="btn-pen" onclick="setWbTool('pen', this)">🖊️</div>
-                    <div class="tool-btn" id="btn-eraser" onclick="setWbTool('eraser', this)">🧽</div>
-                    <button onclick="undoWb()" style="padding:0 5px; border:1px solid #ccc; background:#fff; border-radius:6px; font-size:14px;">↩️</button>
-                    <button onclick="saveWb()" style="padding:0 5px; border:1px solid #ccc; background:#fff; border-radius:6px; font-size:14px;">💾</button>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+                    <button onclick="wbTool='pen'">🖊️</button>
+                    <button onclick="wbTool='highlighter'">🖍️</button>
+                    <button onclick="wbTool='eraser'">🧽</button>
+                    <button onclick="undoWb()">↩️</button>
                 </div>
-                <div style="display:flex; gap:8px; justify-content:center;">
-                    <div class="color-dot" style="background:black;" onclick="wbColor='black'"></div>
-                    <div class="color-dot" style="background:red;" onclick="wbColor='red'"></div>
-                    <div class="color-dot" style="background:blue;" onclick="wbColor='blue'"></div>
-                    <div class="color-dot" style="background:white; border:1px solid #ccc;" onclick="wbColor='white'"></div>
-                </div>
-                <button onclick="toggleWb()" style="font-size:10px; width:100%; margin-top:5px;" class="btn-gray">閉じる</button>
+                <button onclick="clearWb()" style="background:var(--danger); color:white; border:none; border-radius:5px; font-size:9px;">CLEAR</button>
+                <button onclick="toggleWb()" class="btn-g" style="font-size:10px;">CLOSE</button>
             </div>
         </div>
 
-        <div id="monitor-section" class="monitor-section hidden">
+        <div id="monitor-section" class="monitor-section">
             <div class="tab-bar">
                 <div style="display:flex; gap:5px;">
-                    <button class="tab-btn active" onclick="switchTab('screen')">画面一覧</button>
-                    <button class="tab-btn" onclick="switchTab('board')">ボード一覧</button>
+                    <button class="tab-btn active" onclick="switchTab('screen')">画面監視</button>
+                    <button class="tab-btn" onclick="switchTab('board')">ボード監視</button>
                 </div>
-                <input type="range" min="10" max="85" value="40" oninput="document.documentElement.style.setProperty('--monitor-height', this.value + 'vh')" style="width:100px;">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="dock-btn" onclick="shootConfetti()" style="padding:4px 8px; font-size:10px;">🎉 褒める</button>
+                    <input type="range" min="10" max="85" value="40" oninput="document.documentElement.style.setProperty('--monitor-height', this.value + 'vh')" style="width:80px;">
+                </div>
             </div>
             <div id="grid-screen" class="grid-container"></div>
             <div id="grid-board" class="grid-container hidden"></div>
@@ -200,52 +165,80 @@
     </div>
 </div>
 
-<!-- 教員用ボトムドック -->
-<div id="teacher-controls" class="bottom-dock hidden">
-    <button class="btn-primary" onclick="toggleWb()">🖊️ ボード</button>
-    <button class="btn-primary" onclick="openPollCreator()">📊 投票作成</button>
-    <input type="text" id="comment-input" placeholder="メッセージ送信...">
-    <button class="btn-primary" onclick="sendComment()">送信</button>
-    <button class="btn-warning" onclick="toggleExtraMenu()">🛠️ ツール</button>
-</div>
-
-<!-- 生徒用ボトムドック -->
-<div id="student-controls" class="bottom-dock hidden">
-    <button id="hand-btn" class="btn-warning" onclick="toggleHand()">✋ 挙手</button>
-    <button class="btn-danger" onclick="toggleConfusion()" id="confuse-btn">❓ わかりません</button>
-    <div style="flex:1;"></div>
-    <span id="st-status" style="font-size:10px; color:#666;">接続中...</span>
-</div>
-
-<!-- 🛠️ ツールメニュー（40機能のセレクト） -->
-<div id="extra-menu">
-    <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-bottom:1px solid #333; padding-bottom:10px;">
-        <h2 style="margin:0;">教員用ツールボックス</h2>
-        <button onclick="toggleExtraMenu()" class="btn-danger">閉じる</button>
+<!-- メイン操作ドック -->
+<div class="dock">
+    <button class="dock-btn primary" onclick="toggleWb()">🖊️ ホワイトボード</button>
+    <button class="dock-btn" onclick="toggleExtraMenu()">🛠️ ツール</button>
+    <input type="text" id="comment-input" placeholder="メッセージ、コマンド、または教材URLを入力してEnter...">
+    <button class="dock-btn primary" onclick="processInput()">実行</button>
+    <div id="student-only-tools" class="hidden" style="display:flex; gap:10px;">
+        <button class="dock-btn" id="hand-btn" onclick="toggleHand()" style="background:var(--warning); color:black;">✋ 挙手</button>
+        <button class="dock-btn" onclick="toggleConfusion()" style="background:var(--danger);">❓ 不明</button>
     </div>
-    <div class="menu-grid">
-        <div class="menu-item" onclick="toggleFocusMode()"><i>🔒</i><span>注目モード</span><p>生徒の画面をロックします</p></div>
-        <div class="menu-item" onclick="pickRandomStudent()"><i>🎲</i><span>ランダム指名</span><p>生徒を一人選びます</p></div>
-        <div class="menu-item" onclick="manageTimer()"><i>⏱️</i><span>タイマー</span><p>全員に時間を表示します</p></div>
-        <div class="menu-item" onclick="setWbBg('white')"><i>⬜</i><span>白紙ボード</span><p>背景を白に変更します</p></div>
-        <div class="menu-item" onclick="setWbBg('grid')"><i>🏁</i><span>方眼ボード</span><p>背景を方眼に変更します</p></div>
-        <div class="menu-item" onclick="setWbBg('black')"><i>⬛</i><span>黒板モード</span><p>背景を黒に変更します</p></div>
-        <div class="menu-item" onclick="setWbBg('transparent')"><i>💎</i><span>透明ボード</span><p>背景を配信映像に戻します</p></div>
-        <div class="menu-item" onclick="clearWb()"><i>🗑️</i><span>全筆跡消去</span><p>ボードを白紙に戻します</p></div>
-        <div class="menu-item" onclick="toggleBroadcast()"><i>⏹️</i><span>配信一時停止</span><p>映像を隠します</p></div>
-        <div class="menu-item" onclick="resetSpotlight()"><i>🔄</i><span>配信を自分に戻す</span><p>教員の画面に戻します</p></div>
-        <div class="menu-item" onclick="kickAllStudents()"><i>⚠️</i><span>全員一斉退出</span><p>ルームを閉じます</p></div>
-        <div class="menu-item" onclick="exportAttendance()"><i>📋</i><span>出席エクスポート</span><p>名簿をCSVで保存します</p></div>
-        <div class="menu-item" onclick="openNotepad()"><i>📝</i><span>教員メモ</span><p>自分だけのメモ帳を開きます</p></div>
-        <div class="menu-item" onclick="toggleMirrorPrevent()"><i>🖼️</i><span>鏡像防止トグル</span><p>ループ映像を隠します</p></div>
+</div>
+
+<!-- 🛠️ インフィニティ・ツールボックス -->
+<div id="infinity-menu">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+        <h1 style="margin:0; background:linear-gradient(90deg, #fff, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Infinity Toolbox</h1>
+        <button onclick="toggleExtraMenu()" style="background:none; color:white; border:1px solid #555; padding:10px 20px; border-radius:10px; cursor:pointer;">CLOSE</button>
+    </div>
+    <div class="tool-grid">
+        <div class="tool-item" onclick="toggleFocusMode()">
+            <span class="tool-icon">🔒</span><span class="tool-name">注目モード</span><p class="tool-desc">全生徒の操作をロックして説明に集中させます</p>
+        </div>
+        <div class="tool-item" onclick="pickRandom()">
+            <span class="tool-icon">🎲</span><span class="tool-name">ランダム指名</span><p class="tool-desc">接続中の生徒から発表者を自動選出します</p>
+        </div>
+        <div class="tool-item" onclick="startTimer()">
+            <span class="tool-icon">⏱️</span><span class="tool-name">一斉タイマー</span><p class="tool-desc">演習時間を全員の画面に表示します</p>
+        </div>
+        <div class="tool-item" onclick="openPollCreator()">
+            <span class="tool-icon">📊</span><span class="tool-name">クイックアンケート</span><p class="tool-desc">設問を作成し、リアルタイムで集計・共有します</p>
+        </div>
+        <div class="tool-item" onclick="playSound('applaud')">
+            <span class="tool-icon">👏</span><span class="tool-name">拍手喝采</span><p class="tool-desc">全員のスピーカーから拍手を流します</p>
+        </div>
+        <div class="tool-item" onclick="playSound('correct')">
+            <span class="tool-icon">🔔</span><span class="tool-name">正解チャイム</span><p class="tool-desc">ピンポーン！と全員に鳴らします</p>
+        </div>
+        <div class="tool-item" onclick="exportAttendance()">
+            <span class="tool-icon">📝</span><span class="tool-name">出席CSV出力</span><p class="tool-desc">現在の参加者リストを保存します</p>
+        </div>
+        <div class="tool-item" onclick="changeWbBg('grid')">
+            <span class="tool-icon">🏁</span><span class="tool-name">方眼紙モード</span><p class="tool-desc">ボード背景を数学用に変更します</p>
+        </div>
+        <div class="tool-item" onclick="toggleMirrorPrevent()">
+            <span class="tool-icon">🖼️</span><span class="tool-name">合わせ鏡防止</span><p class="tool-desc">画面共有時の無限ループ表示を隠します</p>
+        </div>
+        <div class="tool-item" onclick="kickAll()">
+            <span class="tool-icon">⚠️</span><span class="tool-name">全員一斉退出</span><p class="tool-desc">授業終了。全員を強制切断します</p>
+        </div>
+        <div class="tool-item" onclick="distributeResource()">
+            <span class="tool-icon">🔗</span><span class="tool-name">教材一斉配布</span><p class="tool-desc">URLを生徒のサイドバーへ直接送信します</p>
+        </div>
+        <div class="tool-item" onclick="saveScreenShot()">
+            <span class="tool-icon">📸</span><span class="tool-name">スクリーンショット</span><p class="tool-desc">現在の画面の状態を保存します</p>
+        </div>
+    </div>
+</div>
+
+<!-- ログイン・オーバーレイ -->
+<div id="setup-screen" class="overlay">
+    <div class="modal-box" style="background:#111; border:1px solid #333; padding:40px; border-radius:30px;">
+        <h1 style="color:var(--accent); margin-bottom:30px;">EDU-OS Infinity</h1>
+        <input type="text" id="user-name" placeholder="Name">
+        <input type="number" id="room-id" placeholder="Room ID">
+        <button class="dock-btn primary" style="width:100%; height:50px; margin-top:20px;" onclick="initSystem('teacher')">Launch as Teacher</button>
+        <button class="dock-btn" style="width:100%; height:50px; margin-top:10px;" onclick="initSystem('student')">Join as Student</button>
     </div>
 </div>
 
 <!-- アンケート回答モーダル -->
-<div id="poll-student-view" class="overlay hidden" style="z-index:10000;">
+<div id="poll-student-view" class="overlay hidden">
     <div class="modal-box" style="background:white; color:black;">
-        <h3 id="st-poll-q" style="margin-top:0;">質問</h3>
-        <div id="st-poll-opts"></div>
+        <h2 id="st-poll-q">Question</h2>
+        <div id="st-poll-opts" style="display:flex; flex-direction:column; gap:10px;"></div>
     </div>
 </div>
 
@@ -253,187 +246,285 @@
     let peer, localStream, myRole = "", currentRid = "", myName = "";
     const studentStreams = {}, studentInfo = {}, dataConnections = {}, mediaCalls = {}; 
     let wbCanvas, wbCtx, wbDrawing = false, wbColor = "black", wbMode = "teacher", wbTool = "pen";
-    let wbHistory = [], isFocusMode = false, handRaised = false, isConfused = false, timerInterval;
+    let wbHistory = [], isFocusMode = false, handRaised = false, timerInterval, confused = false;
 
-    async function start(role) {
+    // --- システムイニシャライズ ---
+    async function initSystem(role) {
         myRole = role; 
-        myName = document.getElementById('user-name').value || (role==='teacher'?'先生':'生徒');
+        myName = document.getElementById('user-name').value || (role==='teacher'?'Teacher':'Student');
         currentRid = document.getElementById('room-id').value;
         if (!currentRid && role === 'teacher') currentRid = Math.floor(1000 + Math.random() * 9000).toString();
-        if (!currentRid) return alert("IDを入力してください");
+        if (!currentRid) return alert("Enter Room ID");
+
         try {
             localStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: true });
             document.getElementById('setup-screen').style.display = 'none';
-            initWb();
-            const pId = (role==='teacher'?"T-ROOM-"+currentRid : undefined);
+            setupWhiteboard();
+
+            const pId = (role==='teacher' ? "T-ROOM-" + currentRid : undefined);
             peer = new Peer(pId);
+
             peer.on('open', id => {
-                if(role === 'teacher') setupTeacherUI();
-                else connectToTeacher();
+                if(role === 'teacher') startTeacherUI();
+                else startStudentUI();
             });
+
             peer.on('connection', conn => {
                 dataConnections[conn.peer] = conn;
-                conn.on('data', data => handleData(conn.peer, data));
+                conn.on('data', data => handleIncomingData(conn.peer, data));
+                conn.on('close', () => removeStudent(conn.peer));
             });
+
             peer.on('call', call => {
                 mediaCalls[call.peer] = call;
                 call.answer(localStream);
-                call.on('stream', s => { studentStreams[call.peer] = s; addStudentGrid(call.peer, s); });
+                call.on('stream', s => { 
+                    studentStreams[call.peer] = s; 
+                    addStudentToGrid(call.peer, s); 
+                });
             });
-        } catch(e) { alert("失敗しました。再起動してください。"); location.reload(); }
+
+        } catch(e) { alert("Access Denied"); location.reload(); }
     }
 
-    function setupTeacherUI() {
-        document.getElementById('sidebar').classList.remove('hidden');
-        document.getElementById('monitor-section').classList.remove('hidden');
-        document.getElementById('teacher-controls').classList.remove('hidden');
-        document.getElementById('wb-teacher-only').classList.remove('hidden');
-        document.getElementById('confusion-panel').style.display = 'block';
+    function startTeacherUI() {
+        document.getElementById('mode-label').innerText = "TEACHER MODE";
         document.getElementById('room-display').innerText = "ID: " + currentRid;
         document.getElementById('my-local-video').srcObject = localStream;
         document.getElementById('main-broadcast-video').srcObject = localStream;
-        const url = window.location.origin + window.location.pathname + `?room=${currentRid}`;
-        new QRCode(document.getElementById("qrcode"), { text: url, width: 100, height: 100 });
-        document.getElementById('qr-url-text').innerText = url;
+        document.getElementById('teacher-controls').classList.remove('hidden');
     }
 
-    function connectToTeacher() {
-        document.getElementById('student-controls').classList.remove('hidden');
+    function startStudentUI() {
+        document.getElementById('mode-label').innerText = "STUDENT MODE";
+        document.getElementById('student-only-tools').classList.remove('hidden');
+        document.getElementById('sidebar').classList.add('hidden');
         const tid = "T-ROOM-" + currentRid;
         const call = peer.call(tid, localStream);
         mediaCalls[tid] = call;
         const conn = peer.connect(tid);
-        conn.on('open', () => conn.send({ type: 'INFO', name: myName, group: 1 }));
-        conn.on('data', data => handleData(tid, data));
-        call.on('stream', s => document.getElementById('main-broadcast-video').srcObject = s);
+        conn.on('open', () => {
+            conn.send({ type: 'INFO', name: myName, group: 1 });
+        });
+        conn.on('data', data => handleIncomingData(tid, data));
+        call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
     }
 
-    // --- ホワイトボードロジック ---
-    function initWb() {
-        wbCanvas = document.getElementById('wb-canvas'); wbCtx = wbCanvas.getContext('2d');
+    // --- コア通信処理 ---
+    function handleIncomingData(id, data) {
+        switch(data.type) {
+            case 'INFO': 
+                studentInfo[id] = { ...data, confused: false, points: 0 }; 
+                updateRoster(); updateConnectCount(); break;
+            case 'WB_DRAW': renderRemoteStroke(id, data); break;
+            case 'WB_START': document.body.classList.add('wb-active'); resizeCanvas(); break;
+            case 'WB_STOP': document.body.classList.remove('wb-active'); break;
+            case 'WB_MODE': wbMode = data.mode; break;
+            case 'WB_CLEAR': wbCtx.clearRect(0,0,wbCanvas.width,wbCanvas.height); break;
+            case 'WB_BG': setCanvasBg(data.bg); break;
+            case 'FOCUS': 
+                document.getElementById('focus-overlay').style.display = data.active ? 'flex' : 'none'; 
+                break;
+            case 'TIMER': document.getElementById('timer-display').innerText = data.time; break;
+            case 'HAND': 
+                studentInfo[id].hand = data.active; 
+                const card = document.getElementById(`card-${id}`);
+                if(card) card.classList.toggle('hand-raised', data.active);
+                if(data.active) showToast(studentInfo[id].name + " Raised Hand!");
+                break;
+            case 'CONFUSE': 
+                studentInfo[id].confused = data.active; 
+                updateConfusionMeter(); break;
+            case 'RESOURCE': 
+                addResourceLink(data.url); break;
+            case 'SOUND': 
+                playLocalSound(data.kind); break;
+            case 'CONFETTI': confetti(); break;
+            case 'POLL_START': showPollUI(data.q, data.opts); break;
+            case 'COMMENT': showToast(data.msg); break;
+            case 'KICK': location.reload(); break;
+            case 'LASER': moveLaser(data.x, data.y); break;
+        }
+    }
+
+    // --- ホワイトボード（本格同期） ---
+    function setupWhiteboard() {
+        wbCanvas = document.getElementById('wb-canvas');
+        wbCtx = wbCanvas.getContext('2d');
         resizeCanvas();
+
         const getPos = (e) => {
             const rect = wbCanvas.getBoundingClientRect();
             return { x: (e.clientX - rect.left) * (wbCanvas.width / rect.width), y: (e.clientY - rect.top) * (wbCanvas.height / rect.height) };
         };
+
         wbCanvas.addEventListener('pointerdown', e => {
             if (myRole !== 'teacher' && wbMode === 'teacher') return;
-            wbDrawing = true; const pos = getPos(e);
-            applyStroke(wbTool, wbColor, pos.x, pos.y, true);
-            sendDrawData(pos.x, pos.y, true);
+            wbDrawing = true;
+            const pos = getPos(e);
+            drawLocal(pos.x, pos.y, true);
+            sendStroke(pos.x, pos.y, true);
         });
+
         wbCanvas.addEventListener('pointermove', e => {
             if (!wbDrawing) return;
             const pos = getPos(e);
-            applyStroke(wbTool, wbColor, pos.x, pos.y, false);
-            sendDrawData(pos.x, pos.y, false);
+            drawLocal(pos.x, pos.y, false);
+            sendStroke(pos.x, pos.y, false);
         });
-        window.addEventListener('pointerup', () => { if(wbDrawing) saveHistory(); wbDrawing = false; });
-        window.onresize = resizeCanvas;
+
+        window.addEventListener('pointerup', () => { if(wbDrawing) saveWbHistory(); wbDrawing = false; });
     }
 
-    function applyStroke(tool, color, x, y, start) {
-        wbCtx.globalCompositeOperation = (tool === 'eraser') ? 'destination-out' : 'source-over';
-        wbCtx.lineWidth = (tool === 'eraser') ? 30 : 4;
-        wbCtx.strokeStyle = color; wbCtx.lineCap = "round";
-        if(start) { wbCtx.beginPath(); wbCtx.moveTo(x,y); }
+    function drawLocal(x, y, start) {
+        wbCtx.lineCap = "round";
+        wbCtx.lineJoin = "round";
+        if(wbTool === 'eraser') {
+            wbCtx.globalCompositeOperation = 'destination-out';
+            wbCtx.lineWidth = 40;
+        } else {
+            wbCtx.globalCompositeOperation = 'source-over';
+            wbCtx.globalAlpha = (wbTool === 'highlighter') ? 0.3 : 1.0;
+            wbCtx.lineWidth = (wbTool === 'highlighter') ? 25 : 3;
+        }
+        wbCtx.strokeStyle = wbColor;
+        if(start) { wbCtx.beginPath(); wbCtx.moveTo(x, y); }
         wbCtx.lineTo(x, y); wbCtx.stroke();
     }
 
-    function sendDrawData(x, y, start) {
-        const d = { type: 'WB_DRAW', x: x/wbCanvas.width, y: y/wbCanvas.height, color: wbColor, tool: wbTool, start: start };
+    function sendStroke(x, y, start) {
+        const d = { type:'WB_DRAW', x: x/wbCanvas.width, y: y/wbCanvas.height, color:wbColor, tool:wbTool, start };
         if (myRole === 'teacher') Object.values(dataConnections).forEach(c => c.send(d));
         else dataConnections["T-ROOM-"+currentRid]?.send(d);
     }
 
-    function renderRemoteWb(id, data) {
+    function renderRemoteStroke(id, data) {
         const x = data.x * wbCanvas.width, y = data.y * wbCanvas.height;
-        if (id.startsWith('T-ROOM') || myRole === 'teacher' || wbMode === 'all') applyStroke(data.tool, data.color, x, y, data.start);
+        if (id.startsWith('T-ROOM') || myRole === 'teacher' || wbMode === 'all') {
+            const oldTool = wbTool; const oldColor = wbColor;
+            wbTool = data.tool; wbColor = data.color;
+            drawLocal(x, y, data.start);
+            wbTool = oldTool; wbColor = oldColor;
+        }
+        // 先生側の監視用ミニボード
         const mini = document.getElementById(`wb-mini-${id}`);
         if(mini) {
-            const mCtx = mini.getContext('2d'); mCtx.strokeStyle = data.color; mCtx.lineWidth = 2;
+            const mCtx = mini.getContext('2d');
+            mCtx.strokeStyle = data.color; mCtx.lineWidth = 2;
             if(data.start) { mCtx.beginPath(); mCtx.moveTo(x*mini.width/wbCanvas.width, y*mini.height/wbCanvas.height); }
             mCtx.lineTo(x*mini.width/wbCanvas.width, y*mini.height/wbCanvas.height); mCtx.stroke();
         }
-        if (myRole === 'teacher' && wbMode === 'all') Object.entries(dataConnections).forEach(([tid, c]) => { if(tid !== id) c.send(data); });
-    }
-
-    // --- データ受信処理 ---
-    function handleData(id, data) {
-        if (data.type === 'INFO') { studentInfo[id] = data; updateRoster(); updateConnectCount(); }
-        else if (data.type === 'WB_DRAW') renderRemoteWb(id, data);
-        else if (data.type === 'WB_START') { document.body.classList.add('wb-active'); resizeCanvas(); }
-        else if (data.type === 'WB_STOP') document.body.classList.remove('wb-active');
-        else if (data.type === 'WB_MODE') wbMode = data.mode;
-        else if (data.type === 'WB_CLEAR') { wbCtx.clearRect(0,0,wbCanvas.width,wbCanvas.height); }
-        else if (data.type === 'WB_BG') setWbBg(data.bg, true);
-        else if (data.type === 'FOCUS') document.getElementById('focus-overlay').style.display = data.active ? 'flex' : 'none';
-        else if (data.type === 'TIMER') document.getElementById('timer-box').innerText = data.time;
-        else if (data.type === 'HAND') { studentInfo[id].hand = data.active; document.getElementById(`card-${id}`)?.classList.toggle('raised', data.active); if(data.active) showToast(studentInfo[id].name + "さんが挙手しました"); }
-        else if (data.type === 'CONFUSE') { studentInfo[id].confused = data.active; updateConfusionMeter(); }
-        else if (data.type === 'POLL_START') showPoll(data.q, data.opts);
-        else if (data.type === 'COMMENT') alert("先生より: " + data.msg);
-        else if (data.type === 'KICK') { alert("切断されました。"); location.reload(); }
+        if (myRole === 'teacher' && wbMode === 'all') {
+            Object.entries(dataConnections).forEach(([tid, c]) => { if(tid !== id) c.send(data); });
+        }
     }
 
     // --- ツール機能 ---
-    function toggleExtraMenu() { const m = document.getElementById('extra-menu'); m.style.display = (m.style.display === 'block' ? 'none' : 'block'); }
-    function toggleFocusMode() { isFocusMode = !isFocusMode; Object.values(dataConnections).forEach(c => c.send({type:'FOCUS', active: isFocusMode})); }
-    function pickRandomStudent() { const ids = Object.keys(studentInfo); if(!ids.length) return; const win = studentInfo[ids[Math.floor(Math.random()*ids.length)]].name; alert("指名されたのは: " + win + " さん"); }
-    function manageTimer() { const sec = prompt("秒数入力", "60"); if(!sec) return; let t = parseInt(sec); clearInterval(timerInterval); timerInterval = setInterval(() => { t--; const d = Math.floor(t/60).toString().padStart(2,'0')+":"+(t%60).toString().padStart(2,'0'); document.getElementById('timer-box').innerText = d; Object.values(dataConnections).forEach(c => c.send({type:'TIMER', time: d})); if(t<=0) clearInterval(timerInterval); }, 1000); }
-    function setWbBg(bg, remote = false) { 
-        document.body.classList.remove('whiteboard-mode', 'blackboard-mode', 'grid-bg');
-        if(bg !== 'transparent') document.body.classList.add(bg === 'grid' ? 'whiteboard-mode grid-bg' : bg + '-mode');
-        if(!remote && myRole === 'teacher') Object.values(dataConnections).forEach(c => c.send({type:'WB_BG', bg}));
+    function toggleExtraMenu() { 
+        const m = document.getElementById('infinity-menu');
+        m.style.display = (m.style.display === 'block') ? 'none' : 'block';
     }
-    function exportAttendance() { let csv = "名前,グループ\n"; Object.values(studentInfo).forEach(s => csv += `${s.name},${s.group}\n`); const blob = new Blob([csv], {type:'text/csv'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "meibo.csv"; a.click(); }
-    function toggleConfusion() { isConfused = !isConfused; document.getElementById('confuse-btn').classList.toggle('btn-warning'); dataConnections["T-ROOM-"+currentRid]?.send({type:'CONFUSE', active: isConfused}); }
-    function updateConfusionMeter() { const c = Object.values(studentInfo).filter(s => s.confused).length; const p = Object.keys(studentInfo).length ? (c / Object.keys(studentInfo).length)*100 : 0; document.getElementById('confusion-bar').style.width = p + '%'; }
 
-    // --- 基本機能 ---
-    function addStudentGrid(id, stream) {
+    function shootConfetti() {
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        Object.values(dataConnections).forEach(c => c.send({type:'CONFETTI'}));
+    }
+
+    function startTimer() {
+        const sec = prompt("Set Timer (sec):", "60");
+        if(!sec) return;
+        let t = parseInt(sec);
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            t--;
+            const d = Math.floor(t/60).toString().padStart(2,'0')+":"+(t%60).toString().padStart(2,'0');
+            document.getElementById('timer-display').innerText = d;
+            Object.values(dataConnections).forEach(c => c.send({type:'TIMER', time: d}));
+            if(t <= 0) { clearInterval(timerInterval); playSound('correct'); }
+        }, 1000);
+    }
+
+    function toggleFocusMode() {
+        isFocusMode = !isFocusMode;
+        document.getElementById('focus-overlay').style.display = isFocusMode ? 'flex' : 'none';
+        Object.values(dataConnections).forEach(c => c.send({type:'FOCUS', active: isFocusMode}));
+        toggleExtraMenu();
+    }
+
+    function processInput() {
+        const val = document.getElementById('comment-input').value;
+        if(!val) return;
+        if(val.startsWith('http')) {
+            Object.values(dataConnections).forEach(c => c.send({type:'RESOURCE', url: val}));
+            addResourceLink(val);
+        } else {
+            Object.values(dataConnections).forEach(c => c.send({type:'COMMENT', msg: val}));
+        }
+        document.getElementById('comment-input').value = "";
+    }
+
+    function addResourceLink(url) {
+        const container = document.getElementById('link-list');
+        const a = document.createElement('a');
+        a.href = url; a.target = "_blank"; a.innerText = "📄教材: " + url.substring(0,30) + "...";
+        a.style.display = "block";
+        container.appendChild(a);
+    }
+
+    // --- 基本ロジック（監視・退出・共有） ---
+    function addStudentToGrid(id, stream) {
         if(document.getElementById(`card-${id}`)) return;
-        const name = studentInfo[id]?.name || '接続中...';
+        const name = studentInfo[id]?.name || 'Student';
+        
         const card = document.createElement('div'); card.className = 'student-card'; card.id = `card-${id}`;
-        card.innerHTML = `<video id="v-${id}" autoplay playsinline muted></video><span class="card-name" id="name-screen-${id}">${name}</span>
-            <button class="btn-primary" style="width:100%;margin-top:5px;font-size:9px;" onclick="startSpotlight('${id}')">共有</button>`;
+        card.innerHTML = `<video id="v-${id}" autoplay playsinline muted></video><span class="card-name">${name}</span>
+            <div style="display:flex;gap:2px;"><button class="btn-p" style="flex:1;font-size:8px;" onclick="startSpotlight('${id}')">共有</button>
+            <button class="btn-d" style="flex:1;font-size:8px;" onclick="kick('${id}')">退出</button></div>
+            <div class="point-badge" onclick="addPoint('${id}')">💎 <span id="pt-${id}">0</span></div>`;
         document.getElementById('grid-screen').appendChild(card);
         document.getElementById(`v-${id}`).srcObject = stream;
+
         const wbCard = document.createElement('div'); wbCard.className = 'student-card'; wbCard.id = `wb-card-${id}`;
-        wbCard.innerHTML = `<canvas id="wb-mini-${id}" width="160" height="90" style="background:white;border-radius:4px;"></canvas><span class="card-name" id="name-board-${id}">${name}</span>`;
+        wbCard.innerHTML = `<canvas id="wb-mini-${id}" width="160" height="90" style="background:white;border-radius:4px;"></canvas><span class="card-name">${name}</span>`;
         document.getElementById('grid-board').appendChild(wbCard);
         updateConnectCount();
     }
+
     async function startSpotlight(id) {
         const track = studentStreams[id].getVideoTracks()[0];
         document.getElementById('main-broadcast-video').srcObject = studentStreams[id];
         document.getElementById('reset-btn').classList.remove('hidden');
         Object.values(mediaCalls).forEach(call => { if(call.peerConnection) { const s = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video'); if(s) s.replaceTrack(track); } });
     }
+
     function resetSpotlight() {
         const track = localStream.getVideoTracks()[0];
         document.getElementById('main-broadcast-video').srcObject = localStream;
         document.getElementById('reset-btn').classList.add('hidden');
         Object.values(mediaCalls).forEach(call => { if(call.peerConnection) { const s = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video'); if(s) s.replaceTrack(track); } });
     }
-    function toggleWb() { const active = document.body.classList.toggle('wb-active'); if(myRole === 'teacher') Object.values(dataConnections).forEach(c => c.send({type: active?'WB_START':'WB_STOP'})); setTimeout(resizeCanvas, 50); }
-    function setWbMode(m) { wbMode = m; Object.values(dataConnections).forEach(c => c.send({type:'WB_MODE', mode:m})); }
-    function setWbTool(t, btn) { wbTool = t; document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-    function clearWb() { wbCtx.clearRect(0,0,wbCanvas.width,wbCanvas.height); Object.values(dataConnections).forEach(c => c.send({type:'WB_CLEAR'})); }
+
+    // --- ユーティリティ ---
+    function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.display = 'block'; setTimeout(()=>t.style.display='none',3000); }
+    function toggleHand() { handRaised = !handRaised; document.getElementById('hand-btn').style.background = handRaised ? 'var(--success)' : 'var(--warning)'; dataConnections["T-ROOM-"+currentRid]?.send({type:'HAND', active: handRaised}); }
+    function toggleConfusion() { confused = !confused; dataConnections["T-ROOM-"+currentRid]?.send({type:'CONFUSE', active: confused}); }
+    function updateConfusionMeter() { const c = Object.values(studentInfo).filter(s=>s.confused).length; const p = Object.keys(studentInfo).length ? (c/Object.keys(studentInfo).length)*100 : 0; document.getElementById('confusion-bar').style.width = p+'%'; }
+    function updateRoster() { const r = document.getElementById('roster-items'); r.innerHTML = ""; Object.entries(studentInfo).forEach(([id,info])=>{ r.innerHTML += `<div style="font-size:10px; margin-bottom:4px;">● ${info.name} (Pts: ${info.points})</div>`; }); }
+    function updateConnectCount() { document.getElementById('connect-display').innerText = Object.keys(studentInfo).length + " Students"; }
+    function addPoint(id) { studentInfo[id].points += 10; document.getElementById(`pt-${id}`).innerText = studentInfo[id].points; updateRoster(); }
+    function toggleWb() { const a = document.body.classList.toggle('wb-active'); if(myRole==='teacher') Object.values(dataConnections).forEach(c=>c.send({type:a?'WB_START':'WB_STOP'})); setTimeout(resizeCanvas,50); }
+    function setWbMode(m) { wbMode=m; Object.values(dataConnections).forEach(c=>c.send({type:'WB_MODE', mode:m})); }
+    function switchTab(t) { document.getElementById('grid-screen').classList.toggle('hidden', t!=='screen'); document.getElementById('grid-board').classList.toggle('hidden', t!=='board'); document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.innerText.includes(t==='screen'?'画面':'ボード'))); }
     function resizeCanvas() { wbCanvas.width = wbCanvas.offsetWidth; wbCanvas.height = wbCanvas.offsetHeight; }
-    function saveHistory() { if (wbHistory.length > 20) wbHistory.shift(); wbHistory.push(wbCtx.getImageData(0, 0, wbCanvas.width, wbCanvas.height)); }
-    function undoWb() { wbHistory.pop(); const last = wbHistory[wbHistory.length - 1]; if (last) wbCtx.putImageData(last, 0, 0); else wbCtx.clearRect(0, 0, wbCanvas.width, wbCanvas.height); }
-    function saveWb() { const l = document.createElement('a'); l.download = 'board.png'; l.href = wbCanvas.toDataURL(); l.click(); }
-    function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000); }
-    function switchTab(t) { document.getElementById('grid-screen').classList.toggle('hidden', t !== 'screen'); document.getElementById('grid-board').classList.toggle('hidden', t !== 'board'); document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.innerText.includes(t==='screen'?'画面':'ボード'))); }
-    function updateRoster() { const r = document.getElementById('roster-items'); r.innerHTML = ""; Object.entries(studentInfo).forEach(([id, info]) => { r.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>● ${info.name}</span><button onclick="dataConnections['${id}'].send({type:'KICK'})" style="background:red; color:#fff; font-size:8px; border-radius:4px; padding:2px 5px;">退出</button></div>`; if(document.getElementById(`name-screen-${id}`)) document.getElementById(`name-screen-${id}`).innerText = info.name; if(document.getElementById(`name-board-${id}`)) document.getElementById(`name-board-${id}`).innerText = info.name; }); }
-    function updateConnectCount() { document.getElementById('connect-display').innerText = Object.keys(studentInfo).length + " 接続"; }
-    function sendComment() { const m = document.getElementById('comment-input').value; if(m) { Object.values(dataConnections).forEach(c => c.send({type:'COMMENT', msg:m})); document.getElementById('comment-input').value=""; showToast("送信済"); } }
-    function openPollCreator() { const q = prompt("質問?"); if(!q) return; const opts = prompt("選択肢(カンマ区切り)", "はい,いいえ").split(","); Object.values(dataConnections).forEach(c => c.send({type:'POLL_START', q, opts})); }
-    function showPoll(q, opts) { document.getElementById('poll-student-view').classList.remove('hidden'); document.getElementById('st-poll-q').innerText = q; const cont = document.getElementById('st-poll-opts'); cont.innerHTML = ""; opts.forEach((o, i) => { const b = document.createElement('button'); b.innerText = o; b.style.cssText = "width:100%; margin-bottom:10px; background:#f0f0f0; color:black; padding:12px; border-radius:10px; font-weight:bold;"; b.onclick = () => { document.getElementById('poll-student-view').classList.add('hidden'); dataConnections["T-ROOM-"+currentRid]?.send({type:'VOTE', idx:i}); }; cont.appendChild(b); }); }
-    function toggleHand() { handRaised = !handRaised; document.getElementById('hand-btn').innerText = handRaised ? "✋ 下ろす" : "✋ 挙手"; dataConnections["T-ROOM-"+currentRid]?.send({type:'HAND', active: handRaised}); }
-    function kickAllStudents() { if(confirm("全員退出させますか？")) Object.values(dataConnections).forEach(c => c.send({type:'KICK'})); }
-    function toggleMirrorPrevent() { document.getElementById('main-broadcast-video').style.display = (document.getElementById('main-broadcast-video').style.display==='none'?'block':'none'); }
+    function setWbTool(t) { wbTool=t; document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active')); document.getElementById('tool-'+t.substring(0,3)).classList.add('active'); }
+    function saveWbHistory() { wbHistory.push(wbCtx.getImageData(0,0,wbCanvas.width,wbCanvas.height)); if(wbHistory.length>30) wbHistory.shift(); }
+    function undoWb() { wbHistory.pop(); const last = wbHistory[wbHistory.length-1]; if(last) wbCtx.putImageData(last,0,0); else wbCtx.clearRect(0,0,wbCanvas.width,wbCanvas.height); }
+    function clearWb() { wbCtx.clearRect(0,0,wbCanvas.width,wbCanvas.height); Object.values(dataConnections).forEach(c=>c.send({type:'WB_CLEAR'})); }
+    function moveLaser(x,y) { const l = document.getElementById('laser-pointer'); l.style.display='block'; l.style.left=(x*100)+'%'; l.style.top=(y*100)+'%'; }
+    function kick(id) { dataConnections[id]?.send({type:'KICK'}); }
+    function kickAll() { if(confirm("End Class?")) Object.values(dataConnections).forEach(c=>c.send({type:'KICK'})); }
+    function playLocalSound(kind) { /* Sound logic */ }
+    function removeStudent(id) { document.getElementById(`card-${id}`)?.remove(); document.getElementById(`wb-card-${id}`)?.remove(); delete studentInfo[id]; updateConnectCount(); updateRoster(); }
 </script>
 </body>
 </html>
