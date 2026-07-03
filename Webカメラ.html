@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>マルチカメラ・システム（安定版リスト）</title>
-    <!-- 必要なライブラリ -->
+    <title>マルチカメラ・システム（動画完全版）</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <!-- リスト同期用(MQTT) -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
@@ -21,26 +19,21 @@
         .btn-sub { background: #444; color: white; }
         .btn-danger { background: #ff4444; color: white; padding: 5px 10px; font-size: 12px; }
         
-        /* 公開/非公開スイッチ */
         .toggle-container { margin-bottom: 15px; display: flex; justify-content: center; gap: 10px; }
         .btn-toggle { border: 2px solid #555; background: transparent; color: #888; }
         .btn-toggle.active-pub { border-color: #00ff88; color: #00ff88; background: rgba(0,255,136,0.1); }
         .btn-toggle.active-priv { border-color: #aaa; color: #fff; background: #444; }
 
-        /* 公開リストエリア */
         #public-list-container { background: #1a1a1a; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333; }
         #public-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; min-height: 40px; align-items: center; }
-        .pub-item { background: #00ff88; color: #000; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 14px; animation: fadeIn 0.5s; }
+        .pub-item { background: #00ff88; color: #000; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 14px; }
         
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        /* モニター映像表示 */
         #monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-top: 20px; }
         .video-card { background: #000; padding: 10px; border-radius: 12px; border: 1px solid #444; position: relative; }
-        .video-card img { width: 100%; border-radius: 5px; min-height: 150px; background: #111; }
+        /* 動画要素のスタイル */
+        .video-card video { width: 100%; border-radius: 5px; min-height: 150px; background: #111; object-fit: cover; }
         .video-card .info { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 14px; color: #aaa; }
 
-        /* 配信UI */
         #camera-ui video { width: 100%; max-width: 400px; border-radius: 10px; border: 1px solid #00ff88; }
         #id-display { font-size: 48px; font-weight: bold; color: #00ff88; margin: 10px 0; }
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; margin-bottom: 10px; }
@@ -52,7 +45,7 @@
 <body>
 
 <div class="container">
-    <h2>マルチカメラ・システム</h2>
+    <h2>マルチカメラ・ビデオシステム</h2>
 
     <!-- モード選択 -->
     <div id="mode-selection" class="panel">
@@ -63,8 +56,8 @@
     <!-- 【配信側】 -->
     <div id="camera-ui" class="panel hidden">
         <div class="toggle-container">
-            <button id="priv-btn" class="btn-toggle active-priv" onclick="setPrivacy(false)">🔒 非公開 (IDを知っている人のみ)</button>
-            <button id="pub-btn" class="btn-toggle" onclick="setPrivacy(true)">🌐 公開 (誰でも見れる)</button>
+            <button id="priv-btn" class="btn-toggle active-priv" onclick="setPrivacy(false)">🔒 非公開</button>
+            <button id="pub-btn" class="btn-toggle" onclick="setPrivacy(true)">🌐 公開リストに載せる</button>
         </div>
 
         <div id="connection-info">
@@ -76,19 +69,18 @@
             <video id="temp-video" autoplay playsinline muted></video>
         </div>
         <button class="btn-sub" onclick="switchCamera()">🔄 カメラ切替</button>
-        <canvas id="capture-canvas" class="hidden"></canvas>
     </div>
 
     <!-- 【モニター側】 -->
     <div id="monitor-setup" class="panel hidden">
         <div id="public-list-container">
-            <p style="margin-top:0; font-size:14px; color:#aaa;">🌐 現在公開中のカメラ (クリックで追加)</p>
+            <p style="margin-top:0; font-size:14px; color:#aaa;">🌐 現在公開中のカメラ</p>
             <div id="public-list">待機中...</div>
         </div>
 
         <div style="margin-bottom: 15px;">
             <input type="text" id="peer-id-input" maxlength="4" placeholder="ID" inputmode="numeric">
-            <button class="btn-main" onclick="connectToNewCamera()">手動で追加</button>
+            <button class="btn-main" onclick="connectToNewCamera()">手動追加</button>
             <button class="btn-sub" onclick="startQRScanner()">📷 QR読取</button>
         </div>
         <div id="reader"></div>
@@ -98,15 +90,12 @@
 
 <script>
     let peer, mqttClient;
-    const INTERVAL = 100;
-    const IMG_WIDTH = 350; 
-    const QUALITY = 0.3;
-    const TOPIC = "multicam/lobby/global/v1"; // 共通掲示板のトピック
-    
+    const TOPIC = "multicam/lobby/global/video-v1";
     let myPeerId = null;
     let isPublic = false;
-    let myConnections = {};
-    let publicCameras = {}; // 取得した公開カメラリスト
+    let localStream = null;
+    let publicCameras = {};
+    let activeCalls = {};
 
     // --- 公開設定の変更 ---
     function setPrivacy(pub) {
@@ -114,53 +103,36 @@
         document.getElementById('pub-btn').className = pub ? 'btn-toggle active-pub' : 'btn-toggle';
         document.getElementById('priv-btn').className = !pub ? 'btn-toggle active-priv' : 'btn-toggle';
         document.getElementById('connection-info').className = pub ? 'hidden' : '';
-        // 公開になった瞬間に一度通知
         if (isPublic) sendHeartbeat();
     }
 
-    // --- MQTT（リスト同期）の設定 ---
+    // --- 掲示板（MQTT）設定 ---
     function setupMQTT(role) {
-        // 公開のブローカーを使用
         mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
-
         mqttClient.on('connect', () => {
-            console.log("掲示板に接続しました");
-            if (role === 'monitor') {
-                mqttClient.subscribe(TOPIC);
-            }
+            if (role === 'monitor') mqttClient.subscribe(TOPIC);
         });
-
         mqttClient.on('message', (topic, message) => {
-            if (topic === TOPIC) {
-                const id = message.toString();
-                publicCameras[id] = Date.now(); // 最終確認時刻を保存
-                updatePublicListUI();
-            }
+            const id = message.toString();
+            publicCameras[id] = Date.now();
+            updatePublicListUI();
         });
     }
 
-    // カメラが自分のIDを掲示板に書く
     function sendHeartbeat() {
         if (isPublic && mqttClient && mqttClient.connected && myPeerId) {
             mqttClient.publish(TOPIC, myPeerId);
         }
     }
 
-    // モニター側のリスト表示を更新
     function updatePublicListUI() {
         const listDiv = document.getElementById('public-list');
         const now = Date.now();
         listDiv.innerHTML = "";
-
         let count = 0;
         for (const id in publicCameras) {
-            // 15秒以上音沙汰がないカメラは削除
-            if (now - publicCameras[id] > 15000) {
-                delete publicCameras[id];
-                continue;
-            }
+            if (now - publicCameras[id] > 15000) { delete publicCameras[id]; continue; }
             if (id === myPeerId) continue;
-
             count++;
             const item = document.createElement('div');
             item.className = 'pub-item';
@@ -168,7 +140,6 @@
             item.onclick = () => connectToNewCamera(id);
             listDiv.appendChild(item);
         }
-
         if (count === 0) listDiv.innerHTML = "<span style='color:#666'>公開中のカメラはありません</span>";
     }
 
@@ -176,12 +147,13 @@
     async function initAsCamera() {
         showUI('camera-ui');
         setupMQTT('camera');
-        const video = document.getElementById('temp-video');
-        const canvas = document.getElementById('capture-canvas');
-        const ctx = canvas.getContext('2d');
-        const clients = [];
-
-        await startCameraStream();
+        
+        // カメラ映像取得
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" }, 
+            audio: false 
+        });
+        document.getElementById('temp-video').srcObject = localStream;
 
         myPeerId = Math.floor(1000 + Math.random() * 9000).toString();
         peer = new Peer(myPeerId);
@@ -192,38 +164,12 @@
             new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
         });
 
-        peer.on('connection', conn => {
-            clients.push(conn);
-            conn.on('close', () => {
-                const i = clients.indexOf(conn);
-                if (i > -1) clients.splice(i, 1);
-            });
+        // モニターからの「電話（着信）」に応答する
+        peer.on('call', call => {
+            call.answer(localStream); // 自分の映像を返す
         });
 
-        // 定期処理
-        setInterval(() => {
-            // 映像送信
-            if (clients.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = IMG_WIDTH;
-                canvas.height = IMG_WIDTH * (video.videoHeight / video.videoWidth);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const data = canvas.toDataURL('image/jpeg', QUALITY);
-                clients.forEach(c => { if(c.open) c.send(data); });
-            }
-            // 5秒おきに「私はここにいます」と掲示板に書く
-            sendHeartbeat();
-        }, 5000);
-
-        // 映像送信はもっと高速に
-        setInterval(() => {
-            if (clients.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = IMG_WIDTH;
-                canvas.height = IMG_WIDTH * (video.videoHeight / video.videoWidth);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const data = canvas.toDataURL('image/jpeg', QUALITY);
-                clients.forEach(c => { if(c.open) c.send(data); });
-            }
-        }, INTERVAL);
+        setInterval(sendHeartbeat, 5000);
     }
 
     // --- モニター側の処理 ---
@@ -231,65 +177,73 @@
         showUI('monitor-setup');
         setupMQTT('monitor');
         peer = new Peer();
-        // 定期的にUIをリフレッシュ（古いカメラを消すため）
         setInterval(updatePublicListUI, 5000);
     }
 
     function connectToNewCamera(targetId) {
         const id = targetId || document.getElementById('peer-id-input').value;
-        if (!id || id.length !== 4) return alert("IDを入力してください");
-        if (myConnections[id]) return;
+        if (!id || id.length !== 4 || activeCalls[id]) return;
 
-        const conn = peer.connect(id);
-        setupCameraCard(id, conn);
+        // 指定したIDに「電話（発信）」をかける
+        // 受信専用でも空のストリームを投げることが多い
+        const call = peer.call(id, new MediaStream());
+        setupVideoCard(id, call);
     }
 
-    // --- 共通ヘルパー ---
-    let currentStream = null, currentFacingMode = "environment";
-    async function startCameraStream() {
-        const video = document.getElementById('temp-video');
-        if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: false });
-            currentStream = stream;
-            video.srcObject = stream;
-        } catch(e) { alert("カメラ許可が必要です"); }
-    }
-
-    async function switchCamera() {
-        currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
-        await startCameraStream();
-    }
-
-    function setupCameraCard(id, conn) {
+    function setupVideoCard(id, call) {
         const grid = document.getElementById('monitor-grid');
-        if (document.getElementById(`card-${id}`)) return;
-        
         const card = document.createElement('div');
         card.className = 'video-card';
         card.id = `card-${id}`;
-        card.innerHTML = `<img id="img-${id}" src=""><div class="info"><span>ID: <b>${id}</b> <span id="stat-${id}">接続中...</span></span><button class="btn-danger" onclick="removeCamera('${id}')">閉じる</button></div>`;
+        card.innerHTML = `
+            <video id="video-${id}" autoplay playsinline muted></video>
+            <div class="info">
+                <span>ID: <b>${id}</b> <span id="stat-${id}">接続中...</span></span>
+                <button class="btn-danger" onclick="removeCamera('${id}')">閉じる</button>
+            </div>
+        `;
         grid.appendChild(card);
-        
-        conn.on('open', () => { 
-            const s = document.getElementById(`stat-${id}`);
-            if(s){ s.innerText = "● LIVE"; s.style.color = "#00ff88"; }
-            myConnections[id] = conn;
+        activeCalls[id] = call;
+
+        // 相手から映像ストリームが届いたら表示
+        call.on('stream', remoteStream => {
+            const video = document.getElementById(`video-${id}`);
+            if (video) {
+                video.srcObject = remoteStream;
+                document.getElementById(`stat-${id}`).innerText = "● LIVE";
+                document.getElementById(`stat-${id}`).style.color = "#00ff88";
+            }
         });
-        conn.on('data', data => { 
-            const img = document.getElementById(`img-${id}`);
-            if(img) img.src = data; 
-        });
-        conn.on('close', () => removeCamera(id));
-        conn.on('error', () => removeCamera(id));
+
+        call.on('close', () => removeCamera(id));
+        call.on('error', () => removeCamera(id));
     }
 
     function removeCamera(id) {
-        if (myConnections[id]) { myConnections[id].close(); delete myConnections[id]; }
+        if (activeCalls[id]) { activeCalls[id].close(); delete activeCalls[id]; }
         const card = document.getElementById(`card-${id}`);
         if (card) card.remove();
     }
 
+    // --- カメラ切り替え ---
+    let currentFacingMode = "environment";
+    async function switchCamera() {
+        currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+        const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: false });
+        
+        // 配信中の全コネクションに新しいストリームを反映させる（PeerJSの仕様上、再接続が必要な場合が多い）
+        // 簡易版として、自身のプレビューを更新し、相手側には一度再接続を促すか、トラックを差し替えます
+        const videoTrack = newStream.getVideoTracks()[0];
+        if (localStream) {
+            const oldTrack = localStream.getVideoTracks()[0];
+            localStream.removeTrack(oldTrack);
+            localStream.addTrack(videoTrack);
+            oldTrack.stop();
+        }
+        document.getElementById('temp-video').srcObject = localStream;
+    }
+
+    // --- ユーティリティ ---
     function startQRScanner() {
         const reader = new Html5Qrcode("reader");
         reader.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (id) => {
