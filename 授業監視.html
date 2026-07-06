@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDU-ULTIMATE v2.8 (Full Sync Edition)</title>
+    <title>EDU-ULTIMATE v2.9 (Random Pick Sync)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -19,22 +19,19 @@
         .modal-box input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
         
         /* --- 基本構造 --- */
-        header { background: #111; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 50px; border-bottom: 1px solid #333; flex-shrink: 0; transition: 0.3s; z-index: 100; }
+        header { background: #111; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 50px; border-bottom: 1px solid #333; flex-shrink: 0; transition: 0.4s; z-index: 100; }
         .main-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
-        .sidebar { width: 260px; background: #111; border-right: 1px solid #333; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; transition: 0.3s; z-index: 90; }
+        .sidebar { width: 260px; background: #111; border-right: 1px solid #333; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; transition: 0.4s; z-index: 90; }
         .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
 
         /* --- 生徒側のレイアウト制御 --- */
-        /* 禁止時：全画面（シアターモード） */
-        body.is-student.reaction-disabled header { height: 0 !important; padding: 0 !important; opacity: 0 !important; pointer-events: none; overflow: hidden; border: none; }
-        body.is-student.reaction-disabled .sidebar { width: 0 !important; padding: 0 !important; opacity: 0 !important; pointer-events: none; overflow: hidden; border: none; }
+        body.is-student.reaction-disabled header { height: 0 !important; padding: 0 !important; opacity: 0 !important; pointer-events: none; overflow: hidden; }
+        body.is-student.reaction-disabled .sidebar { width: 0 !important; padding: 0 !important; opacity: 0 !important; pointer-events: none; overflow: hidden; }
         body.is-student.reaction-disabled .reaction-panel { display: none !important; }
 
-        /* 許可時：サイドバー復活 */
-        body.reaction-enabled header { height: 50px !important; opacity: 1 !important; padding: 0 20px !important; }
-        body.reaction-enabled .sidebar { width: 260px !important; opacity: 1 !important; padding: 15px !important; }
+        body.reaction-enabled header { height: 50px !important; opacity: 1 !important; }
+        body.reaction-enabled .sidebar { width: 260px !important; opacity: 1 !important; }
         body.reaction-enabled .reaction-panel { display: block !important; }
-        body.reaction-enabled .fullscreen-btn-container { display: block !important; }
 
         .panel { background: #222; padding: 10px; border-radius: 10px; border: 1px solid #333; }
         .panel-title { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
@@ -43,26 +40,25 @@
         .broadcast-container { flex: 1; position: relative; background: #050505; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         #main-broadcast-video { width: 100%; height: 100%; object-fit: contain; }
         #main-broadcast-video.is-camera { transform: scaleX(-1); }
-        #wb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
-        .wb-active #wb-canvas { pointer-events: auto; cursor: crosshair; }
         
         /* --- ボタン --- */
         .btn-primary { background: #0097e6; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .btn-danger { background: var(--danger); color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; }
         .btn-success { background: var(--success); color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; }
-        .reaction-btn { background: transparent; border: 1px solid #444; font-size: 20px; cursor: pointer; color: white; border-radius: 5px; padding: 5px; }
+        .reaction-btn { background: transparent; border: 1px solid #444; font-size: 20px; cursor: pointer; color: white; border-radius: 5px; width: 100%; height: 40px; }
         
-        .fullscreen-btn-container { position: absolute; bottom: 20px; right: 20px; z-index: 100; display: none; }
-
-        #monitor-section { height: var(--monitor-height); background: #0a0a0a; border-top: 2px solid #333; display: flex; flex-direction: column; }
+        .monitor-section { height: var(--monitor-height); background: #0a0a0a; border-top: 2px solid #333; display: flex; flex-direction: column; }
         .grid-container { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 10px; overflow-y: auto; }
         .student-card { background: #1e1e1e; border-radius: 8px; padding: 5px; position: relative; border: 2px solid transparent; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; }
 
-        .hidden { display: none !important; }
         .on-air { color: red; animation: blink 1s infinite; font-size: 10px; font-weight: bold; }
         @keyframes blink { 50% { opacity: 0; } }
         
+        /* アナウンスバナー */
+        .announce-banner { position: fixed; top: 25%; left: 50%; transform: translate(-50%, -50%); background: var(--accent); color: #000; padding: 20px 40px; border-radius: 50px; font-weight: bold; font-size: 32px; z-index: 10000; box-shadow: 0 0 30px rgba(0,251,255,0.6); pointer-events: none; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes popIn { from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+
         .reaction { position: fixed; font-size: 40px; pointer-events: none; z-index: 9999; animation: floatUp 3s forwards; }
         @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-500px); opacity: 0; } }
     </style>
@@ -74,9 +70,9 @@
 <div id="setup-screen">
     <div class="modal-box">
         <h2 style="color:var(--accent); margin:0 0 10px;">EDU-ULTIMATE</h2>
-        <input type="text" id="user-name" placeholder="名前を入力">
+        <input type="text" id="user-name" placeholder="あなたの名前">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)">
-        <p style="font-size:11px; color:#888; margin-bottom:15px;">生徒は画面共有のみで参加します。</p>
+        <p style="font-size:11px; color:#888; margin-bottom:15px;">生徒は画面共有、先生はカメラで開始します。</p>
         <button class="btn-primary" style="width:100%; margin-bottom:10px;" onclick="start('teacher')">先生として開始</button>
         <button class="btn-success" style="width:100%;" onclick="start('student')">生徒として参加</button>
     </div>
@@ -85,7 +81,7 @@
 <header id="app-header">
     <div style="display:flex; align-items:center; gap:15px;">
         <span id="role-label" style="background:var(--accent); color:#000; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:12px;">STANDBY</span>
-        <span id="timer-display" style="font-size:22px; font-weight:bold; font-family:monospace; color:var(--accent);">00:00</span>
+        <div id="on-air-status" class="hidden"><span class="on-air">● ON AIR</span> <span id="air-target" style="font-size:11px; margin-left:5px;">Teacher</span></div>
     </div>
     <div style="display:flex; gap:15px; align-items:center;">
         <div id="room-display">ID: ----</div>
@@ -108,18 +104,14 @@
                 <button class="btn-primary" style="width:100%; margin-bottom:8px;" onclick="pickRandom()">🎲 ランダム指名</button>
                 <div style="display:flex; gap:5px; align-items:center;">
                     <input type="number" id="t-min" value="3" style="width:40px; background:#000; color:white; border:1px solid #444;">分
-                    <button class="btn-success" style="flex:1;" onclick="broadcastTimer()">⏱️ 開始</button>
+                    <button class="btn-success" style="flex:1;" onclick="broadcastTimer()">⏱️ タイマー</button>
                 </div>
             </div>
             <div class="panel">
-                <div class="panel-title">招待/出席</div>
-                <div id="roster" style="font-size:10px; margin-bottom:10px;"></div>
+                <div class="panel-title">招待用QR</div>
                 <div id="qrcode" style="display:flex; justify-content:center; background:white; padding:5px; border-radius:5px;"></div>
+                <div id="roster" style="font-size:10px; margin-top:10px; max-height:80px; overflow-y:auto;"></div>
             </div>
-        </div>
-
-        <div id="student-tools" class="hidden">
-            <button id="hand-btn" class="btn-primary" style="width:100%; margin-bottom:10px;" onclick="toggleHand()">✋ 手を挙げる</button>
         </div>
 
         <div class="panel reaction-panel">
@@ -131,26 +123,22 @@
                 <button class="reaction-btn" onclick="sendReaction('⭐')">⭐</button>
             </div>
         </div>
-        <button class="btn-primary" onclick="toggleChat()">💬 チャット</button>
+        <button class="btn-primary" onclick="toggleChat()">💬 チャット表示</button>
     </div>
 
     <div class="content-area">
         <div class="broadcast-container" id="broadcast-area">
-            <div style="position:absolute; top:10px; left:10px; z-index:100; display:flex; gap:10px;">
-                <div id="on-air-status" class="hidden"><span class="on-air">● ON AIR</span> <span id="air-target">Teacher</span></div>
-            </div>
             <video id="main-broadcast-video" autoplay playsinline muted></video>
-            <canvas id="wb-canvas"></canvas>
             
-            <div class="fullscreen-btn-container">
+            <div style="position:absolute; bottom:20px; right:20px; z-index:100;" class="reaction-panel">
                 <button class="btn-primary" onclick="toggleBrowserFullscreen()">⛶ 全画面表示</button>
             </div>
         </div>
 
         <div id="monitor-section" class="monitor-section hidden">
             <div class="tab-bar" style="display:flex; background:#111;">
-                <button class="btn-primary" style="flex:1; border-radius:0;" onclick="switchTab('screen')">画面監視</button>
-                <button class="btn-primary" style="flex:1; border-radius:0; background:#333;" onclick="switchTab('board')">ボード監視</button>
+                <button class="btn-primary" style="flex:1; border-radius:0;" onclick="switchTab('screen')">生徒画面</button>
+                <button class="btn-primary" style="flex:1; border-radius:0; background:#333;" onclick="switchTab('board')">出席確認</button>
             </div>
             <div id="grid-screen" class="grid-container"></div>
             <div id="grid-board" class="grid-container hidden"></div>
@@ -161,8 +149,8 @@
 <div id="teacher-controls" class="controls hidden" style="background:#111; padding:10px; border-top:1px solid #333; display:flex; gap:10px;">
     <button class="btn-success" onclick="switchTeacherMedia()">📷/💻 切替</button>
     <button id="spotlight-reset" class="btn-danger hidden" onclick="resetSpotlight()">🔄 先生に戻す</button>
-    <input type="text" id="announce-input" placeholder="一斉通知..." style="flex:1; background:#222; border:1px solid #444; color:white; padding:0 10px;">
-    <button class="btn-primary" onclick="sendAnnounce()">配信</button>
+    <input type="text" id="announce-input" placeholder="一斉通知を送る..." style="flex:1; background:#222; border:1px solid #444; color:white; padding:0 10px;">
+    <button class="btn-primary" onclick="sendAnnounce()">一斉送信</button>
 </div>
 
 <div id="chat-window" style="position:fixed; bottom:80px; right:20px; width:300px; height:400px; background:rgba(30,30,30,0.95); border:1px solid #444; border-radius:10px; display:none; flex-direction:column; z-index:8000;">
@@ -186,8 +174,7 @@
         myName = document.getElementById('user-name').value || (role === 'teacher' ? '先生' : '生徒');
         currentRid = document.getElementById('room-id').value || Math.floor(1000 + Math.random() * 9000).toString();
         
-        if (role === 'student') document.body.classList.add('is-student');
-        else document.body.classList.remove('is-student');
+        document.body.classList.toggle('is-student', role === 'student');
 
         try {
             if (role === 'teacher') {
@@ -202,7 +189,7 @@
             const peerId = (role === 'teacher') ? "T-ROOM-" + currentRid : undefined;
             peer = new Peer(peerId);
 
-            peer.on('open', (id) => {
+            peer.on('open', id => {
                 document.getElementById('room-display').innerText = "ID: " + currentRid;
                 document.getElementById('role-label').innerText = role.toUpperCase();
                 if(role === 'teacher') initTeacher(); else initStudent(myName);
@@ -217,43 +204,38 @@
                 call.answer(localStream);
                 call.on('stream', s => addStudentGrid(call.peer, s));
             });
-        } catch(e) { alert("メディアエラー"); location.reload(); }
+        } catch(e) { alert("起動エラー。ブラウザの許可を確認してください。"); location.reload(); }
     }
 
-    // 先生：リアクションの許可・禁止を切り替える
-    function toggleReactionPermission() {
-        isReactionEnabled = !isReactionEnabled;
-        const btn = document.getElementById('reaction-toggle-btn');
-        btn.innerText = isReactionEnabled ? "リアクション: 許可中" : "リアクション: 禁止中";
-        btn.className = isReactionEnabled ? "btn-success" : "btn-danger";
+    // 先生：ランダム指名
+    function pickRandom() {
+        const ids = Object.keys(studentInfo);
+        if(!ids.length) { alert("生徒がまだ参加していません。"); return; }
         
-        // 全員に現在の設定を強制送信
+        const targetId = ids[Math.floor(Math.random() * ids.length)];
+        const targetName = studentInfo[targetId].name;
+        const msg = `🎲 指名: ${targetName} さん`;
+
+        // 自分に表示
+        showAnnounce(msg);
+        // 全員に放送
         Object.values(connections).forEach(c => {
-            if(c.open) c.send({type: 'REACTION_SETTING', enabled: isReactionEnabled});
+            if(c.open) c.send({type: 'ANNOUNCE', msg: msg});
         });
     }
 
     function handleData(id, data) {
         switch(data.type) {
             case 'JOIN': 
-                studentInfo[id] = { name: data.name, hand: false }; 
+                studentInfo[id] = { name: data.name }; 
                 updateRoster();
-                // 先生側：参加してきた生徒に今の設定を個別に即座に送る
-                if(myRole === 'teacher') {
-                    connections[id].send({type: 'REACTION_SETTING', enabled: isReactionEnabled});
-                }
+                if(myRole === 'teacher') connections[id].send({type: 'REACTION_SETTING', enabled: isReactionEnabled});
                 break;
             case 'REACTION_SETTING':
                 isReactionEnabled = data.enabled;
-                if(data.enabled) {
-                    document.body.classList.remove('reaction-disabled');
-                    document.body.classList.add('reaction-enabled');
-                    showAnnounce("リアクションが許可されました");
-                } else {
-                    document.body.classList.remove('reaction-enabled');
-                    document.body.classList.add('reaction-disabled');
-                    if(document.fullscreenElement) document.exitFullscreen();
-                }
+                document.body.classList.toggle('reaction-disabled', !data.enabled);
+                document.body.classList.toggle('reaction-enabled', data.enabled);
+                if(data.enabled) showAnnounce("先生がリアクションを許可しました");
                 break;
             case 'REACTION': showReaction(data.emoji); break;
             case 'ANNOUNCE': showAnnounce(data.msg); break;
@@ -261,41 +243,35 @@
         }
     }
 
-    // --- その他共有・便利機能 ---
-    function showReaction(emoji) {
-        const div = document.createElement('div'); div.className = 'reaction'; div.innerText = emoji;
-        div.style.left = Math.random() * 80 + 10 + '%'; div.style.bottom = '20px';
-        document.getElementById('reaction-layer').appendChild(div);
-        setTimeout(() => div.remove(), 3000);
-    }
-
-    function sendReaction(emoji) {
-        if(!isReactionEnabled && myRole === 'student') return;
-        showReaction(emoji);
-        if(myRole === 'teacher') Object.values(connections).forEach(c => c.send({type:'REACTION', emoji}));
-        else connections["T-ROOM-"+currentRid]?.send({type:'REACTION', emoji});
+    function toggleReactionPermission() {
+        isReactionEnabled = !isReactionEnabled;
+        const btn = document.getElementById('reaction-toggle-btn');
+        btn.innerText = isReactionEnabled ? "リアクション: 許可中" : "リアクション: 禁止中";
+        btn.className = isReactionEnabled ? "btn-success" : "btn-danger";
+        Object.values(connections).forEach(c => {
+            if(c.open) c.send({type: 'REACTION_SETTING', enabled: isReactionEnabled});
+        });
     }
 
     function showAnnounce(msg) {
+        const existing = document.querySelector('.announce-banner');
+        if(existing) existing.remove();
+
         const b = document.createElement('div');
-        b.style = "position:fixed; top:20%; left:50%; transform:translateX(-50%); background:var(--accent); color:#000; padding:15px 30px; border-radius:50px; font-weight:bold; z-index:10000; font-size:24px; box-shadow:0 0 20px rgba(0,0,0,0.5);";
-        b.innerText = msg; document.body.appendChild(b);
-        setTimeout(() => b.remove(), 4000);
+        b.className = 'announce-banner';
+        b.innerText = msg;
+        document.body.appendChild(b);
+        setTimeout(() => { if(b) b.remove(); }, 4000);
     }
 
-    function sendAnnounce() {
-        const msg = document.getElementById('announce-input').value; if(!msg) return; showAnnounce(msg);
-        Object.values(connections).forEach(c => c.send({type:'ANNOUNCE', msg}));
-        document.getElementById('announce-input').value = "";
-    }
-
-    // 注目機能（全員共有）
+    // --- メディア制御系 ---
     function spotlight(id) {
         const v = document.getElementById('v-'+id);
         if(!v || !v.srcObject) return;
         const track = v.srcObject.getVideoTracks()[0];
         document.getElementById('main-broadcast-video').srcObject = v.srcObject;
         document.getElementById('spotlight-reset').classList.remove('hidden');
+        document.getElementById('air-target').innerText = studentInfo[id].name + "さん";
         updateBroadcastStream(track);
     }
 
@@ -303,6 +279,7 @@
         const track = localStream.getVideoTracks()[0];
         document.getElementById('main-broadcast-video').srcObject = localStream;
         document.getElementById('spotlight-reset').classList.add('hidden');
+        document.getElementById('air-target').innerText = "Teacher";
         updateBroadcastStream(track);
     }
 
@@ -343,34 +320,56 @@
         document.getElementById('teacher-controls').classList.remove('hidden');
         document.getElementById('monitor-section').classList.remove('hidden');
         document.getElementById('main-broadcast-video').srcObject = localStream;
+        document.getElementById('on-air-status').classList.remove('hidden');
         new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?room=" + currentRid, width: 80, height: 80 });
     }
 
     function initStudent(name) {
-        document.getElementById('student-tools').classList.remove('hidden');
         const tid = "T-ROOM-" + currentRid;
         const conn = peer.connect(tid);
         conn.on('open', () => { connections[tid] = conn; conn.send({ type: 'JOIN', name: name }); });
         const call = peer.call(tid, localStream);
-        call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
+        call.on('stream', s => { 
+            document.getElementById('main-broadcast-video').srcObject = s; 
+            document.getElementById('on-air-status').classList.remove('hidden');
+        });
     }
 
-    function updateRoster() {
-        const r = document.getElementById('roster');
-        r.innerHTML = Object.entries(studentInfo).map(([id, info]) => `<div>${info.name}</div>`).join('');
-        document.getElementById('connect-count').innerText = "👥 " + Object.keys(studentInfo).length;
+    // --- その他UI機能 ---
+    function showReaction(emoji) {
+        const div = document.createElement('div'); div.className = 'reaction'; div.innerText = emoji;
+        div.style.left = Math.random() * 80 + 10 + '%'; div.style.bottom = '20px';
+        document.getElementById('reaction-layer').appendChild(div);
+        setTimeout(() => div.remove(), 3000);
     }
 
-    function addStudentGrid(id, stream) {
-        if(document.getElementById('card-'+id)) return;
-        const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
-        card.innerHTML = `<video id="v-${id}" autoplay playsinline muted></video><div style="font-size:10px; display:flex; justify-content:space-between; margin-top:5px;"><span>${studentInfo[id]?.name || '生徒'}</span><button class="btn-primary" style="font-size:8px; padding:2px 5px;" onclick="spotlight('${id}')">注目</button></div>`;
-        document.getElementById('grid-screen').appendChild(card); document.getElementById('v-'+id).srcObject = stream;
+    function sendReaction(emoji) {
+        if(!isReactionEnabled && myRole === 'student') return;
+        showReaction(emoji);
+        if(myRole === 'teacher') Object.values(connections).forEach(c => c.send({type:'REACTION', emoji}));
+        else connections["T-ROOM-"+currentRid]?.send({type:'REACTION', emoji});
     }
 
-    function toggleChat() {
-        const chat = document.getElementById('chat-window');
-        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
+    function sendAnnounce() {
+        const msg = document.getElementById('announce-input').value; if(!msg) return;
+        showAnnounce(msg);
+        Object.values(connections).forEach(c => c.send({type:'ANNOUNCE', msg}));
+        document.getElementById('announce-input').value = "";
+    }
+
+    function startTimer(sec) {
+        clearInterval(window.tInt);
+        window.tInt = setInterval(() => {
+            const m = Math.floor(sec / 60); const s = sec % 60;
+            const display = `${m}:${s.toString().padStart(2,'0')}`;
+            document.getElementById('timer-display').innerText = display;
+            if(sec-- <= 0) clearInterval(window.tInt);
+        }, 1000);
+    }
+
+    function broadcastTimer() {
+        const sec = document.getElementById('t-min').value * 60; startTimer(sec);
+        Object.values(connections).forEach(c => c.send({type:'TIMER', sec}));
     }
 
     function chatSend() {
@@ -386,6 +385,24 @@
         div.innerHTML = `<b style="color:var(--accent); font-size:11px;">${name}</b><br>${msg}`;
         const area = document.getElementById('chat-messages'); area.appendChild(div);
         area.scrollTop = area.scrollHeight;
+    }
+
+    function updateRoster() {
+        const r = document.getElementById('roster');
+        r.innerHTML = Object.values(studentInfo).map(info => `<div>・${info.name}</div>`).join('');
+        document.getElementById('connect-count').innerText = "👥 " + Object.keys(studentInfo).length;
+    }
+
+    function addStudentGrid(id, stream) {
+        if(document.getElementById('card-'+id)) return;
+        const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
+        card.innerHTML = `<video id="v-${id}" autoplay playsinline muted></video><div style="font-size:10px; display:flex; justify-content:space-between; margin-top:5px;"><span>${studentInfo[id]?.name || '生徒'}</span><button class="btn-primary" style="font-size:8px; padding:2px 5px;" onclick="spotlight('${id}')">注目</button></div>`;
+        document.getElementById('grid-screen').appendChild(card); document.getElementById('v-'+id).srcObject = stream;
+    }
+
+    function toggleChat() {
+        const chat = document.getElementById('chat-window');
+        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
     }
 
     function toggleBrowserFullscreen() {
