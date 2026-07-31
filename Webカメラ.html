@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI監視システム【通信強化版】</title>
+    <title>AI監視システム【履歴保存版】</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
@@ -16,138 +16,123 @@
         body { font-family: sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
         .container { max-width: 900px; margin: auto; }
         .panel { background: #222; padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; }
-        
-        /* 状態表示ランプ */
-        #status-bar { font-size: 12px; padding: 10px; margin-bottom: 10px; border-radius: 5px; background: #333; }
-        .status-ok { color: #00ff88; }
-        .status-err { color: #ff4444; }
+        button { padding: 12px 20px; margin: 5px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-main { background: #00e1ff; color: #000; font-size: 16px; }
+        .btn-sub { background: #444; color: white; }
+        .btn-danger { background: #ff4444; color: white; }
 
-        button { padding: 15px 20px; margin: 5px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-main { background: #00e1ff; color: #000; width: 100%; max-width: 300px; font-size: 18px; }
-        
-        #id-display { font-size: 60px; font-weight: bold; color: #00e1ff; margin: 10px 0; }
-        #qrcode { background: white; padding: 15px; border-radius: 10px; display: inline-block; }
-        
-        canvas { width: 100%; border-radius: 8px; background: #000; }
-        .video-card { background: #000; padding: 10px; border-radius: 12px; border: 1px solid #444; position: relative; margin-top: 10px; }
-        .alert-msg { position: absolute; top: 20px; left: 20px; background: red; padding: 5px 10px; border-radius: 5px; font-weight: bold; }
+        /* ステータス表示 */
+        #status-bar { font-size: 12px; padding: 10px; margin-bottom: 10px; background: #333; border-radius: 5px; color: #888; }
 
-        /* 履歴リスト */
-        .log-list { display: flex; overflow-x: auto; gap: 10px; padding: 10px; background: #1a1a1a; border-radius: 10px; margin-top: 10px; }
-        .log-item { min-width: 120px; cursor: pointer; font-size: 10px; }
-        .log-item img { width: 120px; border-radius: 5px; }
+        /* カメラ表示エリア */
+        #monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px; }
+        .video-card { background: #000; padding: 10px; border-radius: 12px; border: 2px solid #444; position: relative; }
+        .detecting { border-color: #00e1ff; box-shadow: 0 0 15px #00e1ff; }
+        canvas { width: 100%; border-radius: 8px; }
 
-        /* モーダル */
+        /* 履歴リストエリア */
+        .log-section { text-align: left; margin-top: 30px; border-top: 1px solid #444; padding-top: 20px; }
+        .log-header { display: flex; justify-content: space-between; align-items: center; }
+        .log-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 15px; }
+        .log-item { background: #2a2a2a; padding: 5px; border-radius: 8px; text-align: center; position: relative; }
+        .log-item img { width: 100%; border-radius: 5px; cursor: pointer; }
+        .log-item span { font-size: 10px; color: #aaa; }
+        .del-item { position: absolute; top: 2px; right: 2px; background: rgba(255,0,0,0.7); border: none; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; padding:0; cursor: pointer; }
+
+        /* 拡大モーダル */
         #modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:100; flex-direction:column; align-items:center; justify-content:center; }
-        #modal img { max-width: 90%; max-height: 70%; border: 1px solid #00e1ff; }
+        #modal img { max-width: 90%; max-height: 70%; border: 2px solid #00e1ff; }
 
         .hidden { display: none; }
+        .alert-badge { position: absolute; top: 15px; left: 15px; background: red; padding: 5px 10px; border-radius: 5px; font-weight: bold; z-index: 10; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>AI遠隔監視・骨格検知</h2>
+    <h2>AI監視・履歴保存システム</h2>
 
-    <!-- 通信状態表示 -->
-    <div id="status-bar">
-        AI: <span id="st-ai">読込中...</span> | 
-        通信: <span id="st-peer">準備中...</span> | 
-        環境: <span id="st-https">判定中...</span>
-    </div>
+    <div id="status-bar">AI: <span id="st-ai">読込中</span> | 通信: <span id="st-peer">準備中</span></div>
 
-    <!-- モード選択 -->
     <div id="mode-selection" class="panel">
-        <button class="btn-main" onclick="initAsCamera()">📸 カメラ（撮影側）にする</button>
-        <div style="margin: 15px 0; color: #888;">または</div>
-        <button class="btn-main" style="background:#aaa;" onclick="showMonitorView()">🖥️ モニター（見る側）にする</button>
+        <button class="btn-main" onclick="initAsCamera()">📸 カメラ（撮影）にする</button>
+        <button class="btn-sub" onclick="showMonitorView()">🖥️ モニター（監視・履歴）にする</button>
     </div>
 
     <!-- カメラ側 -->
     <div id="camera-ui" class="panel hidden">
-        <p>モニターに入力するID</p>
-        <div id="id-display">----</div>
+        <p>モニター側に入力するID</p>
+        <div id="id-display" style="font-size: 50px; color: #00e1ff; font-weight: bold;">----</div>
         <div id="qrcode"></div>
-        <div style="margin-top:20px;">
-            <video id="temp-video" autoplay playsinline muted style="width:100%; max-width:300px; border-radius:10px;"></video>
-        </div>
-        <p style="font-size:12px; color: #888;">この画面は閉じないでください</p>
+        <video id="temp-video" autoplay playsinline muted style="width:100%; max-width:300px; margin-top:20px; border-radius:10px;"></video>
     </div>
 
     <!-- モニター側 -->
     <div id="monitor-setup" class="panel hidden">
-        <input type="text" id="peer-id-input" placeholder="4桁ID" style="font-size:20px; width:100px; padding:10px; text-align:center; border-radius:8px;">
-        <button class="btn-main" style="width:auto;" onclick="connectToNewCamera()">カメラ接続</button>
-        
+        <input type="text" id="peer-id-input" placeholder="IDを入力" style="font-size:18px; width:100px; padding:10px; border-radius:8px;">
+        <button class="btn-main" style="width: auto;" onclick="connectToNewCamera()">カメラ接続</button>
+
         <div id="monitor-grid"></div>
 
-        <div style="text-align:left; margin-top:30px;">
-            <h4>👤 人検知履歴 (タップで拡大)</h4>
+        <div class="log-section">
+            <div class="log-header">
+                <h4>👤 保存された過去の履歴</h4>
+                <button class="btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="clearAllHistory()">全履歴を消去</button>
+            </div>
             <div id="detection-log" class="log-list"></div>
         </div>
     </div>
 </div>
 
+<!-- モーダル -->
 <div id="modal" onclick="this.style.display='none'">
     <img id="modal-img">
-    <p id="modal-info"></p>
-    <button class="btn-main" id="dl-btn">保存する</button>
+    <p id="modal-info" style="margin-top:10px;"></p>
+    <button class="btn-main" id="dl-btn">この画像を保存</button>
 </div>
 
 <script>
     let peer;
     let detector = null;
+    let db = null;
     let myConnections = {};
 
-    // 1. 環境チェック (HTTPSが必要)
-    const stHttps = document.getElementById('st-https');
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        stHttps.innerText = "❌ 非推奨(HTTP)";
-        stHttps.className = "status-err";
-        alert("【重要】カメラ機能はHTTPS環境でしか動作しません。GitHub Pagesなどをご利用ください。");
-    } else {
-        stHttps.innerText = "✅ OK";
-        stHttps.className = "status-ok";
-    }
+    // --- データベース（IndexedDB）の準備 ---
+    const dbRequest = indexedDB.open("DetectionHistory", 1);
+    dbRequest.onupgradeneeded = (e) => {
+        db = e.target.result;
+        db.createObjectStore("history", { keyPath: "id", autoIncrement: true });
+    };
+    dbRequest.onsuccess = (e) => {
+        db = e.target.result;
+        console.log("Database ready");
+    };
 
-    // 2. AIモデル読み込み
-    async function loadModel() {
-        try {
-            detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
-            document.getElementById('st-ai').innerText = "✅ 完了";
-            document.getElementById('st-ai').className = "status-ok";
-        } catch (e) {
-            document.getElementById('st-ai').innerText = "❌ 失敗";
-        }
+    // AI読み込み
+    async function loadAI() {
+        detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
+        document.getElementById('st-ai').innerText = "✅ OK";
     }
-    loadModel();
+    loadAI();
 
     // --- カメラ側 ---
     async function initAsCamera() {
         const video = document.getElementById('temp-video');
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-            video.srcObject = stream;
-        } catch (e) {
-            alert("カメラを起動できません。許可設定を確認してください。");
-            return;
-        }
-
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        video.srcObject = stream;
         showUI('camera-ui');
-        setupPeer((id) => {
+        
+        peer = new Peer(Math.floor(1000 + Math.random() * 9000).toString());
+        peer.on('open', id => {
             document.getElementById('id-display').innerText = id;
-            document.getElementById('qrcode').innerHTML = "";
-            new QRCode(document.getElementById("qrcode"), { text: id, width: 140, height: 140 });
+            new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
+            document.getElementById('st-peer').innerText = "待機中";
         });
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         let conns = [];
-
-        peer.on('connection', c => {
-            conns.push(c);
-            document.getElementById('st-peer').innerText = "✅ 接続中";
-        });
+        peer.on('connection', c => { conns.push(c); document.getElementById('st-peer').innerText = "接続中"; });
 
         setInterval(() => {
             if (conns.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -162,91 +147,120 @@
     // --- モニター側 ---
     function showMonitorView() {
         showUI('monitor-setup');
-        setupPeer();
-    }
-
-    function setupPeer(onOpenCallback) {
-        const rid = Math.floor(1000 + Math.random() * 9000).toString();
-        // PeerJSサーバー設定（安定性を高めるため、デフォルト設定）
-        peer = new Peer(onOpenCallback ? rid : undefined, { debug: 1 });
-        
-        peer.on('open', (id) => {
-            document.getElementById('st-peer').innerText = "✅ オンライン";
-            document.getElementById('st-peer').className = "status-ok";
-            if(onOpenCallback) onOpenCallback(id);
-        });
-
-        peer.on('error', (err) => {
-            console.error(err);
-            document.getElementById('st-peer').innerText = "❌ エラー";
-            document.getElementById('st-peer').className = "status-err";
-            if(err.type === 'unavailable-id') setupPeer(onOpenCallback);
-        });
+        peer = new Peer();
+        peer.on('open', () => { document.getElementById('st-peer').innerText = "オンライン"; loadHistoryFromDB(); });
     }
 
     function connectToNewCamera() {
         const id = document.getElementById('peer-id-input').value;
-        if (!id) return;
         const conn = peer.connect(id);
-        conn.on('open', () => setupMonitor(id, conn));
-        conn.on('error', () => alert("接続できません。IDを確認してください。"));
-    }
+        conn.on('open', () => {
+            const grid = document.getElementById('monitor-grid');
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            card.id = `card-${id}`;
+            card.innerHTML = `<div id="alert-${id}" class="alert-badge hidden">検知</div><canvas id="cvs-${id}"></canvas>ID: ${id}`;
+            grid.appendChild(card);
+            
+            const canvas = document.getElementById(`cvs-${id}`);
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
 
-    function setupMonitor(id, conn) {
-        const grid = document.getElementById('monitor-grid');
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.innerHTML = `<div id="alert-${id}" class="alert-msg hidden">人検知</div><canvas id="cvs-${id}"></canvas>ID: ${id}`;
-        grid.appendChild(card);
-
-        const canvas = document.getElementById(`cvs-${id}`);
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-
-        conn.on('data', async (data) => {
-            img.src = data;
-            img.onload = async () => {
-                canvas.width = img.width; canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-                if (detector) {
-                    const poses = await detector.estimatePoses(canvas);
-                    if (poses.length > 0 && poses[0].score > 0.4) {
-                        drawPose(ctx, poses[0].keypoints);
-                        triggerRecord(id, canvas);
-                    } else {
-                        document.getElementById(`alert-${id}`).classList.add('hidden');
+            conn.on('data', async (data) => {
+                img.src = data;
+                img.onload = async () => {
+                    canvas.width = img.width; canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    if (detector) {
+                        const poses = await detector.estimatePoses(canvas);
+                        if (poses.length > 0 && poses[0].score > 0.4) {
+                            drawPose(ctx, poses[0].keypoints);
+                            handleDetection(id, canvas);
+                        } else {
+                            document.getElementById(`alert-${id}`).classList.add('hidden');
+                            card.classList.remove('detecting');
+                        }
                     }
-                }
-            };
+                };
+            });
         });
     }
 
     function drawPose(ctx, points) {
-        ctx.fillStyle = "#00e1ff"; ctx.strokeStyle = "white";
-        points.forEach(p => { if(p.score > 0.5) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 2*Math.PI); ctx.fill(); } });
+        ctx.fillStyle = "#00e1ff";
+        points.forEach(p => { if(p.score > 0.5) { ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, 2*Math.PI); ctx.fill(); } });
     }
 
-    let lastSave = 0;
-    function triggerRecord(id, canvas) {
+    // 検知時の処理（保存）
+    let lastSave = {};
+    async function handleDetection(id, canvas) {
         document.getElementById(`alert-${id}`).classList.remove('hidden');
-        if (Date.now() - lastSave > 5000) {
-            const logList = document.getElementById('detection-log');
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            const item = document.createElement('div');
-            item.className = 'log-item';
-            const time = new Date().toLocaleTimeString();
-            item.innerHTML = `<img src="${dataUrl}"><br>${time}`;
-            item.onclick = () => {
-                document.getElementById('modal-img').src = dataUrl;
-                document.getElementById('modal-info').innerText = `${time} 検知画像`;
-                document.getElementById('modal').style.display = 'flex';
-                document.getElementById('dl-btn').onclick = () => {
-                    const a = document.createElement('a'); a.href = dataUrl; a.download = `log_${Date.now()}.jpg`; a.click();
-                };
-            };
-            logList.prepend(item);
-            lastSave = Date.now();
+        document.getElementById(`card-${id}`).classList.add('detecting');
+
+        const now = Date.now();
+        if (!lastSave[id] || now - lastSave[id] > 7000) {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            const time = new Date().toLocaleString();
+            
+            // DBに保存
+            const transaction = db.transaction(["history"], "readwrite");
+            transaction.objectStore("history").add({ image: dataUrl, time: time, cameraId: id });
+            
+            lastSave[id] = now;
+            addImgToList(dataUrl, time, id); // リストに表示
         }
+    }
+
+    // 画面のリストに画像を追加する
+    function addImgToList(dataUrl, time, cameraId, dbId) {
+        const logList = document.getElementById('detection-log');
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.innerHTML = `
+            <button class="del-item" onclick="deleteHistory(${dbId}, this)">×</button>
+            <img src="${dataUrl}" onclick="openModal('${dataUrl}', '${time}')">
+            <span>${time}<br>(ID:${cameraId})</span>
+        `;
+        logList.prepend(item);
+    }
+
+    // DBから履歴を読み込んで表示
+    function loadHistoryFromDB() {
+        const transaction = db.transaction(["history"], "readonly");
+        const store = transaction.objectStore("history");
+        store.openCursor().onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                addImgToList(cursor.value.image, cursor.value.time, cursor.value.cameraId, cursor.value.id);
+                cursor.continue();
+            }
+        };
+    }
+
+    // 個別削除
+    function deleteHistory(id, btn) {
+        if (!confirm("この履歴を削除しますか？")) return;
+        const transaction = db.transaction(["history"], "readwrite");
+        transaction.objectStore("history").delete(id);
+        btn.parentElement.remove();
+    }
+
+    // 全削除
+    function clearAllHistory() {
+        if (!confirm("すべての履歴を完全に削除しますか？")) return;
+        const transaction = db.transaction(["history"], "readwrite");
+        transaction.objectStore("history").clear();
+        document.getElementById('detection-log').innerHTML = "";
+    }
+
+    // モーダル
+    function openModal(url, info) {
+        document.getElementById('modal-img').src = url;
+        document.getElementById('modal-info').innerText = info;
+        document.getElementById('modal').style.display = 'flex';
+        document.getElementById('dl-btn').onclick = () => {
+            const a = document.createElement('a'); a.href = url; a.download = `monitor_${Date.now()}.jpg`; a.click();
+        };
     }
 
     function showUI(uiId) {
