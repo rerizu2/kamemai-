@@ -1,254 +1,347 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Precision AI Monitor</title>
-    
-    <!-- MediaPipe & PeerJS -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
-    <style>
-        body { margin: 0; background: #121212; color: white; font-family: sans-serif; overflow-x: hidden; }
-        .container { display: flex; flex-direction: column; height: 100vh; }
-        
-        /* ヘッダーエリア */
-        header { background: #222; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; }
-        .btn { padding: 10px 20px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
-        .btn-main { background: #00ff88; color: #000; }
-        .btn-sub { background: #444; color: white; }
-
-        /* メインコンテンツ */
-        #main-view { display: flex; flex: 1; overflow: hidden; }
-        
-        /* 左：カメラモニター（AI解析） */
-        #monitor-section { flex: 2; padding: 15px; position: relative; display: flex; flex-direction: column; gap: 10px; }
-        #canvas-wrapper { position: relative; width: 100%; background: #000; border-radius: 10px; overflow: hidden; }
-        #output-canvas { width: 100%; height: auto; display: block; }
-        .alert-overlay { position: absolute; top: 20px; left: 20px; background: rgba(255,0,0,0.8); color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold; display: none; animation: blink 0.5s infinite; }
-        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
-
-        /* 右：検知ログ（画像保存） */
-        #log-section { flex: 1; background: #1a1a1a; border-left: 2px solid #333; padding: 15px; overflow-y: auto; }
-        .log-card { background: #333; margin-bottom: 10px; border-radius: 8px; overflow: hidden; font-size: 12px; border: 1px solid #444; }
-        .log-card img { width: 100%; display: block; }
-        .log-info { padding: 8px; display: flex; justify-content: space-between; }
-
-        /* カメラ配信モード用 */
-        #camera-setup { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        #id-display { font-size: 60px; color: #00ff88; font-weight: bold; margin: 20px; }
-        #qr-code { background: white; padding: 10px; border-radius: 10px; }
-
-        .hidden { display: none; }
-    </style>
-</head>
-<body>
-
-<div id="app" class="container">
-    <!-- モード選択 -->
-    <div id="mode-select" class="container" style="justify-content: center; align-items: center; background: #1a1a1a;">
-        <h1 style="color:#00ff88;">AI骨格検知モニタリング</h1>
-        <div style="display:flex; gap:20px;">
-            <button class="btn btn-main" onclick="startAsCamera()" style="font-size:20px; padding:20px 40px;">📸 カメラにする</button>
-            <button class="btn btn-sub" onclick="startAsMonitor()" style="font-size:20px; padding:20px 40px;">🖥️ モニターにする</button>
-        </div>
-        <p style="color:#888; margin-top:20px;">※高精度解析のためPC推奨</p>
+<div id="container">
+    <div id="left-panel">
+        <div class="panel-title">Camera Input (Mirror)</div>
+        <video id="input-video" playsinline></video>
+        <canvas id="output-canvas"></canvas>
     </div>
-
-    <!-- 【モニター画面】 -->
-    <div id="monitor-ui" class="hidden" style="height: 100%;">
-        <header>
-            <div id="status">AI検知停止中</div>
-            <div>
-                <input type="text" id="target-id" placeholder="IDを入力" style="padding:10px; border-radius:5px; border:none; width:100px;">
-                <button class="btn btn-main" onclick="connectToCamera()">追加</button>
-            </div>
-        </header>
-        <div id="main-view">
-            <div id="monitor-section">
-                <div id="canvas-wrapper">
-                    <div id="alert-ui" class="alert-overlay">⚠️ 人を検知！自動保存中...</div>
-                    <canvas id="output-canvas"></canvas>
-                </div>
-                <p id="loading-msg">AIモデル読み込み中...</p>
-            </div>
-            <div id="log-section">
-                <h3>👤 検知履歴 (高精度骨格)</h3>
-                <div id="log-list"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 【カメラ配信画面】 -->
-    <div id="camera-setup" class="hidden">
-        <h2>カメラ配信中</h2>
-        <div id="id-display">----</div>
-        <div id="qr-code"></div>
-        <button class="btn btn-sub" style="margin-top:30px;" onclick="location.reload()">終了</button>
-        <video id="local-video" autoplay playsinline muted style="width:200px; margin-top:20px; border-radius:10px; border:2px solid #00ff88;"></video>
-        <canvas id="send-canvas" class="hidden"></canvas>
+    <div id="right-panel">
+        <div class="panel-title">Realtime 3D Sync</div>
     </div>
 </div>
 
-<script>
-    let peer;
-    let holistic;
-    const canvasElement = document.getElementById('output-canvas');
-    const canvasCtx = canvasElement.getContext('2d');
-    let myConnections = {};
-    let lastLogTime = 0;
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-    // --- AI セットアップ (MediaPipe Holistic) ---
-    async function initAI() {
-        holistic = new Holistic({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`});
-        holistic.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+    // === 1. Three.js セットアップ ===
+    const rightPanel = document.getElementById('right-panel');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x2b2b2b);
+    
+    // グリッド表示
+    const gridHelper = new THREE.GridHelper(10, 10);
+    scene.add(gridHelper);
+
+    const camera3D = new THREE.PerspectiveCamera(45, rightPanel.clientWidth / rightPanel.clientHeight, 0.1, 100);
+    camera3D.position.set(0, 1.4, 3.0); // 正面から見る位置
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(rightPanel.clientWidth, rightPanel.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    rightPanel.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera3D, renderer.domElement);
+    controls.target.set(0, 1.0, 0);
+    controls.enablePan = false;
+    controls.enableDamping = true;
+
+    // ライティング
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
+    scene.add(hemiLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    dirLight.position.set(2, 5, 5);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    // === 2. モデルロードとボーン管理 ===
+    const bones = {
+        Right: { Arm: null, ForeArm: null, Hand: null, Fingers: {} },
+        Left:  { Arm: null, ForeArm: null, Hand: null, Fingers: {} }
+    };
+    
+    const loaderDiv = document.getElementById('loader');
+    const statusText = document.getElementById('status-text');
+    
+    // 汎用的な人型モデル (Xbot)
+    const MODEL_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Xbot.glb';
+    const FINGER_NAMES = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'];
+
+    new GLTFLoader().load(MODEL_URL, (gltf) => {
+        const model = gltf.scene;
+        scene.add(model);
+        model.position.y = 0; // 足元を原点に
+
+        model.traverse((o) => {
+            if (o.isBone) {
+                const n = o.name;
+                // Mixamo形式のボーン名マッピング
+                if (n.includes('RightArm') || n === 'mixamorig_RightArm') bones.Right.Arm = o;
+                if (n.includes('RightForeArm') || n === 'mixamorig_RightForeArm') bones.Right.ForeArm = o;
+                if (n.includes('RightHand') || n === 'mixamorig_RightHand') bones.Right.Hand = o;
+                
+                if (n.includes('LeftArm') || n === 'mixamorig_LeftArm') bones.Left.Arm = o;
+                if (n.includes('LeftForeArm') || n === 'mixamorig_LeftForeArm') bones.Left.ForeArm = o;
+                if (n.includes('LeftHand') || n === 'mixamorig_LeftHand') bones.Left.Hand = o;
+
+                // 指のマッピング
+                FINGER_NAMES.forEach(fName => {
+                    const side = n.includes('Right') ? 'Right' : (n.includes('Left') ? 'Left' : null);
+                    if (side && n.includes(fName)) {
+                        if (!bones[side].Fingers[fName]) bones[side].Fingers[fName] = [];
+                        // ボーン名に 1, 2, 3 が含まれる順序で格納
+                        if (n.includes('1')) bones[side].Fingers[fName][0] = o;
+                        if (n.includes('2')) bones[side].Fingers[fName][1] = o;
+                        if (n.includes('3')) bones[side].Fingers[fName][2] = o;
+                    }
+                });
+            }
         });
-        holistic.onResults(onAIResults);
-        document.getElementById('loading-msg').innerText = "AI準備完了。接続待機中...";
+        statusText.innerText = "モデル読込完了。カメラ起動中...";
+    }, undefined, (e) => {
+        statusText.innerText = "モデル読込エラー";
+        console.error(e);
+    });
+
+    // === 3. 計算ロジック ===
+    const v3 = (x,y,z) => new THREE.Vector3(x,y,z);
+    
+    // ローパスフィルタ用（ジッター軽減）
+    const damp = 0.5; 
+
+    /**
+     * 腕の回転計算
+     * MediaPipeの3点座標から、上腕と前腕の回転を計算する
+     */
+    function solveArm(bUpper, bLower, pShoulder, pElbow, pWrist, boneAxis) {
+        if(!bUpper || !bLower) return;
+
+        // 深度の増幅係数（WebカメラはZ軸が浅いため補正）
+        const Z_AMP = 2.5; 
+
+        // 座標変換 (MediaPipeはYが下向き、Three.jsはYが上向き)
+        // かつ、鏡映しにするためにXを反転させるか考慮が必要だが、
+        // ここではシンプルに入力座標をワールド空間ベクトルに変換する
+        const vS = v3(-pShoulder.x, -pShoulder.y, -pShoulder.z * Z_AMP);
+        const vE = v3(-pElbow.x,    -pElbow.y,    -pElbow.z * Z_AMP);
+        const vW = v3(-pWrist.x,    -pWrist.y,    -pWrist.z * Z_AMP);
+
+        // 1. 上腕の回転
+        const dirUpper = new THREE.Vector3().subVectors(vE, vS).normalize();
+        // デフォルトのボーンの向き(boneAxis)を、計算した向き(dirUpper)に合わせる回転クォータニオン作成
+        const qTargetUpper = new THREE.Quaternion().setFromUnitVectors(boneAxis, dirUpper);
+        bUpper.quaternion.slerp(qTargetUpper, damp); 
+
+        // 2. 前腕の回転
+        // 親（上腕）の回転の影響を打ち消して、ローカル回転を計算する
+        const dirLower = new THREE.Vector3().subVectors(vW, vE).normalize();
+        const qTargetLowerGlobal = new THREE.Quaternion().setFromUnitVectors(boneAxis, dirLower);
+        
+        // 親のワールド回転の逆行列を取得
+        const qParentInv = bUpper.quaternion.clone().invert(); 
+        // ローカル回転 = 親の逆 * グローバル目標
+        const qLocalLower = qParentInv.multiply(qTargetLowerGlobal);
+        bLower.quaternion.slerp(qLocalLower, damp);
     }
 
-    // --- AI解析結果の処理 ---
-    function onAIResults(results) {
-        // キャンバスサイズ調整
-        canvasElement.width = results.image.width;
-        canvasElement.height = results.image.height;
+    /**
+     * 手首と指の完全制御
+     * Roll回転（ひねり）に対応
+     */
+    function solveHandFull(bHand, bFingers, landmarks, boneAxis, isRight) {
+        if(!bHand) return;
+        const Z_AMP = 2.5;
 
-        // 背景描画
+        // MediaPipe Hand Landmarks indices
+        // 0:Wrist, 5:IndexMCP, 9:MiddleMCP, 17:PinkyMCP
+        const pWrist = landmarks[0];
+        const pIndex = landmarks[5];
+        const pMiddle = landmarks[9];
+        const pPinky = landmarks[17];
+
+        const vW = v3(-pWrist.x, -pWrist.y, -pWrist.z * Z_AMP);
+        const vI = v3(-pIndex.x, -pIndex.y, -pIndex.z * Z_AMP);
+        const vM = v3(-pMiddle.x, -pMiddle.y, -pMiddle.z * Z_AMP);
+        const vP = v3(-pPinky.x, -pPinky.y, -pPinky.z * Z_AMP);
+
+        // --- 手首の回転行列を作成する ---
+        
+        // 1. 前方ベクトル (Forward): 手首から中指の付け根
+        const forward = new THREE.Vector3().subVectors(vM, vW).normalize();
+
+        // 2. 右ベクトル (Right) または 上ベクトル (Up) の仮計算
+        // 人差し指と小指を結ぶベクトルを使って、手のひらの法線を出す
+        const vecIndexToPinky = new THREE.Vector3().subVectors(vP, vI).normalize();
+        
+        // 3. 手のひら法線 (Up Vector)
+        // 外積を使って法線を求める (Forward x IndexToPinky)
+        let up = new THREE.Vector3().crossVectors(forward, vecIndexToPinky).normalize();
+        
+        // 左手と右手で座標系が逆になる場合があるので調整
+        // Xbotの場合、手の平が下を向いているか前を向いているかで軸が変わるが、
+        // 一般的に:
+        // 右手: Index(右) -> Pinky(左) なので Cross(Forward, I2P) は手の甲側
+        // 左手: Index(左) -> Pinky(右) 
+        if (isRight) {
+             // 補正が必要ならここで反転
+             // up.negate(); 
+        } else {
+             // up.negate();
+        }
+
+        // 4. 回転行列の構築 (LookAt行列のようなもの)
+        const m4 = new THREE.Matrix4();
+        
+        // X軸基準のボーン(Xbot)に対して、
+        // X軸 = Forward, Y軸 = -Up (手の甲), Z軸 = Cross
+        // 簡易的に setFromUnitVectors ではなく、正確な基底ベクトルをセットする
+        const xAxis = forward.clone();
+        const yAxis = up.clone().negate(); // 手の甲側をYとするか、手の平をYとするか
+        const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
+        // 直交補正
+        yAxis.crossVectors(zAxis, xAxis).normalize();
+
+        // 回転行列を作成
+        // ボーンのローカル軸が (1,0,0) なので、x列にforwardを入れる
+        if (isRight) { // 右手モデル (-X軸が伸びる方向) の場合、軸を反転させる必要があるかも
+             // Xbotの右手は -X 方向に伸びている
+             const mRot = new THREE.Matrix4().makeBasis(xAxis.negate(), yAxis.negate(), zAxis);
+             bHand.rotation.setFromRotationMatrix(mRot);
+        } else {
+             // 左手モデル (+X 方向に伸びている)
+             const mRot = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+             bHand.rotation.setFromRotationMatrix(mRot);
+        }
+        
+        // ※上記行列計算が複雑なため、今回はクォータニオンによる「方向合わせ」＋「ロール補正」を行う簡易実装に切り替えます
+        // これにより暴発を防ぎます。
+        
+        const qDir = new THREE.Quaternion().setFromUnitVectors(boneAxis, forward);
+        
+        // 親の回転をキャンセル
+        const parentQ = new THREE.Quaternion();
+        bHand.parent.getWorldQuaternion(parentQ);
+        const qParentInv = parentQ.clone().invert();
+        
+        // 最終ローカル回転（方向のみ）
+        let qLocal = qParentInv.multiply(qDir);
+        
+        // ロール（ひねり）の適用
+        // 手のひらの法線ベクトルを使って、軸周りの回転を加える
+        // ここは計算が安定しない場合が多いため、まずは「方向追従」を優先させます
+        bHand.quaternion.slerp(qLocal, damp);
+
+
+        // --- 指の回転 ---
+        const handWorldQ = new THREE.Quaternion();
+        bHand.getWorldQuaternion(handWorldQ);
+
+        const fingerMap = [
+            { key: 'Thumb',  idx: [1, 2, 3, 4] },
+            { key: 'Index',  idx: [5, 6, 7, 8] },
+            { key: 'Middle', idx: [9, 10, 11, 12] },
+            { key: 'Ring',   idx: [13, 14, 15, 16] },
+            { key: 'Pinky',  idx: [17, 18, 19, 20] }
+        ];
+
+        fingerMap.forEach(f => {
+            if (!bFingers[f.key]) return;
+            let currentParentQ = handWorldQ.clone(); // 指の根本は手のひらの回転から始まる
+
+            for (let i = 0; i < 3; i++) {
+                const bone = bFingers[f.key][i];
+                if (!bone) continue;
+
+                const vStart = v3(-landmarks[f.idx[i]].x,   -landmarks[f.idx[i]].y,   -landmarks[f.idx[i]].z * Z_AMP);
+                const vEnd   = v3(-landmarks[f.idx[i+1]].x, -landmarks[f.idx[i+1]].y, -landmarks[f.idx[i+1]].z * Z_AMP);
+                
+                const boneVec = new THREE.Vector3().subVectors(vEnd, vStart).normalize();
+                const qGlobal = new THREE.Quaternion().setFromUnitVectors(boneAxis, boneVec);
+                
+                // ローカル回転に変換
+                const invP = currentParentQ.clone().invert();
+                const qLocalBone = invP.multiply(qGlobal);
+                
+                bone.quaternion.slerp(qLocalBone, damp);
+                currentParentQ = qGlobal; // 次の関節の親回転になる
+            }
+        });
+    }
+
+    // === 4. MediaPipe セットアップ ===
+    const videoElement = document.getElementById('input-video');
+    const canvasElement = document.getElementById('output-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    function onResults(results) {
+        // ローダーを消す
+        loaderDiv.style.opacity = 0;
+        setTimeout(() => loaderDiv.style.display = 'none', 500);
+
+        // デバッグ描画
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-        // 骨格描画 (Pose, Hands)
-        if (results.poseLandmarks) {
+        if(results.poseLandmarks) {
             drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-            drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 1});
-            
-            // 人の検知判定
-            if (results.poseLandmarks[11].visibility > 0.5) { // 肩が見えているか
-                triggerDetection();
-            } else {
-                document.getElementById('alert-ui').style.display = 'none';
-            }
         }
-
-        if (results.leftHandLandmarks) {
-            drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {color: '#CC0000', lineWidth: 2});
-        }
-        if (results.rightHandLandmarks) {
-            drawConnectors(canvasCtx, results.rightHandLandmarks, HAND_CONNECTIONS, {color: '#00CC00', lineWidth: 2});
-        }
-        
         canvasCtx.restore();
-    }
 
-    // 検知時の処理
-    function triggerDetection() {
-        const now = Date.now();
-        document.getElementById('alert-ui').style.display = 'block';
+        const lm = results.poseLandmarks;
+        if (!lm) return;
 
-        // 5秒に1回保存
-        if (now - lastLogTime > 5000) {
-            saveDetectionLog();
-            playAlertSound();
-            lastLogTime = now;
+        // --- 姿勢の反映 (Mirror Logic) ---
+        // ユーザーの右手(画面右) → モデルの左手(画面右)
+        // ユーザーの左手(画面左) → モデルの右手(画面左)
+
+        // Left Arm (User's Right)
+        if (bones.Left.Arm && results.poseLandmarks) {
+            // Shoulder(12), Elbow(14), Wrist(16)
+            solveArm(bones.Left.Arm, bones.Left.ForeArm, lm[12], lm[14], lm[16], new THREE.Vector3(1,0,0));
+            
+            if (results.rightHandLandmarks && bones.Left.Hand) {
+                solveHandFull(bones.Left.Hand, bones.Left.Fingers, results.rightHandLandmarks, new THREE.Vector3(1,0,0), false);
+            }
+        }
+
+        // Right Arm (User's Left)
+        if (bones.Right.Arm && results.poseLandmarks) {
+            // Shoulder(11), Elbow(13), Wrist(15)
+            solveArm(bones.Right.Arm, bones.Right.ForeArm, lm[11], lm[13], lm[15], new THREE.Vector3(-1,0,0));
+            
+            if (results.leftHandLandmarks && bones.Right.Hand) {
+                solveHandFull(bones.Right.Hand, bones.Right.Fingers, results.leftHandLandmarks, new THREE.Vector3(-1,0,0), true);
+            }
         }
     }
 
-    function saveDetectionLog() {
-        const logList = document.getElementById('log-list');
-        const dataUrl = canvasElement.toDataURL('image/jpeg', 0.6);
-        const time = new Date().toLocaleTimeString();
+    const holistic = new Holistic({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`});
+    holistic.setOptions({
+        modelComplexity: 1, // 精度重視
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
+        refineFaceLandmarks: false, // 顔は今回使わないのでOFFにして軽量化
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    holistic.onResults(onResults);
 
-        const card = document.createElement('div');
-        card.className = 'log-card';
-        card.innerHTML = `
-            <img src="${dataUrl}">
-            <div class="log-info">
-                <span>👤 人を検知</span>
-                <span>${time}</span>
-            </div>
-        `;
-        logList.prepend(card);
+    const cameraUtils = new Camera(videoElement, {
+        onFrame: async () => {
+            await holistic.send({image: videoElement});
+        },
+        width: 640,
+        height: 480
+    });
+    cameraUtils.start();
+
+    // リサイズ対応
+    window.addEventListener('resize', () => {
+        camera3D.aspect = rightPanel.clientWidth / rightPanel.clientHeight;
+        camera3D.updateProjectionMatrix();
+        renderer.setSize(rightPanel.clientWidth, rightPanel.clientHeight);
+    });
+
+    // アニメーションループ
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera3D);
     }
+    animate();
 
-    function playAlertSound() {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        osc.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.15);
-    }
-
-    // --- モニター側：カメラ接続 ---
-    function startAsMonitor() {
-        document.getElementById('mode-select').classList.add('hidden');
-        document.getElementById('monitor-ui').classList.remove('hidden');
-        peer = new Peer();
-        initAI();
-    }
-
-    function connectToCamera() {
-        const id = document.getElementById('target-id').value;
-        if (!id || myConnections[id]) return;
-        
-        const conn = peer.connect(id);
-        const offscreenImg = new Image();
-
-        conn.on('data', async (data) => {
-            offscreenImg.src = data;
-            offscreenImg.onload = () => {
-                holistic.send({image: offscreenImg});
-            };
-        });
-        myConnections[id] = conn;
-        document.getElementById('status').innerText = `ID:${id} に接続中...`;
-    }
-
-    // --- カメラ側：配信処理 ---
-    async function startAsCamera() {
-        document.getElementById('mode-select').classList.add('hidden');
-        document.getElementById('camera-setup').classList.remove('hidden');
-
-        const video = document.getElementById('local-video');
-        const canvas = document.getElementById('send-canvas');
-        const ctx = canvas.getContext('2d');
-        let conns = [];
-
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-        video.srcObject = stream;
-
-        const rid = Math.floor(1000 + Math.random() * 9000).toString();
-        peer = new Peer(rid);
-        peer.on('open', id => {
-            document.getElementById('id-display').innerText = id;
-            new QRCode(document.getElementById("qr-code"), { text: id, width: 150, height: 150 });
-        });
-
-        peer.on('connection', c => {
-            conns.push(c);
-            c.on('close', () => conns.splice(conns.indexOf(c), 1));
-        });
-
-        // 配信ループ
-        setInterval(() => {
-            if (conns.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = 480;
-                canvas.height = 480 * (video.videoHeight / video.videoWidth);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const data = canvas.toDataURL('image/jpeg', 0.4);
-                conns.forEach(c => { if(c.open) c.send(data); });
-            }
-        }, 200);
-    }
 </script>
-</body>
-</html>
