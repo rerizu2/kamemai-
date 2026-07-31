@@ -16,7 +16,8 @@
         .btn-main { background: #00ff88; color: #000; }
         .btn-sub { background: #444; color: white; }
         .btn-danger { background: #ff4444; color: white; padding: 5px 10px; font-size: 12px; }
-        input { padding: 12px; border-radius: 8px; border: 2px solid #00ff88; background: #000; color: #00ff88; font-size: 20px; text-align: center; width: 120px; }
+        input, select { padding: 12px; border-radius: 8px; border: 2px solid #00ff88; background: #000; color: #00ff88; font-size: 16px; text-align: center; }
+        select { width: 100%; max-width: 300px; margin-top: 10px; cursor: pointer; }
 
         /* モニターグリッド */
         #monitor-grid { 
@@ -33,12 +34,13 @@
         #id-display { font-size: 48px; font-weight: bold; color: #00ff88; margin: 10px 0; }
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; }
         .hidden { display: none; }
+        label { display: block; margin-top: 15px; color: #aaa; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>マルチカメラ・システム (Video版)</h2>
+    <h2>マルチカメラ・システム</h2>
 
     <div id="mode-selection" class="panel">
         <button class="btn-main" onclick="initAsCamera()">📸 この端末をカメラにする</button>
@@ -50,10 +52,15 @@
         <p>配信中... カメラID</p>
         <div id="id-display">----</div>
         <div id="qrcode"></div>
+        
         <div style="margin-top:15px;">
             <video id="local-video" autoplay playsinline muted></video>
         </div>
-        <button class="btn-sub" onclick="switchCamera()">🔄 カメラ切替</button>
+
+        <label for="camera-select">使用するカメラを選択:</label>
+        <select id="camera-select" onchange="onCameraChange(this.value)">
+            <option value="">カメラを読み込み中...</option>
+        </select>
     </div>
 
     <!-- 【モニター側】 -->
@@ -71,22 +78,50 @@
 <script>
     let peer;
     let localStream;
-    let currentFacingMode = "environment";
-    let activeCalls = []; // 接続中のコールを保持
+    let activeCalls = [];
 
     // --- カメラ配信側の処理 ---
-    async function startCameraStream() {
+
+    // 利用可能なカメラリストを取得してプルダウンに入れる
+    async function updateCameraList() {
+        const select = document.getElementById('camera-select');
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            
+            select.innerHTML = '';
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `カメラ ${index + 1}`;
+                select.appendChild(option);
+            });
+        } catch (e) {
+            console.error("デバイスリストの取得に失敗", e);
+        }
+    }
+
+    async function startCameraStream(deviceId = null) {
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
         }
+
+        const constraints = {
+            video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" },
+            audio: false
+        };
+
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: currentFacingMode },
-                audio: false
-            });
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
             document.getElementById('local-video').srcObject = localStream;
 
-            // 接続中の全ての相手の映像を切り替える
+            // ラベル取得のため、ストリーム開始後にリストを更新
+            await updateCameraList();
+            if (deviceId) {
+                document.getElementById('camera-select').value = deviceId;
+            }
+
+            // 接続中の全てのモニターの映像を差し替える
             activeCalls.forEach(call => {
                 const videoTrack = localStream.getVideoTracks()[0];
                 const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
@@ -97,14 +132,15 @@
         }
     }
 
-    async function switchCamera() {
-        currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
-        await startCameraStream();
+    // プルダウン変更時のイベント
+    async function onCameraChange(deviceId) {
+        if (!deviceId) return;
+        await startCameraStream(deviceId);
     }
 
     async function initAsCamera() {
         showUI('camera-ui');
-        await startCameraStream();
+        await startCameraStream(); // 最初はデフォルト（背面など）で起動
 
         function tryConnect() {
             const randomID = Math.floor(1000 + Math.random() * 9000).toString();
@@ -116,7 +152,6 @@
                 new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
             });
 
-            // モニター側からの着信（Call）に応答する
             peer.on('call', call => {
                 call.answer(localStream); 
                 activeCalls.push(call);
@@ -140,8 +175,6 @@
         const id = targetId || document.getElementById('peer-id-input').value;
         if (!id || id.length !== 4) return alert("4桁のIDを入力してください");
         
-        // モニターからカメラへ「発信」する
-        // 映像をもらうだけなので空のストリームを投げるか、PeerJSの仕様に合わせてコール
         const call = peer.call(id, new MediaStream()); 
         setupCameraCard(id, call);
     }
@@ -162,13 +195,13 @@
         `;
         grid.appendChild(card);
 
-        // 相手（カメラ側）から映像ストリームが届いた時
         call.on('stream', remoteStream => {
             const video = document.getElementById(`video-${id}`);
             if (video) {
                 video.srcObject = remoteStream;
-                document.getElementById(`stat-${id}`).innerText = "● LIVE";
-                document.getElementById(`stat-${id}`).style.color = "#00ff88";
+                const stat = document.getElementById(`stat-${id}`);
+                stat.innerText = "● LIVE";
+                stat.style.color = "#00ff88";
             }
         });
 
@@ -181,7 +214,6 @@
         if (card) card.remove();
     }
 
-    // QRスキャナー
     function startQRScanner() {
         const reader = new Html5Qrcode("reader");
         reader.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (id) => {
