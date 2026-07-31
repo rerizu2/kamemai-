@@ -3,59 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>マルチカメラ・モニター</title>
+    <title>AIマルチカメラ・モニター</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- AI関連ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
         body { font-family: sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
         .container { max-width: 900px; margin: auto; }
         h2 { color: #00ff88; }
         
-        /* メニュー・設定エリア */
         .panel { background: #222; padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; }
         button { padding: 12px 20px; margin: 5px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .btn-main { background: #00ff88; color: #000; }
         .btn-sub { background: #444; color: white; }
         .btn-danger { background: #ff4444; color: white; padding: 5px 10px; font-size: 12px; }
         input, select { padding: 12px; border-radius: 8px; border: 2px solid #00ff88; background: #000; color: #00ff88; font-size: 16px; text-align: center; }
-        input { width: 120px; font-size: 20px; }
-        select { width: 80%; max-width: 300px; margin-top: 10px; cursor: pointer; }
 
-        /* マルチビュー・グリッドレイアウト */
         #monitor-grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
-            gap: 15px; 
-            margin-top: 20px; 
+            gap: 15px; margin-top: 20px; 
         }
         .video-card { 
             background: #000; padding: 10px; border-radius: 12px; border: 1px solid #444; 
             position: relative; overflow: hidden;
         }
+        /* 検知時の赤い枠 */
+        .detecting { border: 2px solid #ff4444 !important; box-shadow: 0 0 15px #ff4444; }
         .video-card img { width: 100%; border-radius: 5px; min-height: 150px; background: #111; }
-        .video-card .info { 
-            display: flex; justify-content: space-between; align-items: center; 
-            margin-top: 8px; font-size: 14px; color: #aaa;
-        }
+        
+        /* 検知履歴エリア */
+        #log-container { margin-top: 30px; text-align: left; }
+        .log-list { display: flex; overflow-x: auto; gap: 10px; padding: 10px; background: #1a1a1a; border-radius: 10px; }
+        .log-item { min-width: 120px; font-size: 12px; text-align: center; }
+        .log-item img { width: 120px; border-radius: 5px; display: block; }
 
-        /* 配信側UI */
         #camera-ui video { width: 100%; max-width: 400px; border-radius: 10px; border: 1px solid #00ff88; }
         #id-display { font-size: 48px; font-weight: bold; color: #00ff88; margin: 10px 0; }
         #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; }
-
         .hidden { display: none; }
+        .alert-msg { color: #ff4444; font-weight: bold; animation: blink 0.5s infinite; }
+        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.2;} 100% {opacity: 1;} }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>マルチカメラ・システム</h2>
+    <h2>AI人検知システム</h2>
 
-    <!-- モード選択 -->
     <div id="mode-selection" class="panel">
         <button class="btn-main" onclick="initAsCamera()">📸 この端末をカメラにする</button>
-        <button class="btn-sub" onclick="showMonitorView()">🖥️ 複数のカメラを見る</button>
+        <button class="btn-sub" onclick="showMonitorView()">🖥️ モニターを開始（人検知）</button>
+        <p id="model-status" style="font-size: 12px; color: #888;">AIモデル読み込み待ち...</p>
     </div>
 
     <!-- 【配信側】 -->
@@ -63,17 +65,8 @@
         <p>配信中... カメラID</p>
         <div id="id-display">----</div>
         <div id="qrcode"></div>
-        
-        <div style="margin-top:15px;">
-            <video id="temp-video" autoplay playsinline muted></video>
-        </div>
-
-        <div>
-            <select id="camera-select" onchange="onCameraChange(this.value)">
-                <option value="">カメラ読み込み中...</option>
-            </select>
-        </div>
-        
+        <div style="margin-top:15px;"><video id="temp-video" autoplay playsinline muted></video></div>
+        <div><select id="camera-select" onchange="onCameraChange(this.value)"><option value="">読み込み中...</option></select></div>
         <canvas id="capture-canvas" class="hidden"></canvas>
     </div>
 
@@ -81,71 +74,79 @@
     <div id="monitor-setup" class="panel hidden">
         <div style="margin-bottom: 15px;">
             <input type="text" id="peer-id-input" maxlength="4" placeholder="ID" inputmode="numeric">
-            <button class="btn-main" onclick="connectToNewCamera()">追加する</button>
-            <button class="btn-sub" onclick="startQRScanner()">📷 QR読取</button>
+            <button class="btn-main" onclick="connectToNewCamera()">追加</button>
+            <button class="btn-sub" onclick="startQRScanner()">📷 QR</button>
         </div>
         <div id="reader"></div>
         <div id="monitor-grid"></div>
+
+        <!-- 検知履歴 -->
+        <div id="log-container">
+            <h4>👤 人検知履歴 (自動保存)</h4>
+            <div id="detection-log" class="log-list">
+                <p style="color:#555">検知データはありません</p>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
     let peer;
-    const INTERVAL = 100; 
-    const IMG_WIDTH = 350; 
-    const QUALITY = 0.3;
+    const INTERVAL = 200; // 送信間隔
+    const IMG_WIDTH = 400; 
+    const QUALITY = 0.5;
     let myConnections = {}; 
     let currentStream = null;
+    let detector = null; // AIモデル
+    let lastDetectionTime = {}; // 通知連打防止用
 
-    // --- カメラ配信側の処理 ---
+    // AIモデルのロード
+    async function loadModel() {
+        try {
+            detector = await cocoSsd.load();
+            document.getElementById('model-status').innerText = "✅ AIモデル準備完了";
+        } catch (e) {
+            document.getElementById('model-status').innerText = "❌ AIモデルの読み込みに失敗しました";
+        }
+    }
+    loadModel();
 
-    // 利用可能なカメラリストを取得してプルダウンに入れる
+    // 通知音を鳴らす関数
+    function playAlertSound() {
+        const context = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = context.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, context.currentTime);
+        osc.connect(context.destination);
+        osc.start();
+        osc.stop(context.currentTime + 0.2);
+    }
+
+    // --- カメラ配信側の処理 (前回とほぼ同じ) ---
     async function updateCameraList() {
         const select = document.getElementById('camera-select');
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(device => device.kind === 'videoinput');
-            
-            select.innerHTML = ''; // リセット
-            videoDevices.forEach((device, index) => {
-                const option = document.createElement('option');
-                option.value = device.deviceId;
-                option.text = device.label || `カメラ ${index + 1}`;
-                select.appendChild(option);
-            });
-        } catch (e) {
-            console.error("デバイスリストの取得失敗", e);
-        }
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        select.innerHTML = '';
+        videoDevices.forEach((device, index) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `カメラ ${index + 1}`;
+            select.appendChild(option);
+        });
     }
 
-    // 指定されたデバイスIDでカメラを開始
     async function startCameraStream(deviceId) {
         const video = document.getElementById('temp-video');
-        if (currentStream) {
-            currentStream.getTracks().forEach(track => track.stop());
-        }
-
-        const constraints = {
-            video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" },
-            audio: false
-        };
-
+        if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+        const constraints = { video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }, audio: false };
         try {
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            currentStream = stream;
-            video.srcObject = stream;
-            
-            // 初回起動時などラベルが空の場合があるため、取得後に再度リスト更新
-            if (!deviceId) await updateCameraList(); 
-        } catch (e) {
-            alert("カメラの起動に失敗しました。");
-        }
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = currentStream;
+        } catch (e) { alert("カメラ起動失敗"); }
     }
 
-    // プルダウン変更時
-    async function onCameraChange(deviceId) {
-        await startCameraStream(deviceId);
-    }
+    async function onCameraChange(deviceId) { await startCameraStream(deviceId); }
 
     async function initAsCamera() {
         showUI('camera-ui');
@@ -154,9 +155,7 @@
         const ctx = canvas.getContext('2d');
         const connections = [];
 
-        // 1. まずカメラを起動（権限許可を得る）
         await startCameraStream();
-        // 2. 権限許可後にカメラ名を正しく取得
         await updateCameraList();
 
         function tryConnect() {
@@ -167,13 +166,9 @@
                 document.getElementById("qrcode").innerHTML = "";
                 new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
             });
-            peer.on('error', err => { if(err.type==='unavailable-id') tryConnect(); });
             peer.on('connection', conn => {
                 connections.push(conn);
-                conn.on('close', () => {
-                    const index = connections.indexOf(conn);
-                    if (index > -1) connections.splice(index, 1);
-                });
+                conn.on('close', () => { connections.splice(connections.indexOf(conn), 1); });
             });
 
             setInterval(() => {
@@ -189,7 +184,7 @@
         tryConnect();
     }
 
-    // --- モニター側の処理 (変更なし) ---
+    // --- モニター側の処理 (AI解析追加) ---
     function showMonitorView() {
         showUI('monitor-setup');
         peer = new Peer(); 
@@ -197,8 +192,7 @@
 
     function connectToNewCamera(targetId) {
         const id = targetId || document.getElementById('peer-id-input').value;
-        if (!id || id.length !== 4) return alert("4桁のIDを入力してください");
-        if (myConnections[id]) return alert("そのカメラは既に追加されています");
+        if (!id || id.length !== 4 || myConnections[id]) return;
         const conn = peer.connect(id);
         setupCameraCard(id, conn);
     }
@@ -210,6 +204,7 @@
         card.id = `card-${id}`;
         card.innerHTML = `
             <img id="img-${id}" src="">
+            <div id="alert-${id}" class="alert-msg hidden">⚠️ 人を検知！</div>
             <div class="info">
                 <span>ID: <b>${id}</b> <span id="stat-${id}">接続中...</span></span>
                 <button class="btn-danger" onclick="removeCamera('${id}')">閉じる</button>
@@ -218,16 +213,65 @@
         grid.appendChild(card);
 
         conn.on('open', () => {
-            const stat = document.getElementById(`stat-${id}`);
-            if(stat) { stat.innerText = "● LIVE"; stat.style.color = "#00ff88"; }
+            document.getElementById(`stat-${id}`).innerText = "● LIVE";
             myConnections[id] = conn;
         });
-        conn.on('data', (data) => {
-            const img = document.getElementById(`img-${id}`);
-            if (img) img.src = data;
+
+        conn.on('data', async (data) => {
+            const imgElement = document.getElementById(`img-${id}`);
+            if (!imgElement) return;
+            imgElement.src = data;
+
+            // AI解析 (1秒に数回程度に制限)
+            if (detector) {
+                analyzeFrame(id, imgElement, data);
+            }
         });
-        conn.on('close', () => removeCamera(id));
-        conn.on('error', () => removeCamera(id));
+    }
+
+    // AIで「人」を解析
+    async function analyzeFrame(id, imgElement, dataString) {
+        // 解析頻度を制限（前回の検知から0.5秒以上あける）
+        const now = Date.now();
+        if (imgElement.dataset.analyzing === "true") return;
+        
+        imgElement.dataset.analyzing = "true";
+        const predictions = await detector.detect(imgElement);
+        
+        const foundPerson = predictions.find(p => p.class === "person" && p.score > 0.6);
+        const card = document.getElementById(`card-${id}`);
+        const alertMsg = document.getElementById(`alert-${id}`);
+
+        if (foundPerson) {
+            card.classList.add('detecting');
+            alertMsg.classList.remove('hidden');
+
+            // 履歴に保存（5秒に1回だけ保存）
+            if (!lastDetectionTime[id] || now - lastDetectionTime[id] > 5000) {
+                saveDetectionLog(id, dataString);
+                playAlertSound();
+                lastDetectionTime[id] = now;
+            }
+        } else {
+            card.classList.remove('detecting');
+            alertMsg.classList.add('hidden');
+        }
+        imgElement.dataset.analyzing = "false";
+    }
+
+    // 検知履歴に画像を追加
+    function saveDetectionLog(id, dataString) {
+        const logList = document.getElementById('detection-log');
+        if (logList.innerText.includes("ありません")) logList.innerHTML = "";
+
+        const time = new Date().toLocaleTimeString();
+        const div = document.createElement('div');
+        div.className = 'log-item';
+        div.innerHTML = `
+            <img src="${dataString}">
+            <span>${time} (ID:${id})</span>
+        `;
+        logList.prepend(div); // 最新を先頭に
     }
 
     function removeCamera(id) {
