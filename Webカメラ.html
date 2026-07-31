@@ -18,10 +18,11 @@
         /* パネルデザイン */
         .panel { background: var(--panel); padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0,251,255,0.1); }
         
-        /* ボタン */
-        button { padding: 12px 20px; margin: 5px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        /* ボタン & セレクトボックス */
+        button, select { padding: 12px 20px; margin: 5px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-main { background: var(--accent); color: #000; }
         .btn-sub { background: #444; color: white; }
+        select.btn-sub { background: #333; color: var(--accent); border: 1px solid var(--accent); outline: none; appearance: none; -webkit-appearance: none; text-align: center; }
         .btn-danger { background: var(--danger); color: white; }
         .btn-toggle { border: 2px solid #444; background: transparent; color: #888; }
         .btn-toggle.active { border-color: var(--accent); color: var(--accent); background: rgba(0,251,255,0.1); }
@@ -83,8 +84,11 @@
             <div style="position:absolute; top:25px; left:10px;"><span class="on-air">● ON AIR</span></div>
         </div>
         
-        <div>
-            <button class="btn-sub" onclick="switchCamera()">🔄 カメラ切り替え</button>
+        <div style="margin-top: 10px;">
+            <label style="display:block; font-size:12px; color:#888; margin-bottom:5px;">使用するカメラを選択:</label>
+            <select id="camera-select" class="btn-sub" onchange="switchCamera(this.value)" style="width:100%; max-width:400px;">
+                <option value="">カメラを読み込み中...</option>
+            </select>
         </div>
         <div id="log">ログ: 準備中...</div>
     </div>
@@ -100,7 +104,7 @@
         </div>
 
         <div id="monitor-grid"></div>
-        <div id="monitor-log" id="log" style="font-size:10px; color:#555; text-align:left; background:#000; padding:10px; margin-top:20px;">ログ: 待機中...</div>
+        <div id="monitor-log" style="font-size:10px; color:#555; text-align:left; background:#000; padding:10px; margin-top:20px;">ログ: 待機中...</div>
     </div>
 </div>
 
@@ -109,7 +113,6 @@
     let myPeerId = null;
     let isPublic = false;
     let publicCameras = {};
-    let currentFacingMode = "environment"; // 背面カメラ初期値
     const TOPIC = "ultimate/camera/v2";
 
     const peerConfig = {
@@ -163,16 +166,35 @@
         if (count === 0) listDiv.innerHTML = "<span style='color:#444'>公開中のカメラはありません</span>";
     }
 
+    // --- カメラ一覧取得 ---
+    async function getCameras() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        const select = document.getElementById('camera-select');
+        select.innerHTML = '';
+        
+        videoDevices.forEach((device, index) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `カメラ ${index + 1}`;
+            select.appendChild(option);
+        });
+        return videoDevices;
+    }
+
     // --- カメラ側 (Camera Side) ---
-    async function startMedia() {
+    async function startMedia(deviceId = null) {
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
         }
+        
+        const constraints = {
+            video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" },
+            audio: false
+        };
+
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: currentFacingMode }, 
-                audio: false 
-            });
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
             document.getElementById('local-preview').srcObject = localStream;
             
             // 既に誰かと通話中なら映像を差し替える
@@ -186,20 +208,30 @@
                     });
                 });
             }
+
+            // 初回起動時、デバイス名を取得するために再度リストを更新
+            await getCameras();
+            if (deviceId) {
+                document.getElementById('camera-select').value = deviceId;
+            }
+
         } catch (e) {
+            console.error(e);
             addLog("エラー: カメラが起動できません");
         }
     }
 
-    async function switchCamera() {
-        currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
-        await startMedia();
+    async function switchCamera(deviceId) {
+        if (!deviceId) return;
+        await startMedia(deviceId);
         addLog("カメラを切り替えました");
     }
 
     async function initAsCamera() {
         showUI('camera-ui');
         setupMQTT('camera');
+        
+        // 1. まず標準カメラで起動（パーミッション取得のため）
         await startMedia();
 
         myPeerId = Math.floor(1000 + Math.random() * 9000).toString();
