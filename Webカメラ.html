@@ -3,134 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI骨格検知モニター</title>
+    <title>High-Precision AI Monitor</title>
+    
+    <!-- MediaPipe & PeerJS -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    
-    <!-- TensorFlow.js と MoveNet (骨格検知) の読み込み -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
-        .container { max-width: 950px; margin: auto; }
-        h2 { color: #00e1ff; }
+        body { margin: 0; background: #121212; color: white; font-family: sans-serif; overflow-x: hidden; }
+        .container { display: flex; flex-direction: column; height: 100vh; }
         
-        .panel { background: #222; padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; }
-        button { padding: 12px 20px; margin: 5px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-main { background: #00e1ff; color: #000; }
+        /* ヘッダーエリア */
+        header { background: #222; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .btn-main { background: #00ff88; color: #000; }
         .btn-sub { background: #444; color: white; }
-        .btn-danger { background: #ff4444; color: white; padding: 5px 10px; font-size: 12px; }
-        
-        #monitor-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
-            gap: 15px; margin-top: 20px; 
-        }
-        .video-card { 
-            background: #000; padding: 10px; border-radius: 12px; border: 1px solid #444; 
-            position: relative; overflow: hidden;
-        }
-        .detecting { border: 2px solid #00e1ff !important; box-shadow: 0 0 15px #00e1ff; }
-        
-        /* 映像と骨格を描画するキャンバス */
-        .canvas-container { position: relative; width: 100%; background: #111; }
-        canvas { width: 100%; border-radius: 5px; display: block; }
-        
-        .alert-msg { position: absolute; top: 10px; left: 10px; background: rgba(255,0,0,0.8); color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; z-index: 10; }
 
-        /* 検知履歴 */
-        #log-container { margin-top: 30px; text-align: left; }
-        .log-list { display: flex; overflow-x: auto; gap: 10px; padding: 10px; background: #1a1a1a; border-radius: 10px; min-height: 150px; }
-        .log-item { min-width: 150px; font-size: 11px; text-align: center; }
-        .log-item canvas { width: 150px; border-radius: 5px; margin-bottom: 5px; }
+        /* メインコンテンツ */
+        #main-view { display: flex; flex: 1; overflow: hidden; }
+        
+        /* 左：カメラモニター（AI解析） */
+        #monitor-section { flex: 2; padding: 15px; position: relative; display: flex; flex-direction: column; gap: 10px; }
+        #canvas-wrapper { position: relative; width: 100%; background: #000; border-radius: 10px; overflow: hidden; }
+        #output-canvas { width: 100%; height: auto; display: block; }
+        .alert-overlay { position: absolute; top: 20px; left: 20px; background: rgba(255,0,0,0.8); color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold; display: none; animation: blink 0.5s infinite; }
+        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
 
-        #id-display { font-size: 48px; font-weight: bold; color: #00e1ff; margin: 10px 0; }
-        #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; }
-        #camera-ui video { width: 100%; max-width: 400px; border-radius: 10px; }
+        /* 右：検知ログ（画像保存） */
+        #log-section { flex: 1; background: #1a1a1a; border-left: 2px solid #333; padding: 15px; overflow-y: auto; }
+        .log-card { background: #333; margin-bottom: 10px; border-radius: 8px; overflow: hidden; font-size: 12px; border: 1px solid #444; }
+        .log-card img { width: 100%; display: block; }
+        .log-info { padding: 8px; display: flex; justify-content: space-between; }
+
+        /* カメラ配信モード用 */
+        #camera-setup { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #id-display { font-size: 60px; color: #00ff88; font-weight: bold; margin: 20px; }
+        #qr-code { background: white; padding: 10px; border-radius: 10px; }
+
         .hidden { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>AI骨格検知システム</h2>
-
-    <div id="mode-selection" class="panel">
-        <button class="btn-main" onclick="initAsCamera()">📸 カメラとして配置</button>
-        <button class="btn-sub" onclick="showMonitorView()">🖥️ モニターを開始</button>
-        <p id="model-status" style="font-size: 12px; color: #888;">骨格検知モデル読込中...</p>
-    </div>
-
-    <!-- 配信側 -->
-    <div id="camera-ui" class="panel hidden">
-        <p>配信中... ID: <span id="id-display">----</span></p>
-        <div id="qrcode"></div>
-        <div style="margin-top:15px;"><video id="temp-video" autoplay playsinline muted></video></div>
-        <select id="camera-select" onchange="onCameraChange(this.value)"></select>
-        <canvas id="capture-canvas" class="hidden"></canvas>
-    </div>
-
-    <!-- モニター側 -->
-    <div id="monitor-setup" class="panel hidden">
-        <div>
-            <input type="text" id="peer-id-input" maxlength="4" placeholder="IDを入力" style="padding:10px; width:80px; border-radius:8px;">
-            <button class="btn-main" onclick="connectToNewCamera()">追加</button>
+<div id="app" class="container">
+    <!-- モード選択 -->
+    <div id="mode-select" class="container" style="justify-content: center; align-items: center; background: #1a1a1a;">
+        <h1 style="color:#00ff88;">AI骨格検知モニタリング</h1>
+        <div style="display:flex; gap:20px;">
+            <button class="btn btn-main" onclick="startAsCamera()" style="font-size:20px; padding:20px 40px;">📸 カメラにする</button>
+            <button class="btn btn-sub" onclick="startAsMonitor()" style="font-size:20px; padding:20px 40px;">🖥️ モニターにする</button>
         </div>
-        <div id="monitor-grid"></div>
+        <p style="color:#888; margin-top:20px;">※高精度解析のためPC推奨</p>
+    </div>
 
-        <div id="log-container">
-            <h4>👤 人検知・画像保存履歴</h4>
-            <div id="detection-log" class="log-list">
-                <p style="color:#555; padding: 20px;">検知データはありません</p>
+    <!-- 【モニター画面】 -->
+    <div id="monitor-ui" class="hidden" style="height: 100%;">
+        <header>
+            <div id="status">AI検知停止中</div>
+            <div>
+                <input type="text" id="target-id" placeholder="IDを入力" style="padding:10px; border-radius:5px; border:none; width:100px;">
+                <button class="btn btn-main" onclick="connectToCamera()">追加</button>
+            </div>
+        </header>
+        <div id="main-view">
+            <div id="monitor-section">
+                <div id="canvas-wrapper">
+                    <div id="alert-ui" class="alert-overlay">⚠️ 人を検知！自動保存中...</div>
+                    <canvas id="output-canvas"></canvas>
+                </div>
+                <p id="loading-msg">AIモデル読み込み中...</p>
+            </div>
+            <div id="log-section">
+                <h3>👤 検知履歴 (高精度骨格)</h3>
+                <div id="log-list"></div>
             </div>
         </div>
+    </div>
+
+    <!-- 【カメラ配信画面】 -->
+    <div id="camera-setup" class="hidden">
+        <h2>カメラ配信中</h2>
+        <div id="id-display">----</div>
+        <div id="qr-code"></div>
+        <button class="btn btn-sub" style="margin-top:30px;" onclick="location.reload()">終了</button>
+        <video id="local-video" autoplay playsinline muted style="width:200px; margin-top:20px; border-radius:10px; border:2px solid #00ff88;"></video>
+        <canvas id="send-canvas" class="hidden"></canvas>
     </div>
 </div>
 
 <script>
     let peer;
-    let detector = null;
+    let holistic;
+    const canvasElement = document.getElementById('output-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
     let myConnections = {};
-    const INTERVAL = 200; // 送信間隔(ms)
-    const QUALITY = 0.4;
-    const IMG_WIDTH = 400;
+    let lastLogTime = 0;
 
-    // --- AIモデル(MoveNet)のロード ---
-    async function loadPoseModel() {
-        try {
-            detector = await poseDetection.createDetector(
-                poseDetection.SupportedModels.MoveNet,
-                { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-            );
-            document.getElementById('model-status').innerText = "✅ 骨格センサ準備完了";
-        } catch (e) {
-            document.getElementById('model-status').innerText = "❌ モデル読込失敗";
+    // --- AI セットアップ (MediaPipe Holistic) ---
+    async function initAI() {
+        holistic = new Holistic({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`});
+        holistic.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        holistic.onResults(onAIResults);
+        document.getElementById('loading-msg').innerText = "AI準備完了。接続待機中...";
+    }
+
+    // --- AI解析結果の処理 ---
+    function onAIResults(results) {
+        // キャンバスサイズ調整
+        canvasElement.width = results.image.width;
+        canvasElement.height = results.image.height;
+
+        // 背景描画
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        // 骨格描画 (Pose, Hands)
+        if (results.poseLandmarks) {
+            drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+            drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 1});
+            
+            // 人の検知判定
+            if (results.poseLandmarks[11].visibility > 0.5) { // 肩が見えているか
+                triggerDetection();
+            } else {
+                document.getElementById('alert-ui').style.display = 'none';
+            }
+        }
+
+        if (results.leftHandLandmarks) {
+            drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {color: '#CC0000', lineWidth: 2});
+        }
+        if (results.rightHandLandmarks) {
+            drawConnectors(canvasCtx, results.rightHandLandmarks, HAND_CONNECTIONS, {color: '#00CC00', lineWidth: 2});
+        }
+        
+        canvasCtx.restore();
+    }
+
+    // 検知時の処理
+    function triggerDetection() {
+        const now = Date.now();
+        document.getElementById('alert-ui').style.display = 'block';
+
+        // 5秒に1回保存
+        if (now - lastLogTime > 5000) {
+            saveDetectionLog();
+            playAlertSound();
+            lastLogTime = now;
         }
     }
-    loadPoseModel();
 
-    // --- カメラ配信側 ---
-    async function initAsCamera() {
-        showUI('camera-ui');
-        const video = document.getElementById('temp-video');
-        const canvas = document.getElementById('capture-canvas');
+    function saveDetectionLog() {
+        const logList = document.getElementById('log-list');
+        const dataUrl = canvasElement.toDataURL('image/jpeg', 0.6);
+        const time = new Date().toLocaleTimeString();
+
+        const card = document.createElement('div');
+        card.className = 'log-card';
+        card.innerHTML = `
+            <img src="${dataUrl}">
+            <div class="log-info">
+                <span>👤 人を検知</span>
+                <span>${time}</span>
+            </div>
+        `;
+        logList.prepend(card);
+    }
+
+    function playAlertSound() {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+    }
+
+    // --- モニター側：カメラ接続 ---
+    function startAsMonitor() {
+        document.getElementById('mode-select').classList.add('hidden');
+        document.getElementById('monitor-ui').classList.remove('hidden');
+        peer = new Peer();
+        initAI();
+    }
+
+    function connectToCamera() {
+        const id = document.getElementById('target-id').value;
+        if (!id || myConnections[id]) return;
+        
+        const conn = peer.connect(id);
+        const offscreenImg = new Image();
+
+        conn.on('data', async (data) => {
+            offscreenImg.src = data;
+            offscreenImg.onload = () => {
+                holistic.send({image: offscreenImg});
+            };
+        });
+        myConnections[id] = conn;
+        document.getElementById('status').innerText = `ID:${id} に接続中...`;
+    }
+
+    // --- カメラ側：配信処理 ---
+    async function startAsCamera() {
+        document.getElementById('mode-select').classList.add('hidden');
+        document.getElementById('camera-setup').classList.remove('hidden');
+
+        const video = document.getElementById('local-video');
+        const canvas = document.getElementById('send-canvas');
         const ctx = canvas.getContext('2d');
         let conns = [];
 
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
         video.srcObject = stream;
 
-        // Peer設定
         const rid = Math.floor(1000 + Math.random() * 9000).toString();
         peer = new Peer(rid);
         peer.on('open', id => {
             document.getElementById('id-display').innerText = id;
-            new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
+            new QRCode(document.getElementById("qr-code"), { text: id, width: 150, height: 150 });
         });
+
         peer.on('connection', c => {
             conns.push(c);
             c.on('close', () => conns.splice(conns.indexOf(c), 1));
@@ -139,145 +241,13 @@
         // 配信ループ
         setInterval(() => {
             if (conns.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = IMG_WIDTH;
-                canvas.height = IMG_WIDTH * (video.videoHeight / video.videoWidth);
+                canvas.width = 480;
+                canvas.height = 480 * (video.videoHeight / video.videoWidth);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const data = canvas.toDataURL('image/jpeg', QUALITY);
+                const data = canvas.toDataURL('image/jpeg', 0.4);
                 conns.forEach(c => { if(c.open) c.send(data); });
             }
-        }, INTERVAL);
-    }
-
-    // --- モニター側 ---
-    function showMonitorView() { showUI('monitor-setup'); peer = new Peer(); }
-
-    function connectToNewCamera(tid) {
-        const id = tid || document.getElementById('peer-id-input').value;
-        if (!id || myConnections[id]) return;
-        const conn = peer.connect(id);
-        setupCameraCard(id, conn);
-    }
-
-    function setupCameraCard(id, conn) {
-        const grid = document.getElementById('monitor-grid');
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.id = `card-${id}`;
-        card.innerHTML = `
-            <div class="canvas-container">
-                <div id="alert-${id}" class="alert-msg hidden">人検知！</div>
-                <canvas id="cvs-${id}"></canvas>
-            </div>
-            <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:12px;">
-                <span>ID: ${id}</span>
-                <button class="btn-danger" onclick="removeCamera('${id}')">切断</button>
-            </div>
-        `;
-        grid.appendChild(card);
-
-        const canvas = document.getElementById(`cvs-${id}`);
-        const ctx = canvas.getContext('2d');
-        const offscreenImg = new Image();
-
-        conn.on('data', async (data) => {
-            offscreenImg.src = data;
-            offscreenImg.onload = async () => {
-                canvas.width = offscreenImg.width;
-                canvas.height = offscreenImg.height;
-                ctx.drawImage(offscreenImg, 0, 0);
-
-                if (detector) {
-                    const poses = await detector.estimatePoses(canvas);
-                    if (poses && poses.length > 0 && poses[0].score > 0.4) {
-                        drawSkeleton(ctx, poses[0].keypoints);
-                        handleDetection(id, canvas);
-                    } else {
-                        document.getElementById(`alert-${id}`).classList.add('hidden');
-                        card.classList.remove('detecting');
-                    }
-                }
-            };
-        });
-        myConnections[id] = conn;
-    }
-
-    // 骨格を描画する関数
-    function drawSkeleton(ctx, keypoints) {
-        // 点を描画
-        keypoints.forEach(kp => {
-            if (kp.score > 0.5) {
-                ctx.fillStyle = "#00e1ff";
-                ctx.beginPath();
-                ctx.arc(kp.x, kp.y, 4, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-        });
-        // 骨（線）を描画
-        const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-        adjacentPairs.forEach(([i, j]) => {
-            const kp1 = keypoints[i];
-            const kp2 = keypoints[j];
-            if (kp1.score > 0.5 && kp2.score > 0.5) {
-                ctx.strokeStyle = "#fff";
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(kp1.x, kp1.y);
-                ctx.lineTo(kp2.x, kp2.y);
-                ctx.stroke();
-            }
-        });
-    }
-
-    let lastLogTime = {};
-    function handleDetection(id, canvas) {
-        document.getElementById(`alert-${id}`).classList.remove('hidden');
-        document.getElementById(`card-${id}`).classList.add('detecting');
-
-        // 5秒に1回履歴を保存
-        const now = Date.now();
-        if (!lastLogTime[id] || now - lastLogTime[id] > 5000) {
-            saveLog(id, canvas);
-            lastLogTime[id] = now;
-            playBeep();
-        }
-    }
-
-    function saveLog(id, sourceCanvas) {
-        const logList = document.getElementById('detection-log');
-        if (logList.innerText.includes("ありません")) logList.innerHTML = "";
-
-        const logItem = document.createElement('div');
-        logItem.className = 'log-item';
-        
-        // 検知時の状態を新しいキャンバスにコピーして保存
-        const saveCanvas = document.createElement('canvas');
-        saveCanvas.width = sourceCanvas.width;
-        saveCanvas.height = sourceCanvas.height;
-        saveCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
-        
-        const time = new Date().toLocaleTimeString();
-        logItem.innerHTML = `<span>${time} (ID:${id})</span>`;
-        logItem.prepend(saveCanvas);
-        logList.prepend(logItem);
-    }
-
-    function playBeep() {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        osc.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.1);
-    }
-
-    function removeCamera(id) {
-        if (myConnections[id]) myConnections[id].close();
-        document.getElementById(`card-${id}`)?.remove();
-        delete myConnections[id];
-    }
-
-    function showUI(uiId) {
-        ['mode-selection', 'camera-ui', 'monitor-setup'].forEach(id => document.getElementById(id).classList.add('hidden'));
-        document.getElementById(uiId).classList.remove('hidden');
+        }, 200);
     }
 </script>
 </body>
