@@ -3,215 +3,240 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ULTIMATE STOP-MOTION v4.2</title>
+    <title>マルチカメラ・モニター</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        :root { --accent: #00fbff; --bg: #0a0a0a; --panel: #1e1e1e; --danger: #ff4757; }
-        body { font-family: sans-serif; background: var(--bg); color: white; text-align: center; margin: 0; padding: 10px; }
-        .panel { background: var(--panel); padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; }
-        button, select { padding: 12px; margin: 5px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-main { background: var(--accent); color: #000; width: 200px; }
-        .btn-sub { background: #333; color: white; border: 1px solid #555; }
-        .video-container { position: relative; width: 100%; max-width: 480px; margin: auto; background: #000; border-radius: 10px; overflow: hidden; border: 2px solid #333; }
-        video { width: 100%; aspect-ratio: 16/9; background: #111; display: block; }
-        .status-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10; }
-        #monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-top: 20px; }
-        .video-card { background: #1e1e1e; padding: 10px; border-radius: 12px; border: 1px solid #444; }
-        .hidden { display: none !important; }
-        #log { font-size: 11px; color: #ff9f43; text-align: left; background: #000; padding: 10px; border-radius: 8px; margin-top: 15px; height: 100px; overflow-y: auto; border: 1px solid #222; white-space: pre-wrap; }
+        body { font-family: sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
+        .container { max-width: 900px; margin: auto; }
+        h2 { color: #00ff88; }
+        
+        /* メニュー・設定エリア */
+        .panel { background: #222; padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; }
+        button { padding: 12px 20px; margin: 5px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-main { background: #00ff88; color: #000; }
+        .btn-sub { background: #444; color: white; }
+        .btn-danger { background: #ff4444; color: white; padding: 5px 10px; font-size: 12px; }
+        input { padding: 12px; border-radius: 8px; border: 2px solid #00ff88; background: #000; color: #00ff88; font-size: 20px; text-align: center; width: 120px; }
+
+        /* マルチビュー・グリッドレイアウト */
+        #monitor-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+            gap: 15px; 
+            margin-top: 20px; 
+        }
+        .video-card { 
+            background: #000; padding: 10px; border-radius: 12px; border: 1px solid #444; 
+            position: relative; overflow: hidden;
+        }
+        .video-card img { width: 100%; border-radius: 5px; min-height: 150px; background: #111; }
+        .video-card .info { 
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-top: 8px; font-size: 14px; color: #aaa;
+        }
+
+        /* 配信側UI */
+        #camera-ui video { width: 100%; max-width: 400px; border-radius: 10px; border: 1px solid #00ff88; }
+        #id-display { font-size: 48px; font-weight: bold; color: #00ff88; margin: 10px 0; }
+        #qrcode { background: white; padding: 10px; border-radius: 10px; display: inline-block; }
+
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
-<div style="max-width: 800px; margin: auto;">
-    <h2 style="color:var(--accent);">ULTIMATE STOP-MOTION</h2>
+<div class="container">
+    <h2>マルチカメラ・システム</h2>
 
+    <!-- モード選択 -->
     <div id="mode-selection" class="panel">
-        <button class="btn-main" onclick="initNode('camera')">📸 配信を開始する</button><br>
-        <button class="btn-sub" onclick="initNode('monitor')">🖥️ モニターを開始する</button>
+        <button class="btn-main" onclick="initAsCamera()">📸 この端末をカメラにする</button>
+        <button class="btn-sub" onclick="showMonitorView()">🖥️ 複数のカメラを見る</button>
     </div>
 
-    <!-- 配信側UI -->
+    <!-- 【配信側】 -->
     <div id="camera-ui" class="panel hidden">
-        <div class="video-container">
-            <video id="local-preview" autoplay playsinline muted></video>
-            <canvas id="proc-canvas" class="hidden"></canvas>
-            <div class="status-badge">
-                <span style="color:red; font-weight:bold;">● ON AIR</span> 
-                <span id="peer-id-display">ID: ----</span>
-            </div>
-        </div>
-
+        <p>配信中... カメラID</p>
+        <div id="id-display">----</div>
+        <div id="qrcode"></div>
         <div style="margin-top:15px;">
-            <p style="font-size:12px; color:#aaa; margin:5px 0;">📷 カメラ / ⏱️ 送信間隔</p>
-            <select id="camera-select" style="width:45%;" onchange="changeCamera(this.value)"></select>
-            <select id="interval-select" style="width:45%;" onchange="updateInterval(this.value)">
-                <option value="0">リアルタイム</option>
-                <option value="500">0.5秒間隔</option>
-                <option value="1000" selected>1秒間隔</option>
-                <option value="3000">3秒間隔</option>
-            </select>
+            <video id="temp-video" autoplay playsinline muted></video>
         </div>
-        <div id="qrcode" style="background:white; padding:10px; display:inline-block; margin-top:10px; border-radius:5px;"></div>
-        <div id="log"></div>
+        <div>
+            <button class="btn-sub" onclick="switchCamera()">🔄 カメラ切替</button>
+        </div>
+        <canvas id="capture-canvas" class="hidden"></canvas>
     </div>
 
-    <!-- モニター側UI -->
-    <div id="monitor-ui" class="panel hidden">
-        <input type="text" id="target-id" placeholder="4桁のID" style="padding:12px; width:100px; background:#000; color:var(--accent); border:1px solid #444; border-radius:8px;">
-        <button class="btn-main" style="width:120px;" onclick="connectToCamera()">接続</button>
-        <div id="monitor-grid"></div>
-        <div id="monitor-log" id="log" style="height:100px; background:#000; font-size:11px; color:#ff9f43; text-align:left; padding:10px; margin-top:10px; overflow-y:auto; border:1px solid #333;"></div>
+    <!-- 【モニター側】接続コントロール -->
+    <div id="monitor-setup" class="panel hidden">
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="peer-id-input" maxlength="4" placeholder="ID" inputmode="numeric">
+            <button class="btn-main" onclick="connectToNewCamera()">追加する</button>
+            <button class="btn-sub" onclick="startQRScanner()">📷 QR読取</button>
+        </div>
+        <div id="reader"></div>
+        
+        <!-- 映像並列表示エリア -->
+        <div id="monitor-grid">
+            <!-- ここにカメラ映像が動的に追加される -->
+        </div>
     </div>
 </div>
 
 <script>
-    let peer, localStream, processedStream;
-    let stopMotionTimer = null;
-    let currentInterval = 1000;
-    
-    // 異なるネットワーク間でも接続しやすくするための設定
-    const peerConfig = {
-        config: {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ]
+    let peer;
+    const INTERVAL = 100; // 0.1秒
+    const IMG_WIDTH = 350; 
+    const QUALITY = 0.3;
+    let myConnections = {}; // 接続中のカメラを管理
+
+    // カメラ切り替え用
+    let currentStream = null;
+    let currentFacingMode = "environment"; // 初期値は背面
+
+    // --- カメラ配信側の処理 ---
+    async function startCameraStream() {
+        const video = document.getElementById('temp-video');
+        
+        // 既存のストリームがあれば停止
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
         }
-    };
 
-    const canvas = document.getElementById('proc-canvas');
-    const ctx = canvas.getContext('2d', { alpha: false });
-
-    function addLog(msg, isMonitor = false) {
-        const id = isMonitor ? 'monitor-log' : 'log';
-        const el = document.getElementById(id);
-        if (el) el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n${el.innerText}`;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: currentFacingMode }, 
+                audio: false 
+            });
+            currentStream = stream;
+            video.srcObject = stream;
+        } catch (e) {
+            console.error(e);
+            alert("カメラの起動に失敗しました。許可設定を確認してください。");
+        }
     }
 
-    // --- コマ撮り処理 ---
-    function startStopMotionLoop() {
-        if (stopMotionTimer) clearInterval(stopMotionTimer);
-        const videoEl = document.getElementById('local-preview');
-        
-        const updateFrame = () => {
-            if (videoEl.videoWidth > 0) {
-                if (canvas.width !== videoEl.videoWidth) {
-                    canvas.width = videoEl.videoWidth;
-                    canvas.height = videoEl.videoHeight;
+    async function switchCamera() {
+        // モードを反転
+        currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+        await startCameraStream();
+    }
+
+    async function initAsCamera() {
+        showUI('camera-ui');
+        const video = document.getElementById('temp-video');
+        const canvas = document.getElementById('capture-canvas');
+        const ctx = canvas.getContext('2d');
+        const connections = [];
+
+        await startCameraStream();
+
+        function tryConnect() {
+            const randomID = Math.floor(1000 + Math.random() * 9000).toString();
+            peer = new Peer(randomID);
+            peer.on('open', id => {
+                document.getElementById('id-display').innerText = id;
+                document.getElementById("qrcode").innerHTML = ""; // 初期化
+                new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
+            });
+            peer.on('error', err => { if(err.type==='unavailable-id') tryConnect(); });
+            peer.on('connection', conn => {
+                connections.push(conn);
+                conn.on('close', () => {
+                    const index = connections.indexOf(conn);
+                    if (index > -1) connections.splice(index, 1);
+                });
+            });
+
+            setInterval(() => {
+                // connections が空でなく、かつビデオが準備できている場合
+                if (connections.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = IMG_WIDTH;
+                    canvas.height = IMG_WIDTH * (video.videoHeight / video.videoWidth);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const data = canvas.toDataURL('image/jpeg', QUALITY);
+                    connections.forEach(c => { if(c.open) c.send(data); });
                 }
-                ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            }, INTERVAL);
+        }
+        tryConnect();
+    }
+
+    // --- モニター側の処理 ---
+    function showMonitorView() {
+        showUI('monitor-setup');
+        peer = new Peer(); 
+    }
+
+    function connectToNewCamera(targetId) {
+        const id = targetId || document.getElementById('peer-id-input').value;
+        if (!id || id.length !== 4) return alert("4桁のIDを入力してください");
+        if (myConnections[id]) return alert("そのカメラは既に追加されています");
+
+        const conn = peer.connect(id);
+        setupCameraCard(id, conn);
+    }
+
+    function setupCameraCard(id, conn) {
+        const grid = document.getElementById('monitor-grid');
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.id = `card-${id}`;
+        card.innerHTML = `
+            <img id="img-${id}" src="">
+            <div class="info">
+                <span>ID: <b>${id}</b> <span id="stat-${id}">接続中...</span></span>
+                <button class="btn-danger" onclick="removeCamera('${id}')">閉じる</button>
+            </div>
+        `;
+        grid.appendChild(card);
+
+        conn.on('open', () => {
+            const stat = document.getElementById(`stat-${id}`);
+            if(stat) {
+                stat.innerText = "● LIVE";
+                stat.style.color = "#00ff88";
             }
-        };
-
-        if (currentInterval === "0") {
-            stopMotionTimer = setInterval(updateFrame, 1000/30);
-        } else {
-            stopMotionTimer = setInterval(updateFrame, parseInt(currentInterval));
-        }
-    }
-
-    async function initNode(mode) {
-        document.getElementById('mode-selection').classList.add('hidden');
-        
-        if (mode === 'camera') {
-            document.getElementById('camera-ui').classList.remove('hidden');
-            try {
-                // カメラ起動
-                localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment", width: { ideal: 1280 } }, 
-                    audio: false 
-                });
-                const videoEl = document.getElementById('local-preview');
-                videoEl.srcObject = localStream;
-
-                // カメラ一覧取得
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const select = document.getElementById('camera-select');
-                devices.filter(d => d.kind === 'videoinput').forEach(d => {
-                    select.add(new Option(d.label || `Camera ${select.length+1}`, d.deviceId));
-                });
-
-                // コマ撮り開始
-                startStopMotionLoop();
-                processedStream = canvas.captureStream(30);
-
-                // PeerJS開始 (4桁ID)
-                const myId = Math.floor(1000 + Math.random() * 9000).toString();
-                peer = new Peer(myId, peerConfig);
-                
-                peer.on('open', id => {
-                    document.getElementById('peer-id-display').innerText = "ID: " + id;
-                    new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
-                    addLog("配信開始。IDを相手に伝えてください: " + id);
-                });
-
-                peer.on('call', call => {
-                    addLog("モニターが接続してきました。送信を開始します。");
-                    call.answer(processedStream);
-                });
-
-                peer.on('error', err => addLog("通信エラー: " + err.type));
-
-            } catch (e) { addLog("カメラ起動失敗: " + e.message); }
-
-        } else {
-            document.getElementById('monitor-ui').classList.remove('hidden');
-            peer = new Peer(peerConfig);
-            peer.on('error', err => addLog("エラー: " + err.message, true));
-            addLog("モニターモード起動完了", true);
-        }
-    }
-
-    async function changeCamera(deviceId) {
-        if (localStream) localStream.getTracks().forEach(t => t.stop());
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { deviceId: { exact: deviceId } } 
-        });
-        document.getElementById('local-preview').srcObject = localStream;
-    }
-
-    function updateInterval(val) {
-        currentInterval = val;
-        startStopMotionLoop();
-        addLog("間隔を変更: " + val + "ms");
-    }
-
-    function connectToCamera() {
-        const id = document.getElementById('target-id').value;
-        if (id.length < 4) return;
-        
-        addLog(`ID:${id} に呼び出し中...`, true);
-        
-        // PeerJSの仕様で、受信側もストリームを投げないと繋がらない場合があるため空のMediaStreamを渡す
-        const call = peer.call(id, new MediaStream());
-
-        call.on('stream', stream => {
-            addLog(`ID:${id} 受信成功。映像を表示します。`, true);
-            if (document.getElementById(`card-${id}`)) return;
-            
-            const card = document.createElement('div');
-            card.className = 'video-card';
-            card.id = `card-${id}`;
-            card.innerHTML = `<video id="v-${id}" autoplay playsinline muted></video><div style="margin-top:5px;">ID: ${id}</div>`;
-            document.getElementById('monitor-grid').appendChild(card);
-            
-            const remoteVideo = document.getElementById(`v-${id}`);
-            remoteVideo.srcObject = stream;
-            // 明示的に再生（一部ブラウザ対策）
-            remoteVideo.play().catch(e => addLog("再生失敗: " + e.message, true));
+            myConnections[id] = conn;
         });
 
-        // 10秒経っても映らない場合
-        setTimeout(() => {
-            const v = document.getElementById(`v-${id}`);
-            if (!v || !v.srcObject) {
-                addLog(`ID:${id} 反応がありません。IDが正しいか、相手が配信中か確認してください。`, true);
-            }
-        }, 10000);
+        conn.on('data', (data) => {
+            const img = document.getElementById(`img-${id}`);
+            if (img) img.src = data;
+        });
+
+        conn.on('close', () => removeCamera(id));
+        conn.on('error', () => removeCamera(id));
+    }
+
+    function removeCamera(id) {
+        if (myConnections[id]) {
+            myConnections[id].close();
+            delete myConnections[id];
+        }
+        const card = document.getElementById(`card-${id}`);
+        if (card) card.remove();
+    }
+
+    function startQRScanner() {
+        const reader = new Html5Qrcode("reader");
+        reader.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (id) => {
+            reader.stop();
+            document.getElementById('reader').innerHTML = "";
+            connectToNewCamera(id);
+        });
+    }
+
+    function showUI(uiId) {
+        ['mode-selection', 'camera-ui', 'monitor-setup'].forEach(id => {
+            document.getElementById(id).classList.add('hidden');
+        });
+        document.getElementById(uiId).classList.remove('hidden');
     }
 </script>
+
 </body>
 </html>
