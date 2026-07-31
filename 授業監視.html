@@ -3,425 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDU-ULTIMATE v3.1 (Timer Audio Sync)</title>
+    <title>CAMERA TRANSMITTER (Send Only)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        :root { 
-            --accent: #00fbff; --bg: #0a0a0a; --panel: #1e1e1e; --danger: #ff4757;
-            --success: #2ecc71; --monitor-height: 35vh; 
-        }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        :root { --accent: #00fbff; --bg: #0a0a0a; --panel: #1e1e1e; --danger: #ff4757; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: white; text-align: center; margin: 0; padding: 20px; }
+        .container { max-width: 500px; margin: auto; }
+        .panel { background: var(--panel); padding: 20px; border-radius: 20px; border: 1px solid #333; box-shadow: 0 0 30px rgba(0,251,255,0.1); }
         
-        /* --- セットアップ画面 --- */
-        #setup-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 10000; }
-        .modal-box { background: #222; padding: 30px; border-radius: 20px; text-align: center; width: 340px; border: 1px solid #444; box-shadow: 0 0 30px rgba(0,251,255,0.2); }
-        .modal-box input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
+        video { width: 100%; border-radius: 10px; background: #000; border: 2px solid var(--accent); aspect-ratio: 16/9; object-fit: cover; }
         
-        /* --- レイアウト構造 --- */
-        header { background: #111; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 50px; border-bottom: 1px solid #333; flex-shrink: 0; transition: all 0.4s ease; z-index: 100; }
-        .main-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
-        .sidebar { width: 260px; background: #111; border-right: 1px solid #333; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; transition: all 0.4s ease; z-index: 90; }
-        .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #111; color: white; text-align: center; font-size: 18px; box-sizing: border-box; }
         
-        /* 生徒側：リアクション禁止時の全画面（シアターモード）スタイル */
-        body.is-student.reaction-disabled header { height: 0 !important; padding: 0 !important; opacity: 0 !important; pointer-events: none; overflow: hidden; }
-        body.is-student.reaction-disabled .sidebar { width: 0 !important; padding: 0 !important; opacity: 0 !important; pointer-events: none; overflow: hidden; }
-        body.is-student.reaction-disabled .reaction-panel { display: none !important; }
-
-        .panel { background: #222; padding: 10px; border-radius: 10px; border: 1px solid #333; }
-        .panel-title { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
+        button { width: 100%; padding: 15px; margin: 5px 0; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        .btn-start { background: var(--accent); color: #000; }
+        .btn-switch { background: #444; color: white; }
         
-        /* --- 配信エリア --- */
-        .broadcast-container { flex: 1; position: relative; background: #050505; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        #main-broadcast-video { width: 100%; height: 100%; object-fit: contain; }
-        #main-broadcast-video.is-camera { transform: scaleX(-1); }
-        
-        /* フローティングタイマー (配信画面上のタイマー) */
-        #floating-timer {
-            position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.7); 
-            padding: 10px 20px; border-radius: 10px; border: 1px solid var(--accent);
-            font-size: 32px; font-family: monospace; color: var(--accent); 
-            z-index: 200; display: none; pointer-events: none;
-        }
-        .timer-active #floating-timer { display: block; }
-        
-        /* --- 監視エリア --- */
-        .monitor-section { height: var(--monitor-height); background: #0a0a0a; border-top: 2px solid #333; display: flex; flex-direction: column; }
-        .grid-container { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 10px; overflow-y: auto; }
-        .student-card { background: #1e1e1e; border-radius: 8px; padding: 5px; position: relative; border: 2px solid transparent; }
-        .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; }
-
-        /* --- ボタン・UI --- */
-        .btn-primary { background: #0097e6; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .btn-danger { background: var(--danger); color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; }
-        .btn-success { background: var(--success); color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; }
-        .reaction-btn { background: transparent; border: 1px solid #444; font-size: 20px; cursor: pointer; color: white; border-radius: 5px; height: 40px; }
-        
-        .fullscreen-btn-container { position: absolute; bottom: 20px; right: 20px; z-index: 100; display: none; }
-        body.reaction-enabled .fullscreen-btn-container { display: block; }
-        
-        .hidden { display: none !important; }
-        .on-air { color: red; animation: blink 1s infinite; font-size: 10px; font-weight: bold; }
+        #id-display { font-size: 32px; font-weight: bold; color: var(--accent); margin: 15px 0; }
+        .on-air { color: var(--danger); font-weight: bold; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0; } }
         
-        .announce-banner { position: fixed; top: 25%; left: 50%; transform: translate(-50%, -50%); background: var(--accent); color: #000; padding: 20px 40px; border-radius: 50px; font-weight: bold; font-size: 32px; z-index: 10000; animation: popIn 0.5s forwards; }
-        @keyframes popIn { from { scale: 0.5; opacity: 0; } to { scale: 1; opacity: 1; } }
-        .reaction { position: fixed; font-size: 40px; pointer-events: none; z-index: 9999; animation: floatUp 3s forwards; }
-        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-500px); opacity: 0; } }
+        #log { font-size: 12px; color: #888; margin-top: 15px; text-align: left; background: #000; padding: 10px; border-radius: 5px; height: 60px; overflow-y: auto; }
+        .hidden { display: none; }
     </style>
 </head>
-<body class="is-student reaction-disabled">
+<body>
 
-<div id="reaction-layer"></div>
+<div class="container">
+    <h2 style="color:var(--accent);">TRANSMITTER</h2>
 
-<!-- セットアップ -->
-<div id="setup-screen">
-    <div class="modal-box">
-        <h2 style="color:var(--accent); margin:0 0 10px;">EDU-ULTIMATE</h2>
-        <input type="text" id="user-name" placeholder="名前を入力">
-        <input type="number" id="room-id" placeholder="部屋ID (4桁)">
-        <p style="font-size:11px; color:#888; margin-bottom:15px;">生徒は画面共有、先生はカメラで開始します。</p>
-        <button class="btn-primary" style="width:100%; margin-bottom:10px;" onclick="start('teacher')">先生として開始</button>
-        <button class="btn-success" style="width:100%;" onclick="start('student')">生徒として参加</button>
+    <!-- 設定画面 -->
+    <div id="setup-area" class="panel">
+        <input type="text" id="room-id" placeholder="部屋IDを入力 (例: 1234)">
+        <button class="btn-start" onclick="initTransmitter('camera')">📷 カメラで開始</button>
+        <button class="btn-start" style="background:#2ecc71;" onclick="initTransmitter('screen')">💻 画面共有で開始</button>
     </div>
-</div>
 
-<header id="app-header">
-    <div style="display:flex; align-items:center; gap:15px;">
-        <span id="role-label" style="background:var(--accent); color:#000; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:12px;">STANDBY</span>
-        <span id="timer-display" style="font-size:22px; font-weight:bold; font-family:monospace; color:var(--accent);">00:00</span>
-    </div>
-    <div style="display:flex; gap:15px; align-items:center;">
-        <div id="room-display">ID: ----</div>
-        <div id="connect-count">👥 0</div>
-        <button onclick="location.reload()" style="background:#444; border:none; color:white; padding:5px 10px; border-radius:4px; cursor:pointer;">終了</button>
-    </div>
-</header>
-
-<div class="main-layout">
-    <div class="sidebar" id="app-sidebar">
-        <div class="panel">
-            <div class="panel-title">自分</div>
-            <video id="my-video" autoplay playsinline muted style="width:100%; background:#000; border-radius:5px;"></video>
+    <!-- 配信中画面 -->
+    <div id="broadcast-area" class="panel hidden">
+        <div id="on-air-label" class="on-air">● LIVE</div>
+        <div id="id-display">----</div>
+        
+        <video id="preview-video" autoplay playsinline muted></video>
+        
+        <div style="margin-top:15px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <button class="btn-switch" onclick="switchMedia('camera')">📷 カメラへ</button>
+            <button class="btn-switch" onclick="switchMedia('screen')">💻 画面へ</button>
         </div>
         
-        <div id="teacher-tools" class="hidden">
-            <div class="panel">
-                <div class="panel-title">クラス管理</div>
-                <button id="reaction-toggle-btn" class="btn-danger" style="width:100%; margin-bottom:8px;" onclick="toggleReactionPermission()">リアクション: 禁止中</button>
-                <button class="btn-primary" style="width:100%; margin-bottom:8px;" onclick="pickRandom()">🎲 ランダム指名</button>
-                <div style="display:flex; gap:5px; align-items:center;">
-                    <input type="number" id="t-min" value="3" style="width:40px; background:#000; color:white; border:1px solid #444;">分
-                    <button class="btn-success" style="flex:1;" onclick="broadcastTimer()">⏱️ 開始</button>
-                </div>
-            </div>
-            <div class="panel">
-                <div class="panel-title">招待/出席</div>
-                <div id="roster" style="font-size:10px; margin-bottom:10px; max-height:80px; overflow-y:auto;"></div>
-                <div id="qrcode" style="display:flex; justify-content:center; background:white; padding:5px; border-radius:5px;"></div>
-            </div>
-        </div>
-
-        <div id="student-tools" class="hidden">
-            <button id="hand-btn" class="btn-primary" style="width:100%; margin-bottom:10px;" onclick="toggleHand()">✋ 手を挙げる</button>
-        </div>
-
-        <div class="panel reaction-panel">
-            <div class="panel-title">リアクション</div>
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:5px;">
-                <button class="reaction-btn" onclick="sendReaction('👏')">👏</button>
-                <button class="reaction-btn" onclick="sendReaction('❓')">❓</button>
-                <button class="reaction-btn" onclick="sendReaction('💡')">💡</button>
-                <button class="reaction-btn" onclick="sendReaction('⭐')">⭐</button>
-            </div>
-        </div>
-        <button class="btn-primary" onclick="toggleChat()">💬 チャット表示</button>
-    </div>
-
-    <div class="content-area">
-        <div class="broadcast-container" id="broadcast-area">
-            <div id="floating-timer">00:00</div>
-            <div style="position:absolute; top:10px; left:10px; z-index:100; display:flex; gap:10px;">
-                <div id="on-air-status" class="hidden"><span class="on-air">● ON AIR</span> <span id="air-target" style="font-size:11px; margin-left:5px;">Teacher</span></div>
-            </div>
-            <video id="main-broadcast-video" autoplay playsinline muted></video>
-            
-            <div class="fullscreen-btn-container">
-                <button class="btn-primary" style="opacity:0.8;" onclick="toggleBrowserFullscreen()">⛶ 全画面表示</button>
-            </div>
-        </div>
-
-        <div id="monitor-section" class="monitor-section hidden">
-            <div class="tab-bar" style="display:flex; background:#111;">
-                <button class="btn-primary" style="flex:1; border-radius:0;" onclick="switchTab('screen')">画面監視</button>
-                <button class="btn-primary" style="flex:1; border-radius:0; background:#333;" onclick="switchTab('board')">出席確認</button>
-            </div>
-            <div id="grid-screen" class="grid-container"></div>
-        </div>
-    </div>
-</div>
-
-<div id="teacher-controls" class="controls hidden" style="background:#111; padding:10px; border-top:1px solid #333; display:flex; gap:10px;">
-    <button class="btn-success" onclick="switchTeacherMedia()">📷/💻 切替</button>
-    <button id="spotlight-reset" class="btn-danger hidden" onclick="resetSpotlight()">🔄 先生に戻す</button>
-    <input type="text" id="announce-input" placeholder="一斉通知..." style="flex:1; background:#222; border:1px solid #444; color:white; padding:0 10px;">
-    <button class="btn-primary" onclick="sendAnnounce()">配信</button>
-</div>
-
-<div id="chat-window" style="position:fixed; bottom:80px; right:20px; width:300px; height:400px; background:rgba(30,30,30,0.95); border:1px solid #444; border-radius:10px; display:none; flex-direction:column; z-index:8000;">
-    <div style="padding:10px; background:#333; font-weight:bold; display:flex; justify-content:space-between;">
-        <span>CHAT</span><span onclick="toggleChat()" style="cursor:pointer;">×</span>
-    </div>
-    <div id="chat-messages" style="flex:1; overflow-y:auto; padding:10px; font-size:12px;"></div>
-    <div style="padding:10px; border-top:1px solid #444; display:flex; gap:5px;">
-        <input type="text" id="chat-input" style="flex:1; background:#000; color:white; border:1px solid #555;">
-        <button onclick="chatSend()">送</button>
+        <div id="qrcode" style="display:flex; justify-content:center; background:white; padding:10px; border-radius:10px; margin-top:15px;"></div>
+        
+        <div id="log">ログ: 接続待機中...</div>
+        <button class="btn-switch" style="margin-top:10px; background:var(--danger);" onclick="location.reload()">配信終了</button>
     </div>
 </div>
 
 <script>
-    let peer, localStream, myRole = "", currentRid = "", myName = "";
-    let currentMediaType = "camera", isReactionEnabled = false; 
-    const connections = {}, studentInfo = {};
-    const ALARM_URL = 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg';
+    let peer, localStream, myId;
+    let currentMode = ""; // 'camera' or 'screen'
 
-    async function start(role) {
-        myRole = role;
-        myName = document.getElementById('user-name').value || (role === 'teacher' ? '先生' : '生徒');
-        currentRid = document.getElementById('room-id').value || Math.floor(1000 + Math.random() * 9000).toString();
+    function addLog(msg) {
+        const log = document.getElementById('log');
+        log.innerHTML = `> ${msg}<br>${log.innerHTML}`;
+    }
+
+    // --- 送信機能のコア ---
+    async function initTransmitter(mode) {
+        const inputId = document.getElementById('room-id').value;
+        if (!inputId) { alert("IDを入力してください"); return; }
         
-        document.body.classList.toggle('is-student', role === 'student');
+        myId = "ROOM-" + inputId;
+        currentMode = mode;
 
         try {
-            if (role === 'teacher') {
+            // 1. メディアの取得 (ご提示のプログラムの開始能力)
+            if (mode === 'camera') {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                document.getElementById('my-video').style.transform = "scaleX(-1)";
             } else {
                 localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
             }
-            document.getElementById('my-video').srcObject = localStream;
-            document.getElementById('setup-screen').classList.add('hidden');
             
-            const peerId = (role === 'teacher') ? "T-ROOM-" + currentRid : undefined;
-            peer = new Peer(peerId);
+            document.getElementById('preview-video').srcObject = localStream;
+            document.getElementById('setup-area').classList.add('hidden');
+            document.getElementById('broadcast-area').classList.remove('hidden');
+            document.getElementById('id-display').innerText = inputId;
+
+            // 2. PeerJSの初期化
+            peer = new Peer(myId, {
+                debug: 1,
+                config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+            });
 
             peer.on('open', id => {
-                document.getElementById('room-display').innerText = "ID: " + currentRid;
-                document.getElementById('role-label').innerText = role.toUpperCase();
-                if(role === 'teacher') initTeacher(); else initStudent(myName);
+                addLog("送信サーバーに接続: ID " + inputId);
+                new QRCode(document.getElementById("qrcode"), { text: inputId, width: 100, height: 100 });
             });
 
-            peer.on('connection', conn => {
-                connections[conn.peer] = conn;
-                conn.on('data', data => handleData(conn.peer, data));
-            });
-
+            // 3. 受信側（モニター）からの接続要求に応答する能力
             peer.on('call', call => {
-                call.answer(localStream);
-                call.on('stream', s => addStudentGrid(call.peer, s));
+                addLog("受信側が接続しました");
+                call.answer(localStream); // 自分のストリームを渡す
             });
-        } catch(e) { alert("メディアエラー"); location.reload(); }
-    }
 
-    function handleData(id, data) {
-        switch(data.type) {
-            case 'JOIN': 
-                studentInfo[id] = { name: data.name }; updateRoster();
-                if(myRole === 'teacher') connections[id].send({type: 'REACTION_SETTING', enabled: isReactionEnabled});
-                break;
-            case 'REACTION_SETTING':
-                isReactionEnabled = data.enabled;
-                document.body.classList.toggle('reaction-disabled', !data.enabled);
-                document.body.classList.toggle('reaction-enabled', data.enabled);
-                break;
-            case 'TIMER': startTimer(data.sec); break; // 生徒側でタイマー開始
-            case 'REACTION': showReaction(data.emoji); break;
-            case 'ANNOUNCE': showAnnounce(data.msg); break;
-            case 'CHAT': addChatMessage(data.name, data.msg); break;
+            peer.on('error', err => {
+                if(err.type === 'id-taken') alert("そのIDは既に使用されています");
+                else addLog("エラー: " + err.type);
+            });
+
+        } catch (e) {
+            console.error(e);
+            alert("メディアの取得に失敗しました");
         }
     }
 
-    // --- タイマー機能 (生徒・先生共通) ---
-    function startTimer(sec) {
-        clearInterval(window.tInt);
-        document.body.classList.add('timer-active');
+    // --- ストリーム差し替え能力 (EDU-ULTIMATE v3.1 の核心機能) ---
+    async function switchMedia(mode) {
+        if (currentMode === mode) return;
         
-        window.tInt = setInterval(() => {
-            if(sec < 0) {
-                clearInterval(window.tInt);
-                document.body.classList.remove('timer-active');
-                // 0秒になったら音を鳴らす
-                new Audio(ALARM_URL).play().catch(e => console.log("Audio play blocked"));
-                return;
-            }
-            
-            const m = Math.floor(sec / 60);
-            const s = sec % 60;
-            const timeStr = `${m}:${s.toString().padStart(2,'0')}`;
-            
-            // ヘッダーと配信画面上の両方を更新
-            document.getElementById('timer-display').innerText = timeStr;
-            document.getElementById('floating-timer').innerText = timeStr;
-            
-            sec--;
-        }, 1000);
-    }
-
-    function broadcastTimer() {
-        const sec = document.getElementById('t-min').value * 60;
-        startTimer(sec);
-        // 全生徒に送信
-        Object.values(connections).forEach(c => {
-            if(c.open) c.send({type: 'TIMER', sec: sec});
-        });
-    }
-
-    // --- メディア・注目機能 ---
-    function spotlight(id) {
-        const v = document.getElementById('v-'+id);
-        if(!v || !v.srcObject) return;
-        const track = v.srcObject.getVideoTracks()[0];
-        document.getElementById('main-broadcast-video').srcObject = v.srcObject;
-        document.getElementById('spotlight-reset').classList.remove('hidden');
-        updateBroadcastStream(track);
-    }
-
-    function resetSpotlight() {
-        const track = localStream.getVideoTracks()[0];
-        document.getElementById('main-broadcast-video').srcObject = localStream;
-        document.getElementById('spotlight-reset').classList.add('hidden');
-        updateBroadcastStream(track);
-    }
-
-    function updateBroadcastStream(track) {
-        Object.values(peer.connections).forEach(connList => {
-            connList.forEach(c => {
-                if (c.peerConnection) {
-                    const sender = c.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                    if (sender) sender.replaceTrack(track);
-                }
-            });
-        });
-    }
-
-    async function switchTeacherMedia() {
-        let ns;
         try {
-            if (currentMediaType === "camera") {
-                ns = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                currentMediaType = "screen";
+            let newStream;
+            if (mode === 'camera') {
+                newStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             } else {
-                ns = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                currentMediaType = "camera";
+                newStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
             }
-            const track = ns.getVideoTracks()[0];
-            document.getElementById('my-video').srcObject = ns;
-            document.getElementById('main-broadcast-video').srcObject = ns;
-            updateBroadcastStream(track);
+
+            const newTrack = newStream.getVideoTracks()[0];
+            
+            // 接続中の全ての相手に対して、映像トラックを差し替える
+            // これにより、受信側は再接続せずに映像が切り替わる
+            Object.values(peer.connections).forEach(connList => {
+                connList.forEach(c => {
+                    if (c.peerConnection) {
+                        const sender = c.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(newTrack);
+                    }
+                });
+            });
+
+            // ローカルプレビュー更新
             localStream.getTracks().forEach(t => t.stop());
-            localStream = ns;
-        } catch (e) {}
-    }
+            localStream = newStream;
+            document.getElementById('preview-video').srcObject = localStream;
+            currentMode = mode;
+            addLog("配信ソースを " + mode + " に切り替えました");
 
-    function initTeacher() {
-        document.getElementById('teacher-tools').classList.remove('hidden');
-        document.getElementById('teacher-controls').classList.remove('hidden');
-        document.getElementById('monitor-section').classList.remove('hidden');
-        document.getElementById('main-broadcast-video').srcObject = localStream;
-        document.getElementById('on-air-status').classList.remove('hidden');
-        new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?room=" + currentRid, width: 80, height: 80 });
-    }
-
-    function initStudent(name) {
-        document.getElementById('student-tools').classList.remove('hidden');
-        const tid = "T-ROOM-" + currentRid;
-        const conn = peer.connect(tid);
-        conn.on('open', () => { connections[tid] = conn; conn.send({ type: 'JOIN', name: name }); });
-        const call = peer.call(tid, localStream);
-        call.on('stream', s => { 
-            document.getElementById('main-broadcast-video').srcObject = s; 
-            document.getElementById('on-air-status').classList.remove('hidden');
-        });
-    }
-
-    function toggleReactionPermission() {
-        isReactionEnabled = !isReactionEnabled;
-        const btn = document.getElementById('reaction-toggle-btn');
-        btn.innerText = isReactionEnabled ? "リアクション: 許可中" : "リアクション: 禁止中";
-        btn.className = isReactionEnabled ? "btn-success" : "btn-danger";
-        Object.values(connections).forEach(c => {
-            if(c.open) c.send({type: 'REACTION_SETTING', enabled: isReactionEnabled});
-        });
-    }
-
-    function showReaction(emoji) {
-        const div = document.createElement('div'); div.className = 'reaction'; div.innerText = emoji;
-        div.style.left = Math.random() * 80 + 10 + '%'; div.style.bottom = '20px';
-        document.getElementById('reaction-layer').appendChild(div);
-        setTimeout(() => div.remove(), 3000);
-    }
-
-    function sendReaction(emoji) {
-        if(!isReactionEnabled && myRole === 'student') return;
-        showReaction(emoji);
-        if(myRole === 'teacher') Object.values(connections).forEach(c => c.send({type:'REACTION', emoji}));
-        else connections["T-ROOM-"+currentRid]?.send({type:'REACTION', emoji});
-    }
-
-    function pickRandom() {
-        const ids = Object.keys(studentInfo); if(!ids.length) return;
-        const target = ids[Math.floor(Math.random()*ids.length)];
-        const msg = `🎲 指名: ${studentInfo[target].name} さん`;
-        showAnnounce(msg); Object.values(connections).forEach(c => c.send({type:'ANNOUNCE', msg}));
-    }
-
-    function showAnnounce(msg) {
-        const b = document.createElement('div'); b.className = 'announce-banner'; b.innerText = msg;
-        document.body.appendChild(b); setTimeout(() => b.remove(), 4000);
-    }
-
-    function sendAnnounce() {
-        const msg = document.getElementById('announce-input').value; if(!msg) return; showAnnounce(msg);
-        Object.values(connections).forEach(c => c.send({type:'ANNOUNCE', msg}));
-        document.getElementById('announce-input').value = "";
-    }
-
-    function chatSend() {
-        const msg = document.getElementById('chat-input').value; if(!msg) return;
-        addChatMessage(myName, msg);
-        if(myRole === 'teacher') Object.values(connections).forEach(c => c.send({type:'CHAT', name:myName, msg}));
-        else connections["T-ROOM-"+currentRid]?.send({type:'CHAT', name:myName, msg});
-        document.getElementById('chat-input').value = "";
-    }
-
-    function addChatMessage(name, msg) {
-        const div = document.createElement('div'); div.innerHTML = `<b>${name}</b>: ${msg}`;
-        document.getElementById('chat-messages').appendChild(div);
-    }
-
-    function updateRoster() {
-        const r = document.getElementById('roster');
-        r.innerHTML = Object.values(studentInfo).map(info => `<div>・${info.name}</div>`).join('');
-        document.getElementById('connect-count').innerText = "👥 " + Object.keys(studentInfo).length;
-    }
-
-    function addStudentGrid(id, stream) {
-        if(document.getElementById('card-'+id)) return;
-        const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
-        card.innerHTML = `<video id="v-${id}" autoplay playsinline muted></video><div style="font-size:10px; display:flex; justify-content:space-between; margin-top:5px;"><span>${studentInfo[id]?.name || '生徒'}</span><button class="btn-primary" style="font-size:8px; padding:2px 5px;" onclick="spotlight('${id}')">注目</button></div>`;
-        document.getElementById('grid-screen').appendChild(card); document.getElementById('v-'+id).srcObject = stream;
-    }
-
-    function toggleChat() {
-        const chat = document.getElementById('chat-window');
-        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
-    }
-
-    function toggleBrowserFullscreen() {
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
+        } catch (e) {
+            addLog("切り替え失敗: " + e.message);
+        }
     }
 </script>
+
 </body>
 </html>
