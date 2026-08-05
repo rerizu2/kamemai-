@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDU-ULTIMATE v4.1 Final</title>
+    <title>EDU-ULTIMATE v4.2 Fixed</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -46,10 +46,10 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:15px;">EDU-ULTIMATE v4.1</h2>
+        <h2 style="color:var(--accent); margin-bottom:15px;">EDU-ULTIMATE</h2>
         <input type="text" id="user-name" placeholder="名前">
         <input type="number" id="room-id" placeholder="部屋ID">
-        <div style="font-size:11px; color:#888; text-align:left; margin-bottom:5px;">初期映像ソース:</div>
+        <div style="font-size:11px; color:#888; text-align:left; margin-bottom:5px;">開始時の映像ソース:</div>
         <select id="start-media-type"><option value="camera">📷 カメラ</option><option value="screen">💻 画面共有</option></select>
         <button class="btn-primary" style="margin-top:10px;" onclick="start('teacher')">先生として開始</button>
         <button class="btn-success" style="margin-top:10px;" onclick="start('student')">生徒として参加</button>
@@ -67,17 +67,16 @@
 <div class="main-layout">
     <div class="sidebar">
         <div class="panel">
-            <div class="panel-title">自分・映像切替</div>
+            <div class="panel-title">映像/音声設定</div>
             <video id="my-video" autoplay playsinline muted style="width:100%; background:#000; border-radius:5px;"></video>
             
             <div style="margin-top:10px;">
-                <div style="font-size:10px; color:#888;">映像ソース選択:</div>
                 <select id="sidebar-media-type" class="sidebar-select" onchange="changeMedia()">
-                    <option value="camera">📷 カメラ</option>
-                    <option value="screen">💻 画面共有</option>
+                    <option value="camera">📷 カメラに切替</option>
+                    <option value="screen">💻 画面共有に切替</option>
                 </select>
                 <select id="sidebar-camera-select" class="sidebar-select" onchange="changeMedia()">
-                    <!-- カメラリストがここに入る -->
+                    <!-- カメラリスト -->
                 </select>
             </div>
 
@@ -85,27 +84,23 @@
                 <button id="mic-btn" class="btn-success" onclick="toggleMic()" style="flex:1; font-size:11px;">🎤 ON</button>
                 <button id="cam-btn" class="btn-success" onclick="toggleCam()" style="flex:1; font-size:11px;">📷 ON</button>
             </div>
-            <button class="btn-danger" style="margin-top:8px; font-size:11px; width:100%;" onclick="location.reload()">退出</button>
         </div>
 
         <div id="teacher-tools" class="hidden">
             <div class="panel">
-                <div class="panel-title">一括操作</div>
-                <button class="btn-danger" style="font-size:10px;" onclick="forceExitAll()">⚠️ 全生徒を強制退出</button>
+                <button class="btn-danger" style="font-size:11px;" onclick="forceExitAll()">全員退出</button>
                 <div id="qrcode" style="background:white; padding:5px; border-radius:5px; text-align:center; margin-top:10px;"></div>
             </div>
         </div>
         
         <div class="panel" style="flex:1; display:flex; flex-direction:column;">
-            <div class="panel-title">チャット</div>
-            <div id="chat-messages" style="flex:1; overflow-y:auto; font-size:11px; background:#111; padding:5px; margin-bottom:5px; min-height:100px;"></div>
-            <input type="text" id="chat-input" placeholder="メッセージ..." style="width:100%; background:#000; color:white; border:1px solid #444; font-size:11px; padding:5px; box-sizing:border-box;">
+            <div id="chat-messages" style="flex:1; overflow-y:auto; font-size:11px; background:#111; padding:5px; margin-bottom:5px;"></div>
+            <input type="text" id="chat-input" placeholder="チャット..." style="width:100%; background:#000; color:white; border:1px solid #444; padding:5px; box-sizing:border-box;">
         </div>
     </div>
 
     <div class="content-area">
         <div class="broadcast-container">
-            <div style="position:absolute; top:10px; left:10px; z-index:10;"><span id="live-label" class="hidden" style="background:red; color:white; padding:2px 6px; border-radius:4px; font-size:10px;">● LIVE</span></div>
             <video id="main-broadcast-video" autoplay playsinline></video>
         </div>
         <div id="monitor-area" class="monitor-grid hidden"></div>
@@ -117,7 +112,7 @@
     let connections = {};
     let students = {};
 
-    // 起動時にカメラリストを取得
+    // デバイス取得
     navigator.mediaDevices.enumerateDevices().then(devices => {
         const sel = document.getElementById('sidebar-camera-select');
         devices.filter(d => d.kind === 'videoinput').forEach(d => {
@@ -127,28 +122,26 @@
         });
     });
 
-    // 更新時の自動退出
-    window.addEventListener('beforeunload', () => { if(peer) peer.destroy(); });
-
     async function start(role) {
         myName = document.getElementById('user-name').value || "ゲスト";
         currentRid = document.getElementById('room-id').value;
-        if(!currentRid) return alert("部屋IDを入力してください");
+        if(!currentRid) return alert("IDを入力してください");
 
         myRole = role;
         const type = document.getElementById('start-media-type').value;
         document.getElementById('sidebar-media-type').value = type;
 
         try {
-            await updateStream(type); // 初期ストリーム取得
-            document.getElementById('setup-screen').classList.add('hidden');
+            // ここでストリームを待機
+            const success = await updateStream(type);
+            if(!success) return; // 画面共有キャンセル時などは中断
 
+            document.getElementById('setup-screen').classList.add('hidden');
             peer = new Peer(role === 'teacher' ? "T-ROOM-" + currentRid : undefined);
             
             peer.on('open', id => {
                 document.getElementById('room-display').innerText = "ID: " + currentRid;
                 document.getElementById('role-label').innerText = role.toUpperCase();
-                document.getElementById('live-label').classList.remove('hidden');
                 if(role === 'teacher') initTeacher(); else initStudent();
             });
 
@@ -162,59 +155,64 @@
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
-
-        } catch(e) { alert("メディアエラー: カメラ/画面共有を許可してください"); }
+        } catch(e) {
+            alert("メディアエラー: 画面共有またはカメラが許可されませんでした。");
+        }
     }
 
     async function updateStream(type) {
-        const deviceId = document.getElementById('sidebar-camera-select').value;
         let vStream;
-        
-        // 既存のマイク設定を維持するためにマイクのみ先に取得（または既存のを流用）
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        try {
+            // 音声(マイク)を常に取得
+            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-        if (type === 'camera') {
-            vStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { deviceId: deviceId ? { exact: deviceId } : undefined } 
-            });
-            document.getElementById('my-video').style.transform = "scaleX(-1)";
-            document.getElementById('sidebar-camera-select').classList.remove('hidden');
-        } else {
-            vStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            document.getElementById('my-video').style.transform = "none";
-            document.getElementById('sidebar-camera-select').classList.add('hidden');
-        }
+            if (type === 'camera') {
+                const deviceId = document.getElementById('sidebar-camera-select').value;
+                vStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { deviceId: deviceId ? { exact: deviceId } : undefined } 
+                });
+                document.getElementById('my-video').style.transform = "scaleX(-1)";
+                document.getElementById('sidebar-camera-select').classList.remove('hidden');
+            } else {
+                // 【重要】画面共有の取得
+                vStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                document.getElementById('my-video').style.transform = "none";
+                document.getElementById('sidebar-camera-select').classList.add('hidden');
+                
+                // 画面共有が停止ボタンで消された時の処理
+                vStream.getVideoTracks()[0].onended = () => {
+                    document.getElementById('sidebar-media-type').value = 'camera';
+                    changeMedia();
+                };
+            }
 
-        const newStream = new MediaStream([...vStream.getVideoTracks(), ...micStream.getAudioTracks()]);
-        
-        // 通話中の相手全員の映像を差し替える
-        if (localStream) {
-            const newVideoTrack = newStream.getVideoTracks()[0];
-            replaceTrackInAllConnections(newVideoTrack);
-            localStream.getTracks().forEach(t => t.stop()); // 古いストリームを停止
-        }
+            const newStream = new MediaStream([...vStream.getVideoTracks(), ...micStream.getAudioTracks()]);
+            
+            if (localStream) {
+                replaceTrackInAllConnections(newStream.getVideoTracks()[0]);
+                localStream.getTracks().forEach(t => t.stop());
+            }
 
-        localStream = newStream;
-        document.getElementById('my-video').srcObject = localStream;
-        
-        // 先生の場合、自分の放送用メインビデオも更新
-        if (myRole === 'teacher') {
-            document.getElementById('main-broadcast-video').srcObject = localStream;
+            localStream = newStream;
+            document.getElementById('my-video').srcObject = localStream;
+            if (myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
+            
+            return true;
+        } catch(e) {
+            console.error(e);
+            return false;
         }
     }
 
-    // 映像切り替え実行
     async function changeMedia() {
         const type = document.getElementById('sidebar-media-type').value;
-        try {
-            await updateStream(type);
-        } catch(e) { 
-            alert("切り替えに失敗しました。"); 
-            console.error(e);
+        const success = await updateStream(type);
+        if(!success) {
+            document.getElementById('sidebar-media-type').value = 'camera';
+            await updateStream('camera');
         }
     }
 
-    // 全接続のトラックを差し替える（核となる処理）
     function replaceTrackInAllConnections(newTrack) {
         if (!peer) return;
         Object.values(peer.connections).forEach(connList => {
@@ -232,27 +230,12 @@
             case 'JOIN': students[id] = { name: data.name }; break;
             case 'CHAT': addChat(data.name, data.msg); if(myRole === 'teacher') broadcast(data); break;
             case 'REMOTE_CONTROL':
-                if(data.action === 'MUTE') {
-                    localStream.getAudioTracks()[0].enabled = data.state;
-                    updateBtn('mic-btn', data.state, '🎤');
-                } else if(data.action === 'CAM') {
-                    localStream.getVideoTracks()[0].enabled = data.state;
-                    updateBtn('cam-btn', data.state, '📷');
-                } else if(data.action === 'EXIT') {
-                    alert("管理者により退出させられました。"); location.reload();
-                }
+                if(data.action === 'MUTE') { localStream.getAudioTracks()[0].enabled = data.state; updateBtn('mic-btn', data.state, '🎤'); }
+                else if(data.action === 'CAM') { localStream.getVideoTracks()[0].enabled = data.state; updateBtn('cam-btn', data.state, '📷'); }
+                else if(data.action === 'EXIT') location.reload();
                 break;
-            case 'FORCE_EXIT_ALL': alert("授業が終了しました。"); location.reload(); break;
+            case 'FORCE_EXIT_ALL': location.reload(); break;
         }
-    }
-
-    // --- 管理者ツール ---
-    function forceExitAll() {
-        if(confirm("全員を退出させますか？")) broadcast({ type: 'FORCE_EXIT_ALL' });
-    }
-
-    function broadcast(data) {
-        Object.values(connections).forEach(c => { if(c.open) c.send(data); });
     }
 
     function initTeacher() {
@@ -265,10 +248,7 @@
     function initStudent() {
         const tid = "T-ROOM-" + currentRid;
         const conn = peer.connect(tid);
-        conn.on('open', () => {
-            connections[tid] = conn;
-            conn.send({ type: 'JOIN', name: myName });
-        });
+        conn.on('open', () => { connections[tid] = conn; conn.send({ type: 'JOIN', name: myName }); });
         const call = peer.call(tid, localStream);
         call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
     }
@@ -281,57 +261,21 @@
             <div style="font-size:10px; margin:5px 0;">${students[id]?.name || '生徒'}</div>
             <div style="display:flex; flex-wrap:wrap; gap:2px;">
                 <button class="btn-mini btn-primary" onclick="remoteToggle('${id}', 'MUTE')">🎤 遠隔Mute</button>
-                <button class="btn-mini btn-primary" onclick="remoteToggle('${id}', 'CAM')">📷 遠隔Cam</button>
-                <button class="btn-mini btn-danger" onclick="kickStudent('${id}')">❌ 追放</button>
+                <button class="btn-mini btn-danger" onclick="kickStudent('${id}')">追放</button>
             </div>`;
         document.getElementById('monitor-area').appendChild(card);
         document.getElementById('v-'+id).srcObject = stream;
     }
 
-    let remoteStates = {};
-    function remoteToggle(id, type) {
-        if(!remoteStates[id]) remoteStates[id] = { MUTE: true, CAM: true };
-        remoteStates[id][type] = !remoteStates[id][type];
-        if(connections[id]) connections[id].send({ type: 'REMOTE_CONTROL', action: type, state: remoteStates[id][type] });
-    }
-
-    function kickStudent(id) {
-        if(confirm("追放しますか？")) {
-            if(connections[id]) connections[id].send({ type: 'REMOTE_CONTROL', action: 'EXIT' });
-        }
-    }
-
-    function removeStudent(id) {
-        const card = document.getElementById('card-'+id);
-        if(card) card.remove();
-        delete students[id]; delete connections[id];
-    }
-
-    function toggleMic() {
-        const t = localStream.getAudioTracks()[0];
-        t.enabled = !t.enabled; updateBtn('mic-btn', t.enabled, '🎤');
-    }
-    function toggleCam() {
-        const t = localStream.getVideoTracks()[0];
-        t.enabled = !t.enabled; updateBtn('cam-btn', t.enabled, '📷');
-    }
-    function updateBtn(id, state, icon) {
-        const b = document.getElementById(id);
-        b.innerText = `${icon} ${state ? 'ON' : 'OFF'}`;
-        b.className = state ? 'btn-success' : 'btn-danger';
-    }
-    function addChat(name, msg) {
-        const div = document.createElement('div'); div.innerHTML = `<b>${name}:</b> ${msg}`;
-        const box = document.getElementById('chat-messages');
-        box.appendChild(div); box.scrollTop = box.scrollHeight;
-    }
-    document.getElementById('chat-input').onkeydown = e => {
-        if(e.key === 'Enter' && e.target.value) {
-            addChat("自分", e.target.value);
-            broadcast({ type: 'CHAT', name: myName, msg: e.target.value });
-            e.target.value = "";
-        }
-    };
+    function broadcast(data) { Object.values(connections).forEach(c => { if(c.open) c.send(data); }); }
+    function forceExitAll() { if(confirm("全員退出？")) broadcast({ type: 'FORCE_EXIT_ALL' }); }
+    function kickStudent(id) { if(confirm("追放？")) if(connections[id]) connections[id].send({ type: 'REMOTE_CONTROL', action: 'EXIT' }); }
+    function removeStudent(id) { const c = document.getElementById('card-'+id); if(c) c.remove(); delete students[id]; delete connections[id]; }
+    function toggleMic() { const t = localStream.getAudioTracks()[0]; t.enabled = !t.enabled; updateBtn('mic-btn', t.enabled, '🎤'); }
+    function toggleCam() { const t = localStream.getVideoTracks()[0]; t.enabled = !t.enabled; updateBtn('cam-btn', t.enabled, '📷'); }
+    function updateBtn(id, state, icon) { const b = document.getElementById(id); b.innerText = `${icon} ${state ? 'ON' : 'OFF'}`; b.className = state ? 'btn-success' : 'btn-danger'; }
+    function addChat(n, m) { const d = document.createElement('div'); d.innerHTML = `<b>${n}:</b> ${m}`; const b = document.getElementById('chat-messages'); b.appendChild(d); b.scrollTop = b.scrollHeight; }
+    document.getElementById('chat-input').onkeydown = e => { if(e.key === 'Enter' && e.target.value) { addChat("自分", e.target.value); broadcast({ type: 'CHAT', name: myName, msg: e.target.value }); e.target.value = ""; } };
 </script>
 </body>
 </html>
