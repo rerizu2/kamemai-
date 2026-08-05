@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDU-ULTIMATE v3.3 (Fixed Setup)</title>
+    <title>EDU-ULTIMATE v3.4 (Media Switch)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -34,6 +34,7 @@
         
         .btn-primary { background: #0097e6; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; }
         .btn-success { background: var(--success); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; }
+        .btn-switch { background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         
         .hidden { display: none !important; }
         .on-air { color: red; animation: blink 1s infinite; font-size: 10px; font-weight: bold; }
@@ -48,8 +49,8 @@
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)">
         <p id="setup-msg" style="font-size:11px; color:#aaa; margin-bottom:15px;">カメラとマイクを許可してください。</p>
-        <button id="btn-t" class="btn-primary" style="margin-bottom:10px;" onclick="start('teacher')">先生として開始</button>
-        <button id="btn-s" class="btn-success" onclick="start('student')">生徒として参加</button>
+        <button class="btn-primary" style="margin-bottom:10px;" onclick="start('teacher')">先生として開始</button>
+        <button class="btn-success" onclick="start('student')">生徒として参加</button>
     </div>
 </div>
 
@@ -66,16 +67,15 @@
         <div class="panel">
             <div class="panel-title">自分</div>
             <video id="my-video" autoplay playsinline muted style="width:100%; background:#000; border-radius:5px;"></video>
-            <button id="mic-btn" class="btn-success" style="margin-top:5px; padding:5px; font-size:12px;" onclick="toggleMic()">🎤 マイク: ON</button>
+            <div style="display:flex; flex-direction:column; gap:5px; margin-top:10px;">
+                <button id="mic-btn" class="btn-success" style="padding:8px; font-size:12px;" onclick="toggleMic()">🎤 マイク: ON</button>
+                <button class="btn-switch" onclick="switchVideoSource()">📷 ↔ 💻 映像切替</button>
+            </div>
         </div>
         <div id="teacher-tools" class="hidden">
              <div class="panel">
-                <div class="panel-title">クラス管理</div>
-                <button class="btn-primary" style="font-size:12px;" onclick="pickRandom()">🎲 ランダム指名</button>
-             </div>
-             <div class="panel">
-                <div class="panel-title">招待</div>
-                <div id="qrcode" style="background:white; padding:5px; border-radius:5px; display:inline-block;"></div>
+                <div class="panel-title">招待用QR</div>
+                <div id="qrcode" style="background:white; padding:5px; border-radius:5px; text-align:center;"></div>
             </div>
         </div>
     </div>
@@ -91,43 +91,23 @@
 
 <script>
     let peer, localStream, myRole = "", currentRid = "";
-    const connections = {};
+    let isCameraMode = true; // 現在カメラかどうか
 
     async function start(role) {
         const nameInput = document.getElementById('user-name');
         const roomInput = document.getElementById('room-id');
-        if (!nameInput.value || !roomInput.value) {
-            alert("名前と部屋IDを入力してください。");
-            return;
-        }
+        if (!nameInput.value || !roomInput.value) return alert("入力してください");
 
         myRole = role;
         currentRid = roomInput.value;
-        const setupMsg = document.getElementById('setup-msg');
-        setupMsg.innerText = "接続準備中...";
+        isCameraMode = (role === 'teacher'); // 先生はカメラ、生徒は画面共有から開始
 
         try {
-            // メディアストリームの取得
-            if (role === 'teacher') {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            } else {
-                try {
-                    // 生徒：まずは画面共有を試みる
-                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    localStream = new MediaStream([...screenStream.getVideoTracks(), ...micStream.getAudioTracks()]);
-                } catch (e) {
-                    console.log("画面共有が利用できないかキャンセルされました。カメラに切り替えます。");
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                }
-            }
-
-            // ストリーム取得に成功したら画面を隠す
-            document.getElementById('my-video').srcObject = localStream;
+            await getStream(isCameraMode);
+            
             document.getElementById('setup-screen').classList.add('hidden');
             if(role === 'student') document.body.classList.add('is-student', 'reaction-disabled');
 
-            // PeerJSの開始
             const peerId = (role === 'teacher') ? "T-ROOM-" + currentRid : undefined;
             peer = new Peer(peerId);
 
@@ -142,16 +122,70 @@
                 call.on('stream', s => addGrid(call.peer, s));
             });
 
-            peer.on('connection', conn => {
-                conn.on('data', data => {
-                    if(data.type === 'ANNOUNCE') alert(data.msg);
-                });
-            });
-
         } catch (err) {
-            console.error(err);
-            alert("エラー: カメラやマイクの権限が拒否されたか、対応していないブラウザです。\n" + err.message);
-            setupMsg.innerText = "エラーが発生しました。再読み込みしてください。";
+            alert("メディアエラー: " + err.message);
+        }
+    }
+
+    // ストリームを取得する関数
+    async function getStream(camera) {
+        let newStream;
+        try {
+            if (camera) {
+                newStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            } else {
+                newStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                // 画面共有には音声が含まれない場合があるためマイクを追加
+                const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+                newStream = new MediaStream([...newStream.getVideoTracks(), ...mic.getAudioTracks()]);
+            }
+
+            if (localStream) {
+                // 既存の通信がある場合、映像トラックだけを入れ替える（replaceTrack）
+                const newVideoTrack = newStream.getVideoTracks()[0];
+                replaceVideoTrack(newVideoTrack);
+                
+                // 古いストリームを停止
+                localStream.getTracks().forEach(t => t.stop());
+            }
+
+            localStream = newStream;
+            document.getElementById('my-video').srcObject = localStream;
+            // 先生の場合、自分の放送画面も更新
+            if(myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
+            
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
+    }
+
+    // 通話中の全相手に新しい映像トラックを送信する
+    function replaceVideoTrack(newTrack) {
+        if (!peer) return;
+        
+        // PeerJSの内部的な接続リストからRTCPeerConnectionにアクセス
+        Object.values(peer.connections).forEach(connList => {
+            connList.forEach(conn => {
+                if (conn.peerConnection) {
+                    const senders = conn.peerConnection.getSenders();
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    if (videoSender) {
+                        videoSender.replaceTrack(newTrack);
+                    }
+                }
+            });
+        });
+    }
+
+    // 切り替えボタン
+    async function switchVideoSource() {
+        isCameraMode = !isCameraMode;
+        try {
+            await getStream(isCameraMode);
+        } catch (e) {
+            isCameraMode = !isCameraMode; // 失敗したらモードを戻す
+            alert("切り替えに失敗しました。デバイスが対応していない可能性があります。");
         }
     }
 
@@ -160,7 +194,7 @@
         document.getElementById('monitor-section').classList.remove('hidden');
         document.getElementById('main-broadcast-video').srcObject = localStream;
         document.getElementById('on-air-status').classList.remove('hidden');
-        new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?id=" + currentRid, width: 100, height: 100 });
+        new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?id=" + currentRid, width: 120, height: 120 });
     }
 
     function initStudent() {
@@ -170,7 +204,6 @@
             document.getElementById('main-broadcast-video').srcObject = s;
             document.getElementById('on-air-status').classList.remove('hidden');
         });
-        const conn = peer.connect(tid);
     }
 
     function addGrid(id, stream) {
@@ -193,10 +226,6 @@
             document.getElementById('mic-btn').innerText = audioTrack.enabled ? "🎤 マイク: ON" : "🔇 マイク: OFF";
             document.getElementById('mic-btn').className = audioTrack.enabled ? "btn-success" : "btn-danger";
         }
-    }
-
-    function pickRandom() {
-        alert("ランダム指名機能：生徒が接続されている必要があります。");
     }
 </script>
 </body>
