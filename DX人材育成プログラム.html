@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDU-ULTIMATE v3.4 (Media Switch)</title>
+    <title>EDU-ULTIMATE v3.5 (Device Selector)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -15,16 +15,15 @@
         
         /* --- セットアップ画面 --- */
         #setup-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 10000; }
-        .modal-box { background: #222; padding: 30px; border-radius: 20px; text-align: center; width: 340px; border: 1px solid #444; box-shadow: 0 0 30px rgba(0,251,255,0.2); }
-        .modal-box input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
+        .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 360px; border: 1px solid #444; box-shadow: 0 0 30px rgba(0,251,255,0.2); }
+        .modal-box input, .modal-box select { width: 100%; padding: 10px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
         
         header { background: #111; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 50px; border-bottom: 1px solid #333; flex-shrink: 0; z-index: 100; }
-        .main-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
         .sidebar { width: 260px; background: #111; border-right: 1px solid #333; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
+        .content-area { flex: 1; display: flex; flex-direction: column; background: #000; }
         
-        body.is-student.reaction-disabled header, 
-        body.is-student.reaction-disabled .sidebar { display: none; }
+        body.is-student.hide-ui header, body.is-student.hide-ui .sidebar { display: none; }
 
         .panel { background: #222; padding: 10px; border-radius: 10px; border: 1px solid #333; }
         .panel-title { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
@@ -34,8 +33,9 @@
         
         .btn-primary { background: #0097e6; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; }
         .btn-success { background: var(--success); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; }
-        .btn-switch { background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         
+        .sidebar select { background: #000; color: white; border: 1px solid #444; padding: 5px; width: 100%; border-radius: 4px; margin-top: 5px; font-size: 11px; }
+
         .hidden { display: none !important; }
         .on-air { color: red; animation: blink 1s infinite; font-size: 10px; font-weight: bold; }
         @keyframes blink { 50% { opacity: 0; } }
@@ -48,16 +48,27 @@
         <h2 style="color:var(--accent); margin:0 0 10px;">EDU-ULTIMATE</h2>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)">
-        <p id="setup-msg" style="font-size:11px; color:#aaa; margin-bottom:15px;">カメラとマイクを許可してください。</p>
-        <button class="btn-primary" style="margin-bottom:10px;" onclick="start('teacher')">先生として開始</button>
+        
+        <div style="text-align:left; font-size:11px; color:#888; margin-bottom:5px;">映像ソースを選択:</div>
+        <select id="start-media-type" onchange="toggleStartDeviceSelect()">
+            <option value="camera">📷 カメラ</option>
+            <option value="screen">💻 画面共有</option>
+        </select>
+        
+        <div id="start-camera-area">
+            <div style="text-align:left; font-size:11px; color:#888; margin-bottom:5px;">使用するカメラ:</div>
+            <select id="start-camera-select"><option value="">読み込み中...</option></select>
+        </div>
+
+        <button class="btn-primary" style="margin-top:10px; margin-bottom:10px;" onclick="start('teacher')">先生として開始</button>
         <button class="btn-success" onclick="start('student')">生徒として参加</button>
     </div>
 </div>
 
-<header id="app-header">
+<header>
     <div style="display:flex; align-items:center; gap:15px;">
         <span id="role-label" style="background:var(--accent); color:#000; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:12px;">READY</span>
-        <span id="timer-display" style="font-size:22px; font-weight:bold; color:var(--accent);">00:00</span>
+        <span id="timer-display" style="font-size:20px; font-weight:bold; color:var(--accent);">00:00</span>
     </div>
     <div id="room-display">ID: ----</div>
 </header>
@@ -65,15 +76,24 @@
 <div class="main-layout">
     <div class="sidebar">
         <div class="panel">
-            <div class="panel-title">自分</div>
-            <video id="my-video" autoplay playsinline muted style="width:100%; background:#000; border-radius:5px;"></video>
-            <div style="display:flex; flex-direction:column; gap:5px; margin-top:10px;">
-                <button id="mic-btn" class="btn-success" style="padding:8px; font-size:12px;" onclick="toggleMic()">🎤 マイク: ON</button>
-                <button class="btn-switch" onclick="switchVideoSource()">📷 ↔ 💻 映像切替</button>
+            <div class="panel-title">自分の配信設定</div>
+            <video id="my-video" autoplay playsinline muted style="width:100%; background:#000; border-radius:5px; transform: scaleX(-1);"></video>
+            
+            <div style="margin-top:10px;">
+                <button id="mic-btn" class="btn-success" style="padding:5px; font-size:11px; width:100%; margin-bottom:8px;" onclick="toggleMic()">🎤 マイク: ON</button>
+                
+                <div class="panel-title">映像切り替え</div>
+                <select id="sidebar-media-type" onchange="handleSidebarSwitch()">
+                    <option value="camera">📷 カメラ</option>
+                    <option value="screen">💻 画面共有</option>
+                </select>
+                <select id="sidebar-camera-select" class="hidden" onchange="handleSidebarSwitch()">
+                    <!-- JSで挿入 -->
+                </select>
             </div>
         </div>
         <div id="teacher-tools" class="hidden">
-             <div class="panel">
+            <div class="panel">
                 <div class="panel-title">招待用QR</div>
                 <div id="qrcode" style="background:white; padding:5px; border-radius:5px; text-align:center;"></div>
             </div>
@@ -91,22 +111,62 @@
 
 <script>
     let peer, localStream, myRole = "", currentRid = "";
-    let isCameraMode = true; // 現在カメラかどうか
+    let videoDevices = [];
+
+    // 起動時にカメラリストを取得
+    async function initDevices() {
+        try {
+            // 一度権限を要求してラベルを取得可能にする
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            tempStream.getTracks().forEach(t => t.stop());
+
+            videoDevices = devices.filter(d => d.kind === 'videoinput');
+            const startSelect = document.getElementById('start-camera-select');
+            const sideSelect = document.getElementById('sidebar-camera-select');
+            
+            [startSelect, sideSelect].forEach(sel => {
+                sel.innerHTML = '';
+                videoDevices.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || `Camera ${sel.length + 1}`;
+                    sel.appendChild(opt);
+                });
+            });
+        } catch (e) {
+            console.error("デバイスリスト取得失敗", e);
+        }
+    }
+    initDevices();
+
+    function toggleStartDeviceSelect() {
+        const type = document.getElementById('start-media-type').value;
+        document.getElementById('start-camera-area').classList.toggle('hidden', type === 'screen');
+    }
 
     async function start(role) {
-        const nameInput = document.getElementById('user-name');
-        const roomInput = document.getElementById('room-id');
-        if (!nameInput.value || !roomInput.value) return alert("入力してください");
+        const name = document.getElementById('user-name').value;
+        const room = document.getElementById('room-id').value;
+        if (!name || !room) return alert("名前とIDを入力してください");
 
         myRole = role;
-        currentRid = roomInput.value;
-        isCameraMode = (role === 'teacher'); // 先生はカメラ、生徒は画面共有から開始
+        currentRid = room;
+
+        const type = document.getElementById('start-media-type').value;
+        const deviceId = document.getElementById('start-camera-select').value;
+
+        // サイドバーの状態をセットアップに合わせる
+        document.getElementById('sidebar-media-type').value = type;
+        if(type === 'camera') {
+            document.getElementById('sidebar-camera-select').value = deviceId;
+            document.getElementById('sidebar-camera-select').classList.remove('hidden');
+        }
 
         try {
-            await getStream(isCameraMode);
-            
+            await updateStream(type, deviceId);
             document.getElementById('setup-screen').classList.add('hidden');
-            if(role === 'student') document.body.classList.add('is-student', 'reaction-disabled');
+            if(role === 'student') document.body.classList.add('is-student');
 
             const peerId = (role === 'teacher') ? "T-ROOM-" + currentRid : undefined;
             peer = new Peer(peerId);
@@ -121,71 +181,66 @@
                 call.answer(localStream);
                 call.on('stream', s => addGrid(call.peer, s));
             });
-
         } catch (err) {
-            alert("メディアエラー: " + err.message);
+            alert("開始エラー: " + err.message);
         }
     }
 
-    // ストリームを取得する関数
-    async function getStream(camera) {
+    async function updateStream(type, deviceId) {
         let newStream;
-        try {
-            if (camera) {
-                newStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            } else {
-                newStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                // 画面共有には音声が含まれない場合があるためマイクを追加
-                const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
-                newStream = new MediaStream([...newStream.getVideoTracks(), ...mic.getAudioTracks()]);
-            }
-
-            if (localStream) {
-                // 既存の通信がある場合、映像トラックだけを入れ替える（replaceTrack）
-                const newVideoTrack = newStream.getVideoTracks()[0];
-                replaceVideoTrack(newVideoTrack);
-                
-                // 古いストリームを停止
-                localStream.getTracks().forEach(t => t.stop());
-            }
-
-            localStream = newStream;
-            document.getElementById('my-video').srcObject = localStream;
-            // 先生の場合、自分の放送画面も更新
-            if(myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
-            
-        } catch (e) {
-            console.error(e);
-            throw e;
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        if (type === 'camera') {
+            newStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { deviceId: deviceId ? { exact: deviceId } : undefined },
+                audio: false 
+            });
+            document.getElementById('my-video').style.transform = "scaleX(-1)"; // カメラは鏡
+        } else {
+            newStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            document.getElementById('my-video').style.transform = "none"; // 画面共有は鏡にしない
         }
+
+        const tracks = [...newStream.getVideoTracks(), ...micStream.getAudioTracks()];
+        const combinedStream = new MediaStream(tracks);
+
+        if (localStream) {
+            const newVideoTrack = combinedStream.getVideoTracks()[0];
+            replaceVideoTrack(newVideoTrack);
+            localStream.getTracks().forEach(t => t.stop());
+        }
+
+        localStream = combinedStream;
+        document.getElementById('my-video').srcObject = localStream;
+        if(myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
     }
 
-    // 通話中の全相手に新しい映像トラックを送信する
     function replaceVideoTrack(newTrack) {
         if (!peer) return;
-        
-        // PeerJSの内部的な接続リストからRTCPeerConnectionにアクセス
         Object.values(peer.connections).forEach(connList => {
             connList.forEach(conn => {
                 if (conn.peerConnection) {
-                    const senders = conn.peerConnection.getSenders();
-                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-                    if (videoSender) {
-                        videoSender.replaceTrack(newTrack);
-                    }
+                    const sender = conn.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender) sender.replaceTrack(newTrack);
                 }
             });
         });
     }
 
-    // 切り替えボタン
-    async function switchVideoSource() {
-        isCameraMode = !isCameraMode;
+    async function handleSidebarSwitch() {
+        const type = document.getElementById('sidebar-media-type').value;
+        const camSelect = document.getElementById('sidebar-camera-select');
+        
+        if (type === 'camera') {
+            camSelect.classList.remove('hidden');
+        } else {
+            camSelect.classList.add('hidden');
+        }
+        
         try {
-            await getStream(isCameraMode);
+            await updateStream(type, camSelect.value);
         } catch (e) {
-            isCameraMode = !isCameraMode; // 失敗したらモードを戻す
-            alert("切り替えに失敗しました。デバイスが対応していない可能性があります。");
+            alert("切り替え失敗: " + e.message);
         }
     }
 
@@ -194,7 +249,7 @@
         document.getElementById('monitor-section').classList.remove('hidden');
         document.getElementById('main-broadcast-video').srcObject = localStream;
         document.getElementById('on-air-status').classList.remove('hidden');
-        new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?id=" + currentRid, width: 120, height: 120 });
+        new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?room=" + currentRid, width: 100, height: 100 });
     }
 
     function initStudent() {
@@ -209,13 +264,8 @@
     function addGrid(id, stream) {
         if(document.getElementById('v-'+id)) return;
         const v = document.createElement('video');
-        v.id = 'v-'+id;
-        v.srcObject = stream;
-        v.autoplay = true;
-        v.playsinline = true;
-        v.style.width = "100%";
-        v.style.borderRadius = "5px";
-        v.style.background = "#000";
+        v.id = 'v-'+id; v.srcObject = stream; v.autoplay = true; v.playsinline = true;
+        v.style.width = "100%"; v.style.borderRadius = "5px"; v.style.background = "#000";
         document.getElementById('monitor-section').appendChild(v);
     }
 
@@ -223,8 +273,9 @@
         const audioTrack = localStream.getAudioTracks()[0];
         if (audioTrack) {
             audioTrack.enabled = !audioTrack.enabled;
-            document.getElementById('mic-btn').innerText = audioTrack.enabled ? "🎤 マイク: ON" : "🔇 マイク: OFF";
-            document.getElementById('mic-btn').className = audioTrack.enabled ? "btn-success" : "btn-danger";
+            const btn = document.getElementById('mic-btn');
+            btn.innerText = audioTrack.enabled ? "🎤 マイク: ON" : "🔇 マイク: OFF";
+            btn.className = audioTrack.enabled ? "btn-success" : "btn-danger";
         }
     }
 </script>
