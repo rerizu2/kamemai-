@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDU-ULTIMATE v4.2 Spotlight Share</title>
+    <title>EDU-ULTIMATE v4.2 Spotlight Share (Kick Function Enhanced)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -80,10 +80,11 @@
             <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; font-size:11px;" onclick="resetToTeacherStream()">🔄 自分の配信に戻す</button>
         </div>
 
+        <!-- 先生専用ツール -->
         <div id="teacher-tools" class="hidden">
             <div class="panel">
                 <div class="panel-title">管理者コマンド</div>
-                <button class="btn-danger" style="font-size:10px;" onclick="forceExitAll()">⚠️ 全生徒を強制退出</button>
+                <button class="btn-danger" style="font-size:11px; margin-bottom:10px;" onclick="forceExitAll()">⚠️ 全生徒を強制退出</button>
                 <div id="qrcode" style="background:white; padding:5px; border-radius:5px; text-align:center; margin-top:10px;"></div>
             </div>
         </div>
@@ -141,6 +142,7 @@
                     const card = document.getElementById('card-'+conn.peer);
                     if(card) card.remove();
                     delete students[conn.peer];
+                    delete connections[conn.peer];
                 });
             });
         } catch(e) { alert("メディア取得失敗"); }
@@ -157,10 +159,8 @@
             document.getElementById('my-video').style.transform = "scaleX(-1)";
             finalStream = new MediaStream([...videoStream.getVideoTracks(), ...micStream.getAudioTracks()]);
         } else {
-            // システム音を含めて取得
             videoStream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:true});
             document.getElementById('my-video').style.transform = "none";
-            
             const systemAudioTracks = videoStream.getAudioTracks();
             if (systemAudioTracks.length > 0) {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -213,6 +213,8 @@
         const tid = "T-ROOM-" + currentRid;
         const conn = peer.connect(tid);
         conn.on('open', () => conn.send({type:'JOIN', name:myName}));
+        // 先生からのコマンドを受け取れるようにする
+        conn.on('data', data => handleData(tid, data));
         const call = peer.call(tid, localStream);
         call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
     }
@@ -220,7 +222,6 @@
     function addStudentToGrid(id, stream) {
         if(document.getElementById('card-'+id)) return;
         const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
-        // 名前を表示する要素に id="name-label-..." を付与
         card.innerHTML = `
             <video id="v-${id}" autoplay playsinline></video>
             <div id="name-label-${id}" style="font-size:10px; margin:5px 0; font-weight:bold; color:var(--accent);">
@@ -257,23 +258,45 @@
         replaceAllTracks(localStream);
     }
 
+    // ★重要: データ受信処理
     function handleData(id, data) {
         if(data.type === 'JOIN') {
             students[id] = {name: data.name};
-            // データが届いたタイミングで表示名を「生徒」や「接続中」から実際の氏名に書き換える
             const label = document.getElementById('name-label-' + id);
             if(label) label.innerText = data.name;
         }
         if(data.type === 'CHAT') addChat(data.name, data.msg);
-        if(data.type === 'EXIT') location.reload();
+        
+        // ★追放コマンドを受けた時の処理
+        if(data.type === 'EXIT') {
+            alert("管理者によって退出させられました。");
+            if(localStream) localStream.getTracks().forEach(t => t.stop());
+            if(peer) peer.destroy();
+            location.reload(); // 強制リロードして初期画面に戻す
+        }
     }
 
-    function forceExitAll() {
-        if(confirm("全員を退出させますか？")) Object.values(connections).forEach(c => c.send({type:'EXIT'}));
-    }
-
+    // ★特定の生徒を追放
     function kickStudent(id) {
-        if(connections[id]) connections[id].send({type:'EXIT'});
+        if(confirm("この生徒を退出させますか？")) {
+            if(connections[id]) {
+                connections[id].send({type:'EXIT'});
+                // 数秒後に画面から消す（生徒側がリロードするまでの予備）
+                setTimeout(() => {
+                    const card = document.getElementById('card-'+id);
+                    if(card) card.remove();
+                }, 500);
+            }
+        }
+    }
+
+    // ★全員を強制退出
+    function forceExitAll() {
+        if(confirm("全生徒を強制的に退出させますか？")) {
+            Object.values(connections).forEach(c => {
+                c.send({type:'EXIT'});
+            });
+        }
     }
 
     function toggleMic() {
