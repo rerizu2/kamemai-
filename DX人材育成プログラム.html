@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDU-ULTIMATE v4.2 Spotlight Share (Audio Included)</title>
+    <title>EDU-ULTIMATE v4.2 Spotlight Share</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -48,7 +48,6 @@
 <div id="setup-screen">
     <div class="modal-box">
         <h2 style="color:var(--accent); margin-bottom:15px;">EDU-ULTIMATE v4.2</h2>
-        <p style="font-size: 11px; color: #aaa; margin-bottom: 10px;">※画面共有時は「システムオーディオも共有」にチェックを入れてください</p>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)">
         <select id="start-media-type"><option value="camera">📷 カメラで開始</option><option value="screen">💻 画面共有で開始</option></select>
@@ -144,69 +143,37 @@
                     delete students[conn.peer];
                 });
             });
-        } catch(e) { 
-            console.error(e);
-            alert("メディア取得に失敗しました。カメラ・マイクの許可、または画面共有のキャンセルを確認してください。"); 
-        }
+        } catch(e) { alert("メディア取得失敗"); }
     }
 
     async function getMedia(type) {
-        // 以前のトラックを停止
-        if(localStream) {
-            localStream.getTracks().forEach(t => t.stop());
-        }
-
-        // マイク音声の取得
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
+        if(localStream) localStream.getTracks().forEach(t => t.stop());
+        const micStream = await navigator.mediaDevices.getUserMedia({audio:true});
         let videoStream;
         let finalStream;
 
         if(type === 'camera') {
-            videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            videoStream = await navigator.mediaDevices.getUserMedia({video:true});
             document.getElementById('my-video').style.transform = "scaleX(-1)";
-            // カメラの場合はマイク音のみ
             finalStream = new MediaStream([...videoStream.getVideoTracks(), ...micStream.getAudioTracks()]);
         } else {
-            // 画面共有（システム音を含む設定）
-            videoStream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: true, 
-                audio: true // ここでシステム音を要求
-            });
+            // システム音を含めて取得
+            videoStream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:true});
             document.getElementById('my-video').style.transform = "none";
-
-            // システム音がある場合、マイク音と合成する
+            
             const systemAudioTracks = videoStream.getAudioTracks();
             if (systemAudioTracks.length > 0) {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
                 const dest = audioCtx.createMediaStreamDestination();
-                
-                // マイク入力をソース化
-                const sourceMic = audioCtx.createMediaStreamSource(micStream);
-                sourceMic.connect(dest);
-                
-                // システム音入力をソース化
-                const sourceSys = audioCtx.createMediaStreamSource(new MediaStream([systemAudioTracks[0]]));
-                sourceSys.connect(dest);
-                
-                // 合成したオーディオトラックと画面映像を結合
-                finalStream = new MediaStream([
-                    videoStream.getVideoTracks()[0],
-                    dest.stream.getAudioTracks()[0]
-                ]);
+                audioCtx.createMediaStreamSource(micStream).connect(dest);
+                audioCtx.createMediaStreamSource(new MediaStream([systemAudioTracks[0]])).connect(dest);
+                finalStream = new MediaStream([videoStream.getVideoTracks()[0], dest.stream.getAudioTracks()[0]]);
             } else {
-                // システム音が取得されなかった場合はマイク音のみ使用
-                finalStream = new MediaStream([
-                    videoStream.getVideoTracks()[0],
-                    micStream.getAudioTracks()[0]
-                ]);
+                finalStream = new MediaStream([videoStream.getVideoTracks()[0], micStream.getAudioTracks()[0]]);
             }
         }
-
         localStream = finalStream;
         document.getElementById('my-video').srcObject = localStream;
-        
         if(myRole === 'teacher' && !isSpotlighting) {
             document.getElementById('main-broadcast-video').srcObject = localStream;
         }
@@ -253,9 +220,12 @@
     function addStudentToGrid(id, stream) {
         if(document.getElementById('card-'+id)) return;
         const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
+        // 名前を表示する要素に id="name-label-..." を付与
         card.innerHTML = `
             <video id="v-${id}" autoplay playsinline></video>
-            <div style="font-size:10px; margin:5px 0;">${students[id]?.name || '生徒'}</div>
+            <div id="name-label-${id}" style="font-size:10px; margin:5px 0; font-weight:bold; color:var(--accent);">
+                ${students[id]?.name || '接続中...'}
+            </div>
             <div style="display:flex; gap:2px;">
                 <button class="btn-mini btn-warning" onclick="spotlightStudent('${id}')">クラスに共有</button>
                 <button class="btn-mini btn-danger" onclick="kickStudent('${id}')">追放</button>
@@ -267,15 +237,13 @@
     function spotlightStudent(id) {
         const studentVideo = document.getElementById('v-'+id);
         if(!studentVideo) return;
-        const studentStream = studentVideo.srcObject;
-        
         isSpotlighting = true;
+        const studentStream = studentVideo.srcObject;
         document.getElementById('main-broadcast-video').srcObject = studentStream;
         document.getElementById('reset-broadcast-btn').classList.remove('hidden');
         document.getElementById('broadcast-status').innerText = "配信: 生徒の画面共有中";
         document.getElementById('broadcast-status').style.background = "var(--warning)";
         document.getElementById('broadcast-status').style.color = "black";
-
         replaceAllTracks(studentStream);
     }
 
@@ -286,12 +254,16 @@
         document.getElementById('broadcast-status').innerText = "配信: 先生の画面";
         document.getElementById('broadcast-status').style.background = "#444";
         document.getElementById('broadcast-status').style.color = "white";
-
         replaceAllTracks(localStream);
     }
 
     function handleData(id, data) {
-        if(data.type === 'JOIN') students[id] = {name: data.name};
+        if(data.type === 'JOIN') {
+            students[id] = {name: data.name};
+            // データが届いたタイミングで表示名を「生徒」や「接続中」から実際の氏名に書き換える
+            const label = document.getElementById('name-label-' + id);
+            if(label) label.innerText = data.name;
+        }
         if(data.type === 'CHAT') addChat(data.name, data.msg);
         if(data.type === 'EXIT') location.reload();
     }
