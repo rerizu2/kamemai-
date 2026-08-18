@@ -46,6 +46,10 @@
         .btn-danger { background: var(--danger); color: white; width: 100%; }
         .btn-warning { background: var(--warning); color: black; width: 100%; }
         .btn-mini { padding: 5px; font-size: 11px; margin-top: 5px; border-radius: 4px; }
+        
+        /* 録画中表示用 */
+        .recording-active { background: var(--danger) !important; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.7; } }
 
         .hidden { display: none !important; }
 
@@ -113,8 +117,11 @@
         </div>
 
         <div id="teacher-tools" class="hidden">
-            <button class="btn-danger" style="font-size:11px;" onclick="forceExitAll()">全生徒を強制退出</button>
-            <div id="qrcode" style="display:none;"></div> <!-- QRは必要な時だけ表示可能 -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:5px;">
+                <button id="record-btn" class="btn-primary" style="font-size:11px;" onclick="toggleRecording()">🔴 録画開始</button>
+                <button class="btn-danger" style="font-size:11px;" onclick="forceExitAll()">全生徒退出</button>
+            </div>
+            <div id="qrcode" style="display:none;"></div>
         </div>
 
         <div style="flex:1; display:flex; flex-direction:column; gap:5px; overflow:hidden;">
@@ -132,6 +139,10 @@
     let students = {};
     let isSpotlighting = false;
     let audioCtx;
+    
+    // 録画用変数
+    let mediaRecorder;
+    let recordedChunks = [];
 
     // スマホのオーディオ制限解除用
     function initAudioContext() {
@@ -180,38 +191,26 @@
 
         } catch(e) { 
             console.error(e);
-            alert("メディア取得に失敗。カメラ/マイクを許可してください。スマホの画面共有は非対応のブラウザがあります。"); 
+            alert("メディア取得に失敗。カメラ/マイクを許可してください。"); 
         }
     }
 
     async function getMedia(type) {
         if(localStream) localStream.getTracks().forEach(t => t.stop());
-        
-        // 1. マイクを取得
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-        
         let videoStream;
         let finalStream;
 
         if(type === 'camera') {
-            // 前面カメラを指定
             videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
             document.getElementById('my-video').style.transform = "scaleX(-1)";
             finalStream = new MediaStream([...videoStream.getVideoTracks(), ...(micStream ? micStream.getAudioTracks() : [])]);
         } else {
-            // 画面共有（エラーハンドリング強化）
             try {
-                // スマホは audio: true でエラーになることが多いため、まずは video のみ試みるか、分離する
-                videoStream = await navigator.mediaDevices.getDisplayMedia({ 
-                    video: true, 
-                    audio: true 
-                }).catch(async () => {
-                    // オーディオ付きで失敗したらビデオのみで再試行
+                videoStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).catch(async () => {
                     return await navigator.mediaDevices.getDisplayMedia({ video: true });
                 });
-                
                 document.getElementById('my-video').style.transform = "none";
-                
                 const systemAudioTracks = videoStream.getAudioTracks();
                 if (systemAudioTracks.length > 0 && micStream) {
                     initAudioContext();
@@ -227,11 +226,69 @@
                 throw err;
             }
         }
-        
         localStream = finalStream;
         document.getElementById('my-video').srcObject = localStream;
         if(myRole === 'teacher' && !isSpotlighting) {
             document.getElementById('main-broadcast-video').srcObject = localStream;
+        }
+    }
+
+    // 録画の開始・停止切り替え
+    function toggleRecording() {
+        if (!mediaRecorder || mediaRecorder.state === "inactive") {
+            startRecording();
+        } else {
+            stopRecording();
+        }
+    }
+
+    function startRecording() {
+        const videoElement = document.getElementById('main-broadcast-video');
+        const stream = videoElement.srcObject;
+        
+        if (!stream) return alert("録画する映像がありません。");
+
+        recordedChunks = [];
+        // ブラウザの対応状況に合わせてMIMEタイプを選択
+        const options = { mimeType: 'video/webm; codecs=vp9,opus' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options.mimeType = 'video/webm';
+        }
+
+        mediaRecorder = new MediaRecorder(stream, options);
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `record_${new Date().getTime()}.webm`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+            
+            const btn = document.getElementById('record-btn');
+            btn.innerText = "🔴 録画開始";
+            btn.classList.remove('recording-active');
+        };
+
+        mediaRecorder.start();
+        const btn = document.getElementById('record-btn');
+        btn.innerText = "⏹ 録画停止";
+        btn.classList.add('recording-active');
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
         }
     }
 
@@ -254,6 +311,9 @@
                 }
             });
         });
+        
+        // 録画中にソースが変わった場合、MediaRecorderは現在のストリームを追いかけますが、
+        // PeerJSのreplaceTrackなら継続可能です。srcObject自体を差し替えると録画が止まる場合があるため注意。
     }
 
     function initTeacher() {
