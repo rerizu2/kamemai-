@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI監視システム【履歴保存版】</title>
+    <title>AI監視システム【Googleドライブ連動】</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
@@ -20,98 +19,69 @@
         .btn-main { background: #00e1ff; color: #000; font-size: 16px; }
         .btn-sub { background: #444; color: white; }
         .btn-danger { background: #ff4444; color: white; }
-
-        /* ステータス表示 */
         #status-bar { font-size: 12px; padding: 10px; margin-bottom: 10px; background: #333; border-radius: 5px; color: #888; }
-
-        /* カメラ表示エリア */
         #monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px; }
         .video-card { background: #000; padding: 10px; border-radius: 12px; border: 2px solid #444; position: relative; }
         .detecting { border-color: #00e1ff; box-shadow: 0 0 15px #00e1ff; }
         canvas { width: 100%; border-radius: 8px; }
-
-        /* 履歴リストエリア */
         .log-section { text-align: left; margin-top: 30px; border-top: 1px solid #444; padding-top: 20px; }
-        .log-header { display: flex; justify-content: space-between; align-items: center; }
         .log-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 15px; }
-        .log-item { background: #2a2a2a; padding: 5px; border-radius: 8px; text-align: center; position: relative; }
-        .log-item img { width: 100%; border-radius: 5px; cursor: pointer; }
-        .log-item span { font-size: 10px; color: #aaa; }
-        .del-item { position: absolute; top: 2px; right: 2px; background: rgba(255,0,0,0.7); border: none; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; padding:0; cursor: pointer; }
-
-        /* 拡大モーダル */
-        #modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:100; flex-direction:column; align-items:center; justify-content:center; }
-        #modal img { max-width: 90%; max-height: 70%; border: 2px solid #00e1ff; }
-
+        .log-item { background: #2a2a2a; padding: 5px; border-radius: 8px; text-align: center; position: relative; font-size: 10px; color: #aaa; }
+        .log-item img { width: 100%; border-radius: 5px; }
+        .cloud-status { color: #00e1ff; font-weight: bold; }
         .hidden { display: none; }
-        .alert-badge { position: absolute; top: 15px; left: 15px; background: red; padding: 5px 10px; border-radius: 5px; font-weight: bold; z-index: 10; }
+        .alert-badge { position: absolute; top: 15px; left: 15px; background: red; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; z-index: 10; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>AI監視・履歴保存システム</h2>
+    <h2>AI監視システム (Googleドライブ保存版)</h2>
 
-    <div id="status-bar">AI: <span id="st-ai">読込中</span> | 通信: <span id="st-peer">準備中</span></div>
+    <!-- 設定パネル -->
+    <div class="panel" style="background: #1a1a1a;">
+        <p style="font-size: 12px; margin-bottom: 5px;">GASウェブアプリURLを入力してください：</p>
+        <input type="password" id="gas-url" placeholder="https://script.google.com/macros/s/..." style="width: 85%; padding: 10px; border-radius: 8px; border: 1px solid #444; background: #333; color: white;">
+    </div>
+
+    <div id="status-bar">AI: <span id="st-ai">読込中</span> | クラウド: <span id="st-cloud">待機中</span></div>
 
     <div id="mode-selection" class="panel">
-        <button class="btn-main" onclick="initAsCamera()">📸 カメラ（撮影）にする</button>
-        <button class="btn-sub" onclick="showMonitorView()">🖥️ モニター（監視・履歴）にする</button>
+        <button class="btn-main" onclick="initAsCamera()">📸 カメラ（送信側）にする</button>
+        <button class="btn-sub" onclick="showMonitorView()">🖥️ モニター（受信・保存側）にする</button>
     </div>
 
-    <!-- カメラ側 -->
+    <!-- カメラ側UI -->
     <div id="camera-ui" class="panel hidden">
-        <p>モニター側に入力するID</p>
-        <div id="id-display" style="font-size: 50px; color: #00e1ff; font-weight: bold;">----</div>
-        <div id="qrcode"></div>
-        <video id="temp-video" autoplay playsinline muted style="width:100%; max-width:300px; margin-top:20px; border-radius:10px;"></video>
+        <p>モニター側で下のIDを入力してください</p>
+        <div id="id-display" style="font-size: 50px; color: #00e1ff; font-weight: bold; margin: 10px;">----</div>
+        <div id="qrcode" style="display: flex; justify-content: center;"></div>
+        <video id="temp-video" autoplay playsinline muted style="width:100%; max-width:300px; margin-top:20px; border-radius:10px; opacity: 0.5;"></video>
     </div>
 
-    <!-- モニター側 -->
+    <!-- モニター側UI -->
     <div id="monitor-setup" class="panel hidden">
-        <input type="text" id="peer-id-input" placeholder="IDを入力" style="font-size:18px; width:100px; padding:10px; border-radius:8px;">
-        <button class="btn-main" style="width: auto;" onclick="connectToNewCamera()">カメラ接続</button>
+        <input type="text" id="peer-id-input" placeholder="カメラのID" style="font-size:18px; width:120px; padding:10px; border-radius:8px; border:none;">
+        <button class="btn-main" onclick="connectToNewCamera()">接続</button>
 
         <div id="monitor-grid"></div>
 
         <div class="log-section">
-            <div class="log-header">
-                <h4>👤 保存された過去の履歴</h4>
-                <button class="btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="clearAllHistory()">全履歴を消去</button>
-            </div>
+            <h4>📁 Googleドライブ保存履歴</h4>
             <div id="detection-log" class="log-list"></div>
         </div>
     </div>
 </div>
 
-<!-- モーダル -->
-<div id="modal" onclick="this.style.display='none'">
-    <img id="modal-img">
-    <p id="modal-info" style="margin-top:10px;"></p>
-    <button class="btn-main" id="dl-btn">この画像を保存</button>
-</div>
-
 <script>
     let peer;
     let detector = null;
-    let db = null;
-    let myConnections = {};
+    let lastSave = {};
 
-    // --- データベース（IndexedDB）の準備 ---
-    const dbRequest = indexedDB.open("DetectionHistory", 1);
-    dbRequest.onupgradeneeded = (e) => {
-        db = e.target.result;
-        db.createObjectStore("history", { keyPath: "id", autoIncrement: true });
-    };
-    dbRequest.onsuccess = (e) => {
-        db = e.target.result;
-        console.log("Database ready");
-    };
-
-    // AI読み込み
+    // AIのロード
     async function loadAI() {
         detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
-        document.getElementById('st-ai').innerText = "✅ OK";
+        document.getElementById('st-ai').innerText = "✅ 準備完了";
     }
     loadAI();
 
@@ -126,13 +96,12 @@
         peer.on('open', id => {
             document.getElementById('id-display').innerText = id;
             new QRCode(document.getElementById("qrcode"), { text: id, width: 120, height: 120 });
-            document.getElementById('st-peer').innerText = "待機中";
         });
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         let conns = [];
-        peer.on('connection', c => { conns.push(c); document.getElementById('st-peer').innerText = "接続中"; });
+        peer.on('connection', c => { conns.push(c); });
 
         setInterval(() => {
             if (conns.length > 0 && video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -141,14 +110,13 @@
                 const data = canvas.toDataURL('image/jpeg', 0.4);
                 conns.forEach(c => { if(c.open) c.send(data); });
             }
-        }, 300);
+        }, 400);
     }
 
     // --- モニター側 ---
     function showMonitorView() {
         showUI('monitor-setup');
         peer = new Peer();
-        peer.on('open', () => { document.getElementById('st-peer').innerText = "オンライン"; loadHistoryFromDB(); });
     }
 
     function connectToNewCamera() {
@@ -188,79 +156,53 @@
 
     function drawPose(ctx, points) {
         ctx.fillStyle = "#00e1ff";
-        points.forEach(p => { if(p.score > 0.5) { ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, 2*Math.PI); ctx.fill(); } });
+        points.forEach(p => { if(p.score > 0.5) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 2*Math.PI); ctx.fill(); } });
     }
 
-    // 検知時の処理（保存）
-    let lastSave = {};
     async function handleDetection(id, canvas) {
         document.getElementById(`alert-${id}`).classList.remove('hidden');
         document.getElementById(`card-${id}`).classList.add('detecting');
 
         const now = Date.now();
-        if (!lastSave[id] || now - lastSave[id] > 7000) {
+        // 10秒に1回だけ保存（連続保存を防止）
+        if (!lastSave[id] || now - lastSave[id] > 10000) {
+            lastSave[id] = now;
             const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
             const time = new Date().toLocaleString();
             
-            // DBに保存
-            const transaction = db.transaction(["history"], "readwrite");
-            transaction.objectStore("history").add({ image: dataUrl, time: time, cameraId: id });
-            
-            lastSave[id] = now;
-            addImgToList(dataUrl, time, id); // リストに表示
+            // 履歴リストに追加（プレビュー）
+            addImgToList(dataUrl, time);
+
+            // クラウド保存実行
+            const gasUrl = document.getElementById('gas-url').value;
+            if(gasUrl) {
+                saveToGoogleDrive(gasUrl, dataUrl, time);
+            }
         }
     }
 
-    // 画面のリストに画像を追加する
-    function addImgToList(dataUrl, time, cameraId, dbId) {
-        const logList = document.getElementById('detection-log');
-        const item = document.createElement('div');
-        item.className = 'log-item';
-        item.innerHTML = `
-            <button class="del-item" onclick="deleteHistory(${dbId}, this)">×</button>
-            <img src="${dataUrl}" onclick="openModal('${dataUrl}', '${time}')">
-            <span>${time}<br>(ID:${cameraId})</span>
-        `;
-        logList.prepend(item);
+    async function saveToGoogleDrive(url, dataUrl, time) {
+        document.getElementById('st-cloud').innerText = "☁️ 送信中...";
+        try {
+            await fetch(url, {
+                method: "POST",
+                mode: "no-cors", // CORS回避
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image: dataUrl, time: time })
+            });
+            document.getElementById('st-cloud').innerText = "✅ 保存成功";
+        } catch (e) {
+            document.getElementById('st-cloud').innerText = "❌ 保存失敗";
+            console.error(e);
+        }
     }
 
-    // DBから履歴を読み込んで表示
-    function loadHistoryFromDB() {
-        const transaction = db.transaction(["history"], "readonly");
-        const store = transaction.objectStore("history");
-        store.openCursor().onsuccess = (e) => {
-            const cursor = e.target.result;
-            if (cursor) {
-                addImgToList(cursor.value.image, cursor.value.time, cursor.value.cameraId, cursor.value.id);
-                cursor.continue();
-            }
-        };
-    }
-
-    // 個別削除
-    function deleteHistory(id, btn) {
-        if (!confirm("この履歴を削除しますか？")) return;
-        const transaction = db.transaction(["history"], "readwrite");
-        transaction.objectStore("history").delete(id);
-        btn.parentElement.remove();
-    }
-
-    // 全削除
-    function clearAllHistory() {
-        if (!confirm("すべての履歴を完全に削除しますか？")) return;
-        const transaction = db.transaction(["history"], "readwrite");
-        transaction.objectStore("history").clear();
-        document.getElementById('detection-log').innerHTML = "";
-    }
-
-    // モーダル
-    function openModal(url, info) {
-        document.getElementById('modal-img').src = url;
-        document.getElementById('modal-info').innerText = info;
-        document.getElementById('modal').style.display = 'flex';
-        document.getElementById('dl-btn').onclick = () => {
-            const a = document.createElement('a'); a.href = url; a.download = `monitor_${Date.now()}.jpg`; a.click();
-        };
+    function addImgToList(url, time) {
+        const log = document.getElementById('detection-log');
+        const div = document.createElement('div');
+        div.className = 'log-item';
+        div.innerHTML = `<img src="${url}"><br>${time}<br><span class="cloud-status">Drive Sync</span>`;
+        log.prepend(div);
     }
 
     function showUI(uiId) {
