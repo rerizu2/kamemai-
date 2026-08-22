@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v6.0 - Full Audio Mixer</title>
+    <title>EDU-ULTIMATE v7.0 - Meeting & Learning</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -14,23 +14,58 @@
         }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; overflow: hidden; touch-action: manipulation; }
         
+        /* セットアップ・入室画面 */
         #setup-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 10000; padding: 20px; }
-        .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 100%; max-width: 360px; border: 1px solid #444; }
+        .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 100%; max-width: 360px; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .modal-box h2 { color: var(--accent); margin-bottom: 15px; font-size: 24px; }
         .modal-box input, .modal-box select { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; font-size: 16px; box-sizing: border-box; }
         
+        /* ヘッダー */
         header { background: #111; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; height: var(--header-h); border-bottom: 1px solid #333; flex-shrink: 0; }
+        
+        /* メインレイアウト */
         .main-layout { display: flex; flex: 1; overflow: hidden; }
-        .content-area { flex: 1; display: flex; flex-direction: row; background: #000; overflow: hidden; }
-        .broadcast-container { flex: 1; position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        #main-broadcast-video { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.3s ease; }
 
-        .monitor-grid { width: var(--monitor-w); background: #111; border-left: 2px solid #333; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; flex-shrink: 0; }
+        /* コンテンツエリア（映像表示 ＋ 右モニター） */
+        .content-area { flex: 1; display: flex; flex-direction: row; background: #000; overflow: hidden; }
+
+        /* メイン配信ビデオコンテナ */
+        .broadcast-container { 
+            flex: 1; 
+            position: relative; 
+            background: #000; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden; 
+        }
+        #main-broadcast-video { 
+            max-width: 100%; 
+            max-height: 100%; 
+            object-fit: contain; 
+            transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease; 
+        }
+
+        /* モニターエリア（管理者用：参加者リスト） */
+        .monitor-grid { 
+            width: var(--monitor-w); 
+            background: #111; 
+            border-left: 2px solid #333; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            padding: 10px; 
+            overflow-y: auto; 
+            flex-shrink: 0; 
+        }
         .student-card { background: #222; padding: 5px; border-radius: 8px; border: 1px solid #444; text-align: center; flex-shrink: 0; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; object-fit: cover; }
         .name-badge { font-size: 12px; font-weight: bold; color: var(--accent); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+        /* サイドバー（操作パネル ＋ チャット） */
         .sidebar { width: var(--sidebar-w); background: #111; border-left: 1px solid #333; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
-        button { cursor: pointer; border: none; font-weight: bold; border-radius: 8px; transition: 0.2s; font-size: 13px; padding: 10px; }
+        
+        button { cursor: pointer; border: none; font-weight: bold; border-radius: 8px; transition: 0.2s; font-size: 13px; padding: 10px; touch-action: manipulation; }
         .btn-primary { background: #0097e6; color: white; width: 100%; }
         .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
@@ -39,38 +74,41 @@
         
         #chat-messages { flex: 1; min-height: 100px; overflow-y: auto; font-size: 12px; background: #000; padding: 8px; border-radius: 5px; border: 1px solid #333; }
         .chat-name { color: var(--accent); font-weight: bold; }
+
         .hidden { display: none !important; }
 
+        /* レスポンシブ：スマホ対応 */
         @media (max-width: 1000px) {
             .main-layout { flex-direction: column; }
             .content-area { flex-direction: column; flex: 2; }
             .monitor-grid { width: 100%; height: 130px; flex-direction: row; border-left: none; border-top: 2px solid #333; }
             .student-card { width: 140px; }
             .sidebar { width: 100%; border-left: none; border-top: 1px solid #333; flex: 1; }
+            header { font-size: 14px; }
         }
     </style>
 </head>
-<body onclick="initAudioContext()"> <!-- どこかをタップすれば音が出るようになる -->
+<body onclick="initAudioContext()"> <!-- 画面タップで音声を有効化 -->
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:15px;">EDU-ULTIMATE v6.0</h2>
-        <input type="text" id="user-name" placeholder="氏名を入力">
-        <input type="number" id="room-id" placeholder="部屋ID (4桁)">
+        <h2>EDU-ULTIMATE v7.0</h2>
+        <input type="text" id="user-name" placeholder="氏名を入力してください" required>
+        <input type="number" id="room-id" placeholder="部屋ID (4桁)" required>
         <select id="start-media-type">
             <option value="camera">📷 カメラで開始</option>
             <option value="screen">💻 画面共有で開始</option>
         </select>
         <button class="btn-primary" onclick="start('teacher')">管理者(先生)として開始</button>
         <button class="btn-success" style="margin-top:10px; width:100%;" onclick="start('student')">参加者(生徒)として参加</button>
-        <p style="font-size:10px; color:#888; margin-top:10px;">※スマホは「カメラで開始」を推奨</p>
+        <p style="font-size:10px; color:#888; margin-top:10px;">※スマホ参加は「カメラで開始」を推奨</p>
     </div>
 </div>
 
 <header>
     <div style="display:flex; align-items:center; gap:8px;">
         <span id="role-label" style="background:var(--accent); color:#000; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:10px;">READY</span>
-        <button onclick="rotateVideo()" style="background:#555; color:white; padding:5px 12px; font-size:12px; border-radius:4px;">🔄 回転</button>
+        <button onclick="rotateVideo(); initAudioContext();" style="background:#555; color:white; padding:5px 12px; font-size:12px; border-radius:4px;">🔄 回転</button>
     </div>
     <div style="text-align:right;">
         <span id="broadcast-status" style="font-size:10px; background:#333; padding:2px 6px; border-radius:4px;">待機中</span>
@@ -80,29 +118,33 @@
 
 <div class="main-layout">
     <div class="content-area">
+        <!-- メイン配信画面 -->
         <div class="broadcast-container" id="video-container">
+            <div style="position:absolute; top:8px; left:8px; z-index:10;"><span style="background:red; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">● LIVE</span></div>
             <video id="main-broadcast-video" autoplay playsinline></video>
         </div>
+        <!-- モニターエリア -->
         <div id="monitor-area" class="monitor-grid hidden"></div>
     </div>
 
+    <!-- 操作パネル -->
     <div class="sidebar">
         <div class="panel">
             <video id="my-video" autoplay playsinline muted style="width:90px; height:68px; background:#000; border-radius:5px; float:right; margin-left:8px; object-fit: cover;"></video>
             <div id="self-name-label" style="font-size:14px; font-weight:bold; color:var(--accent); margin-bottom:5px;">氏名</div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
-                <button id="mic-btn" class="btn-success" onclick="toggleMic()">🎤 ON</button>
-                <button id="cam-btn" class="btn-success" onclick="toggleCam()">📷 ON</button>
+                <button id="mic-btn" class="btn-success" onclick="toggleMic(); initAudioContext();">🎤 ON</button>
+                <button id="cam-btn" class="btn-success" onclick="toggleCam(); initAudioContext();">📷 ON</button>
             </div>
-            <select id="switch-media" onchange="changeMyMedia()" style="width:100%; margin-top:8px; background:#000; color:white; border:1px solid #444; font-size:11px; padding:8px;">
+            <select id="switch-media" onchange="changeMyMedia(); initAudioContext();" style="width:100%; margin-top:8px; background:#000; color:white; border:1px solid #444; font-size:11px; padding:8px;">
                 <option value="camera">📷 カメラ切替</option>
                 <option value="screen">💻 画面共有切替</option>
             </select>
-            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; width:100%;" onclick="resetToTeacherStream()">🔄 自分の配信に戻す</button>
+            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; width:100%;" onclick="resetToTeacherStream(); initAudioContext();">🔄 元に戻す</button>
         </div>
 
         <div id="teacher-tools" class="hidden">
-            <button class="btn-danger" style="width:100%; font-size:11px;" onclick="forceExitAll()">全員を退出させる</button>
+            <button class="btn-danger" style="width:100%; font-size:11px;" onclick="forceExitAll(); initAudioContext();">全員を退出させる</button>
             <div id="qrcode" style="margin-top:10px; display:flex; justify-content:center;"></div>
         </div>
 
@@ -119,13 +161,13 @@
     let audioCtx, mixerDest, currentRotation = 0;
     let retryInterval = null;
 
-    // ★オーディオミキサーの初期化（先生側のみで使用）
+    // ★オーディオハブ（全員の声を聞こえるようにするミキサー）の初期化
     function initAudioContext() {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (myRole === 'teacher') {
                 mixerDest = audioCtx.createMediaStreamDestination();
-                // 先生自身の声をミキサーに追加
+                // 管理者自身の声をミキサーに投入
                 const source = audioCtx.createMediaStreamSource(localStream);
                 source.connect(mixerDest);
             }
@@ -134,6 +176,7 @@
         }
     }
 
+    // 画面回転処理
     function rotateVideo() {
         currentRotation = (currentRotation + 90) % 360;
         const v = document.getElementById('main-broadcast-video');
@@ -156,7 +199,7 @@
 
         try {
             await getMedia(document.getElementById('start-media-type').value);
-            initAudioContext(); // メディア取得後に初期化
+            initAudioContext();
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('self-name-label').innerText = myName;
 
@@ -169,18 +212,17 @@
             });
 
             peer.on('call', call => {
-                // 先生側：全員に配信するためのミキシング済み音声ストリームを返す
+                // 配信するストリームの選択：管理者の場合は全員の声が入ったミキサー音声を送る
                 const outStream = (myRole === 'teacher' && mixerDest) ? 
                     new MediaStream([localStream.getVideoTracks()[0], mixerDest.stream.getAudioTracks()[0]]) : localStream;
                 
                 call.answer(outStream);
                 call.on('stream', s => {
                     if (myRole === 'teacher') {
-                        // ★重要：届いた生徒の音声をミキサーに結合
-                        const studentAudioSource = audioCtx.createMediaStreamSource(s);
-                        studentAudioSource.connect(mixerDest);
-                        // 先生自身のスピーカーからも聞こえるようにする
-                        studentAudioSource.connect(audioCtx.destination);
+                        // ★生徒の声が届いたら、それを管理者のミキサー（全員の耳）に繋ぐ
+                        const studentSource = audioCtx.createMediaStreamSource(s);
+                        studentSource.connect(mixerDest);
+                        studentSource.connect(audioCtx.destination); // 管理者のスピーカーでも鳴らす
                     }
                     addStudentToGrid(call.peer, s);
                 });
@@ -220,7 +262,7 @@
         document.getElementById('teacher-tools').classList.remove('hidden');
         document.getElementById('monitor-area').classList.remove('hidden');
         document.getElementById('main-broadcast-video').srcObject = localStream;
-        document.getElementById('broadcast-status').innerText = "配信中";
+        document.getElementById('broadcast-status').innerText = "ミーティング中";
         new QRCode(document.getElementById("qrcode"), { text: location.href, width: 80, height: 80 });
     }
 
@@ -228,11 +270,11 @@
         const tid = "T-ROOM-" + currentRid;
         const tryConnect = () => {
             if (connections[tid] && connections[tid].open) return;
-            document.getElementById('broadcast-status').innerText = "先生待機中...";
+            document.getElementById('broadcast-status').innerText = "先生を待機中...";
             const conn = peer.connect(tid);
             conn.on('open', () => {
                 clearInterval(retryInterval);
-                document.getElementById('broadcast-status').innerText = "接続済み";
+                document.getElementById('broadcast-status').innerText = "接続完了";
                 connections[tid] = conn;
                 conn.send({type:'JOIN', name:myName});
                 peer.call(tid, localStream).on('stream', s => { 
@@ -245,17 +287,17 @@
         startRetryLoop();
     }
 
+    // スポットライト（特定の生徒をメインにする）時も全員の声が聞こえるようにする
     function spotlightStudent(id) {
         const studentVideo = document.getElementById('v-'+id);
         if(!studentVideo) return;
         isSpotlighting = true;
         
-        // メイン画面の映像だけ生徒に切り替え
         document.getElementById('main-broadcast-video').srcObject = studentVideo.srcObject;
         document.getElementById('reset-broadcast-btn').classList.remove('hidden');
         document.getElementById('broadcast-status').innerText = (students[id]?.name || "生徒") + "さんの画面";
 
-        // 全員へ送るストリームを更新（映像＝生徒、音声＝ミキサー[全員分]）
+        // ★映像＝生徒、音声＝全員分ミックス音声
         const mixedStream = new MediaStream([
             studentVideo.srcObject.getVideoTracks()[0],
             mixerDest.stream.getAudioTracks()[0]
@@ -267,9 +309,9 @@
         isSpotlighting = false;
         document.getElementById('main-broadcast-video').srcObject = localStream;
         document.getElementById('reset-broadcast-btn').classList.add('hidden');
-        document.getElementById('broadcast-status').innerText = "配信中";
+        document.getElementById('broadcast-status').innerText = "ミーティング中";
         
-        // 先生の映像 ＋ ミキサーの音声に戻す
+        // ★映像＝先生、音声＝全員分ミックス音声
         const teacherMixedStream = new MediaStream([
             localStream.getVideoTracks()[0],
             mixerDest.stream.getAudioTracks()[0]
@@ -306,12 +348,13 @@
     function addStudentToGrid(id, stream) {
         if(document.getElementById('card-'+id)) return;
         const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
+        const initialName = (students[id] && students[id].name) ? students[id].name : "接続中...";
         card.innerHTML = `
             <video id="v-${id}" autoplay playsinline muted></video>
-            <div id="name-${id}" class="name-badge">接続中...</div>
+            <div id="name-${id}" class="name-badge">${initialName}</div>
             <div style="display:flex; gap:2px; margin-top:5px;">
-                <button class="btn-mini btn-warning" style="flex:1" onclick="spotlightStudent('${id}')">共有</button>
-                <button class="btn-mini btn-danger" onclick="kickStudent('${id}')">✕</button>
+                <button class="btn-mini btn-warning" style="flex:1" onclick="spotlightStudent('${id}'); initAudioContext();">共有</button>
+                <button class="btn-mini btn-danger" onclick="kickStudent('${id}'); initAudioContext();">✕</button>
             </div>`;
         document.getElementById('monitor-area').appendChild(card);
         document.getElementById('v-'+id).srcObject = stream;
@@ -322,8 +365,7 @@
     async function changeMyMedia() {
         await getMedia(document.getElementById('switch-media').value);
         if(!isSpotlighting) {
-            // 先生の場合、映像トラックのみ差し替え（音声はミキサーが生きているため）
-            if (myRole === 'teacher') {
+            if (myRole === 'teacher' && mixerDest) {
                 const teacherMixedStream = new MediaStream([localStream.getVideoTracks()[0], mixerDest.stream.getAudioTracks()[0]]);
                 replaceAllTracks(teacherMixedStream);
             } else {
@@ -332,7 +374,7 @@
         }
     }
 
-    function forceExitAll() { if(confirm("全員退出？")) Object.values(connections).forEach(c => c.send({type:'EXIT'})); }
+    function forceExitAll() { if(confirm("全員退出させますか？")) Object.values(connections).forEach(c => c.send({type:'EXIT'})); }
     function kickStudent(id) { if(confirm("退出？")) connections[id]?.send({type:'EXIT'}); }
 
     function toggleMic() {
@@ -347,7 +389,9 @@
     }
 
     function addChat(name, msg) {
-        const div = document.createElement('div'); div.innerHTML = `<span class="chat-name">${name}:</span> ${msg}`;
+        const div = document.createElement('div');
+        div.style.marginBottom = "4px";
+        div.innerHTML = `<span class="chat-name">${name}:</span> ${msg}`;
         const box = document.getElementById('chat-messages'); box.appendChild(div); box.scrollTop = box.scrollHeight;
     }
 
