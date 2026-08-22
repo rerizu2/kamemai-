@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-MEETING v4.5 (Volume Visualizer)</title>
+    <title>EDU-MEETING v4.6 (Teacher Screen Share Only)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -31,7 +31,6 @@
         .student-card { background: #222; padding: 5px; border-radius: 8px; border: 1px solid #444; text-align: center; position: relative; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; object-fit: cover; }
 
-        /* 音量レベルメーターのスタイル */
         .vol-container { width: 100%; height: 4px; background: #444; border-radius: 2px; margin-top: 4px; overflow: hidden; }
         .vol-bar { height: 100%; width: 0%; background: var(--success); transition: width 0.1s; }
 
@@ -57,12 +56,12 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-MEETING v4.5</h2>
+        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-MEETING v4.6</h2>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" pattern="\d*">
         <select id="start-media-type">
             <option value="camera">📷 カメラで開始</option>
-            <option value="screen">💻 画面共有で開始</option>
+            <option value="screen">💻 画面共有で開始(ホストのみ)</option>
         </select>
         <button class="btn-primary" style="margin-top:5px;" onclick="start('teacher')">ホストとして開始</button>
         <button class="btn-success" style="margin-top:10px;" onclick="start('student')">参加者として参加</button>
@@ -98,11 +97,12 @@
                     <button id="cam-btn" class="btn-success" onclick="toggleCam()" style="font-size:12px; padding:6px;">📷 ON</button>
                 </div>
             </div>
+            <!-- このセレクトボックスは参加者の場合は非表示にする -->
             <select id="switch-media" onchange="changeMyMedia()" style="width:100%; margin-top:8px; background:#000; color:white; border:1px solid #444; font-size:12px; padding:8px;">
                 <option value="camera">📷 カメラ切替</option>
                 <option value="screen">💻 画面共有切替</option>
             </select>
-            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; font-size:12px;" onclick="resetToTeacherStream()">🔄 自分の配信に戻す</button>
+            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; font-size:12px;" onclick="resetToTeacherStream()">🔄 ホストの配信を表示</button>
         </div>
 
         <div id="teacher-tools" class="hidden">
@@ -137,8 +137,12 @@
         if(!currentRid) return alert("部屋IDを入力してください");
         myRole = role;
 
+        // ★ 参加者（生徒）の場合は、画面共有が選択されていても強制的にカメラにする
+        let selectedMedia = document.getElementById('start-media-type').value;
+        if(role === 'student') selectedMedia = 'camera';
+
         try {
-            await getMedia(document.getElementById('start-media-type').value);
+            await getMedia(selectedMedia);
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('self-name-label').innerText = myName;
 
@@ -149,7 +153,6 @@
                 document.getElementById('room-display').innerText = "ID: " + currentRid;
                 document.getElementById('role-label').innerText = role === 'teacher' ? "HOST" : "GUEST";
                 if(role === 'teacher') initTeacher(); else initStudent();
-                // 自分の声も可視化
                 setupVolumeMeter(localStream, 'my-vol-bar');
             });
 
@@ -163,7 +166,7 @@
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
-        } catch(e) { alert("メディア取得失敗"); }
+        } catch(e) { alert("カメラ/マイクの使用を許可してください"); }
     }
 
     async function getMedia(type) {
@@ -174,6 +177,7 @@
             videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
             document.getElementById('my-video').style.transform = "scaleX(-1)";
         } else {
+            // 先生のみここが実行可能
             videoStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         }
         localStream = new MediaStream([...videoStream.getVideoTracks(), ...(micStream ? micStream.getAudioTracks() : [])]);
@@ -181,28 +185,22 @@
         if(myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
     }
 
-    // ★ 音量メーターのロジック
     function setupVolumeMeter(stream, barId) {
         const audioTracks = stream.getAudioTracks();
         if (audioTracks.length === 0) return;
-
         const meterContext = new (window.AudioContext || window.webkitAudioContext)();
         const source = meterContext.createMediaStreamSource(new MediaStream([audioTracks[0]]));
         const analyser = meterContext.createAnalyser();
         analyser.fftSize = 256;
         source.connect(analyser);
-
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const bar = document.getElementById(barId);
-
         function update() {
-            if (!document.getElementById(barId)) return; // 要素が消えたら停止
+            if (!document.getElementById(barId)) return;
             analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            let sum = 0; for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
             let average = sum / dataArray.length;
-            let volume = Math.min(100, average * 2.5); // 感度調整
-            if (bar) bar.style.width = volume + "%";
+            if (bar) bar.style.width = Math.min(100, average * 2.5) + "%";
             requestAnimationFrame(update);
         }
         update();
@@ -214,6 +212,9 @@
     }
 
     function initStudent() {
+        // ★ 参加者の場合は、メディア切り替えボタン自体を非表示にする
+        document.getElementById('switch-media').classList.add('hidden');
+
         const tid = "T-ROOM-" + currentRid;
         const conn = peer.connect(tid);
         conn.on('open', () => conn.send({type:'JOIN', name:myName}));
@@ -227,7 +228,6 @@
         const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
         const name = students[id] ? students[id].name : "参加者";
         const volBarId = "vol-" + id;
-        
         card.innerHTML = `
             <video id="v-${id}" autoplay playsinline></video>
             <div style="font-size:10px; margin-top:2px;">${name}</div>
@@ -236,8 +236,6 @@
         `;
         document.getElementById('monitor-area').appendChild(card);
         document.getElementById('v-'+id).srcObject = stream;
-        
-        // 音量メーターの開始
         setupVolumeMeter(stream, volBarId);
     }
 
@@ -286,8 +284,7 @@
     function removeStudent(id) {
         const card = document.getElementById('card-'+id);
         if(card) card.remove();
-        delete students[id];
-        delete connections[id];
+        delete students[id]; delete connections[id];
     }
 
     function toggleMic() {
@@ -331,8 +328,9 @@
     }
 
     async function changeMyMedia() {
+        // ホストのみ切り替え可能
         await getMedia(document.getElementById('switch-media').value);
-        setupVolumeMeter(localStream, 'my-vol-bar'); // メディア切り替え時に再設定
+        setupVolumeMeter(localStream, 'my-vol-bar');
         const vt = localStream.getVideoTracks()[0];
         const at = localStream.getAudioTracks()[0];
         Object.values(peer.connections).forEach(conns => {
