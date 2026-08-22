@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v5.1 - Fixed Name Display</title>
+    <title>EDU-ULTIMATE v5.2 - Perfect Edition</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -14,23 +14,57 @@
         }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; overflow: hidden; }
         
+        /* セットアップ画面 */
         #setup-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 10000; padding: 20px; }
-        .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 100%; max-width: 360px; border: 1px solid #444; }
+        .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 100%; max-width: 360px; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .modal-box h2 { color: var(--accent); margin-bottom: 15px; font-size: 24px; }
         .modal-box input, .modal-box select { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; font-size: 16px; }
         
+        /* ヘッダー */
         header { background: #111; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; height: var(--header-h); border-bottom: 1px solid #333; flex-shrink: 0; }
+        
+        /* メインレイアウト（横並び） */
         .main-layout { display: flex; flex: 1; overflow: hidden; }
-        .content-area { flex: 1; display: flex; flex-direction: row; background: #000; overflow: hidden; }
-        .broadcast-container { flex: 1; position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        #main-broadcast-video { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.3s ease; }
 
-        .monitor-grid { width: var(--monitor-w); background: #111; border-left: 2px solid #333; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; flex-shrink: 0; }
+        /* コンテンツエリア */
+        .content-area { flex: 1; display: flex; flex-direction: row; background: #000; overflow: hidden; }
+
+        /* メイン配信ビデオエリア */
+        .broadcast-container { 
+            flex: 1; 
+            position: relative; 
+            background: #000; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden; 
+        }
+        #main-broadcast-video { 
+            max-width: 100%; 
+            max-height: 100%; 
+            object-fit: contain; 
+            transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease; 
+        }
+
+        /* モニターエリア（先生用：生徒一覧） */
+        .monitor-grid { 
+            width: var(--monitor-w); 
+            background: #111; 
+            border-left: 2px solid #333; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            padding: 10px; 
+            overflow-y: auto; 
+            flex-shrink: 0; 
+        }
         .student-card { background: #222; padding: 5px; border-radius: 8px; border: 1px solid #444; text-align: center; flex-shrink: 0; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; object-fit: cover; }
         .name-badge { font-size: 13px; font-weight: bold; color: var(--accent); margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(0,0,0,0.3); padding: 2px; border-radius: 4px; }
 
+        /* サイドバー（操作パネル） */
         .sidebar { width: var(--sidebar-w); background: #111; border-left: 1px solid #333; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+        
         button { cursor: pointer; border: none; font-weight: bold; border-radius: 8px; transition: 0.2s; font-size: 13px; padding: 10px; }
         .btn-primary { background: #0097e6; color: white; width: 100%; }
         .btn-success { background: var(--success); color: white; }
@@ -40,14 +74,18 @@
         
         #chat-messages { flex: 1; min-height: 100px; overflow-y: auto; font-size: 12px; background: #000; padding: 8px; border-radius: 5px; border: 1px solid #333; }
         .chat-name { color: var(--accent); font-weight: bold; }
-        .hidden { display: none !important; }
 
+        .hidden { display: none !important; }
+        .recording-active { background: var(--danger) !important; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.7; } }
+
+        /* レスポンシブ対応 */
         @media (max-width: 1000px) {
-            .content-area { flex-direction: column; }
+            .main-layout { flex-direction: column; }
+            .content-area { flex-direction: column; flex: 2; }
             .monitor-grid { width: 100%; height: 130px; flex-direction: row; border-left: none; border-top: 2px solid #333; }
             .student-card { width: 140px; }
-            .sidebar { width: 100%; height: auto; border-left: none; border-top: 1px solid #333; }
-            .main-layout { flex-direction: column; }
+            .sidebar { width: 100%; border-left: none; border-top: 1px solid #333; flex: 1; }
         }
     </style>
 </head>
@@ -55,7 +93,7 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2>EDU-ULTIMATE v5.1</h2>
+        <h2>EDU-ULTIMATE v5.2</h2>
         <input type="text" id="user-name" placeholder="あなたの氏名を入力" required>
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" required>
         <select id="start-media-type">
@@ -70,7 +108,7 @@
 <header>
     <div style="display:flex; align-items:center; gap:8px;">
         <span id="role-label" style="background:var(--accent); color:#000; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:10px;">READY</span>
-        <button onclick="rotateVideo()" style="background:#555; color:white; padding:5px 12px; font-size:12px; border-radius:4px;">🔄 回転</button>
+        <button onclick="rotateVideo()" style="background:#555; color:white; padding:5px 12px; font-size:12px; border-radius:4px;">🔄 画面回転</button>
     </div>
     <div style="text-align:right;">
         <span id="broadcast-status" style="font-size:10px; background:#333; padding:2px 6px; border-radius:4px;">待機中</span>
@@ -80,12 +118,15 @@
 
 <div class="main-layout">
     <div class="content-area">
+        <!-- メイン映像 -->
         <div class="broadcast-container" id="video-container">
             <video id="main-broadcast-video" autoplay playsinline></video>
         </div>
+        <!-- 生徒モニター（先生のみ） -->
         <div id="monitor-area" class="monitor-grid hidden"></div>
     </div>
 
+    <!-- 右側操作パネル -->
     <div class="sidebar">
         <div class="panel">
             <video id="my-video" autoplay playsinline muted style="width:90px; height:68px; background:#000; border-radius:5px; float:right; margin-left:8px; object-fit: cover;"></video>
@@ -95,8 +136,8 @@
                 <button id="cam-btn" class="btn-success" onclick="toggleCam()" style="padding:6px;">📷 ON</button>
             </div>
             <select id="switch-media" onchange="changeMyMedia()" style="width:100%; margin-top:8px; background:#000; color:white; border:1px solid #444; font-size:11px; padding:8px;">
-                <option value="camera">📷 カメラ切替</option>
-                <option value="screen">💻 画面共有切替</option>
+                <option value="camera">📷 カメラに切替</option>
+                <option value="screen">💻 画面共有に切替</option>
             </select>
             <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; width:100%;" onclick="resetToTeacherStream()">🔄 自分の配信に戻す</button>
         </div>
@@ -104,17 +145,18 @@
         <div id="teacher-tools" class="hidden">
             <button id="record-btn" class="btn-primary" style="margin-bottom:5px;" onclick="toggleRecording()">🔴 録画開始</button>
             <button class="btn-danger" style="width:100%; font-size:11px;" onclick="forceExitAll()">全生徒退出</button>
+            <div id="qrcode" style="margin-top:10px; display:flex; justify-content:center;"></div>
         </div>
 
         <div id="chat-messages"></div>
-        <input type="text" id="chat-input" placeholder="メッセージ..." style="width:100%; box-sizing:border-box; background:#000; color:white; border:1px solid #444; padding:12px; border-radius:5px;">
+        <input type="text" id="chat-input" placeholder="メッセージを入力..." style="width:100%; box-sizing:border-box; background:#000; color:white; border:1px solid #444; padding:12px; border-radius:5px;">
     </div>
 </div>
 
 <script>
     let peer, localStream, myRole = "", currentRid = "", myName = "";
     let connections = {};
-    let students = {}; // ピアIDごとの名前を保存する辞書
+    let students = {}; // ピアIDと名前の紐付け
     let isSpotlighting = false;
     let audioCtx, retryInterval = null, currentRotation = 0;
     let mediaRecorder, recordedChunks = [];
@@ -158,20 +200,23 @@
                 if(role === 'teacher') initTeacher(); else initStudent();
             });
 
-            // 先生側：ビデオ着信時にカード作成
+            // ビデオ着信時の処理
             peer.on('call', call => {
                 call.answer(localStream);
                 call.on('stream', s => addStudentToGrid(call.peer, s));
             });
 
-            // 先生側：データ通信接続時に名前を受け取る準備
+            // データ通信着信時の処理
             peer.on('connection', conn => {
                 connections[conn.peer] = conn;
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
 
-            peer.on('error', err => console.log("PeerJS Error:", err.type));
+            peer.on('error', err => {
+                if(err.type === 'peer-unavailable') console.log("Waiting...");
+                else console.error("PeerJS Error:", err);
+            });
 
         } catch(e) { console.error(e); alert("メディア取得失敗"); }
     }
@@ -213,6 +258,7 @@
         document.getElementById('monitor-area').classList.remove('hidden');
         document.getElementById('main-broadcast-video').srcObject = localStream;
         document.getElementById('broadcast-status').innerText = "配信中";
+        new QRCode(document.getElementById("qrcode"), { text: location.href, width: 80, height: 80 });
     }
 
     function initStudent() {
@@ -225,7 +271,7 @@
                 clearInterval(retryInterval);
                 document.getElementById('broadcast-status').innerText = "接続済み";
                 connections[tid] = conn;
-                // ★重要：接続が開いたらすぐに名前を送信
+                // 接続直後に名前を送る
                 conn.send({type:'JOIN', name:myName});
                 
                 const call = peer.call(tid, localStream);
@@ -239,29 +285,23 @@
         startRetryLoop();
     }
 
-    // 名前データの受信処理
+    // 名前データの反映処理を強化
     function handleData(id, data) {
         if(data.type === 'JOIN') {
-            students[id] = { name: data.name }; // 辞書に保存
-            updateStudentNameUI(id, data.name); // UIを更新
+            students[id] = { name: data.name };
+            // すでにカードがあれば名前を書き換える
+            const label = document.getElementById('name-' + id);
+            if(label) label.innerText = data.name;
         }
         if(data.type === 'CHAT') addChat(data.name, data.msg);
         if(data.type === 'EXIT') location.reload();
-    }
-
-    // 指定したピアIDの名前表示を書き換える
-    function updateStudentNameUI(id, name) {
-        const label = document.getElementById('name-' + id);
-        if(label) {
-            label.innerText = name;
-        }
     }
 
     function addStudentToGrid(id, stream) {
         if(document.getElementById('card-'+id)) return;
         const card = document.createElement('div'); card.className = 'student-card'; card.id = 'card-'+id;
         
-        // カード作成時、もし既に名前データ(JOIN)が届いていればそれを使う、無ければ「接続中...」
+        // 既にデータ通信(JOIN)で名前が届いていればそれを使う
         const initialName = (students[id] && students[id].name) ? students[id].name : "接続中...";
         
         card.innerHTML = `
@@ -285,6 +325,7 @@
         const sName = (students[id] && students[id].name) ? students[id].name : "生徒";
         document.getElementById('broadcast-status').innerText = sName + " さんの画面を共有中";
         
+        // 【重要】先生のマイク ＋ 生徒の映像をミックス
         const teacherAudioTrack = localStream.getAudioTracks()[0];
         const studentVideoTrack = studentStream.getVideoTracks()[0];
         const mixedStream = new MediaStream();
