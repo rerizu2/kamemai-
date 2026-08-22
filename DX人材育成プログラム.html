@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v4.3 Mobile Friendly</title>
+    <title>EDU-ULTIMATE v4.5 - Auto Waiting Room</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -34,12 +34,11 @@
         .broadcast-container { flex: 2; position: relative; background: #000; display: flex; justify-content: center; align-items: center; min-height: 200px; }
         #main-broadcast-video { width: 100%; height: 100%; object-fit: contain; }
         
-        /* モニターエリア（グリッド） */
+        /* モニターエリア */
         .monitor-grid { flex: 1; background: #111; border-top: 2px solid #333; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 10px; overflow-y: auto; }
         .student-card { background: #222; padding: 5px; border-radius: 8px; border: 1px solid #444; text-align: center; }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; object-fit: cover; }
 
-        /* ボタン */
         button { cursor: pointer; border: none; font-weight: bold; border-radius: 8px; transition: 0.2s; font-size: 14px; padding: 10px; }
         .btn-primary { background: #0097e6; color: white; width: 100%; }
         .btn-success { background: var(--success); color: white; width: 100%; }
@@ -47,16 +46,11 @@
         .btn-warning { background: var(--warning); color: black; width: 100%; }
         .btn-mini { padding: 5px; font-size: 11px; margin-top: 5px; border-radius: 4px; }
         
-        /* 録画中表示用 */
         .recording-active { background: var(--danger) !important; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0.7; } }
-
         .hidden { display: none !important; }
-
-        /* チャット */
         #chat-messages { flex: 1; min-height: 100px; overflow-y: auto; font-size: 12px; background: #000; padding: 5px; border-radius: 5px; }
 
-        /* スマホ向けレスポンシブ設定 */
         @media (max-width: 768px) {
             .main-layout { flex-direction: column; }
             .sidebar { width: 100%; height: auto; border-right: none; border-top: 1px solid #333; order: 2; max-height: 40%; }
@@ -70,7 +64,7 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v4.3</h2>
+        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v4.5</h2>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" pattern="\d*">
         <select id="start-media-type">
@@ -139,12 +133,11 @@
     let students = {};
     let isSpotlighting = false;
     let audioCtx;
+    let retryInterval = null; // 接続再試行用タイマー
     
-    // 録画用変数
     let mediaRecorder;
     let recordedChunks = [];
 
-    // スマホのオーディオ制限解除用
     function initAudioContext() {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -165,6 +158,7 @@
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('self-name-label').innerText = myName;
 
+            // 先生は固定ID、生徒は自動割り当てID
             peer = new Peer(role === 'teacher' ? "T-ROOM-" + currentRid : undefined);
             
             peer.on('open', id => {
@@ -185,13 +179,19 @@
             });
 
             peer.on('error', err => {
-                if(err.type === 'unavailable-id') alert("この部屋IDは既に使用されているか、作成できません。");
-                console.error(err);
+                // 生徒が先生を探している時のエラー（peer-unavailable）は無視する
+                if(err.type === 'peer-unavailable') {
+                    console.log("先生はまだ入室していません...");
+                } else if(err.type === 'unavailable-id') {
+                    alert("この部屋IDは既に先生が使用しています。");
+                } else {
+                    console.error("Peer Error:", err);
+                }
             });
 
         } catch(e) { 
             console.error(e);
-            alert("メディア取得に失敗。カメラ/マイクを許可してください。"); 
+            alert("メディア取得に失敗しました。"); 
         }
     }
 
@@ -233,89 +233,6 @@
         }
     }
 
-    // 録画の開始・停止切り替え
-    function toggleRecording() {
-        if (!mediaRecorder || mediaRecorder.state === "inactive") {
-            startRecording();
-        } else {
-            stopRecording();
-        }
-    }
-
-    function startRecording() {
-        const videoElement = document.getElementById('main-broadcast-video');
-        const stream = videoElement.srcObject;
-        
-        if (!stream) return alert("録画する映像がありません。");
-
-        recordedChunks = [];
-        // ブラウザの対応状況に合わせてMIMEタイプを選択
-        const options = { mimeType: 'video/webm; codecs=vp9,opus' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options.mimeType = 'video/webm';
-        }
-
-        mediaRecorder = new MediaRecorder(stream, options);
-
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) recordedChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `record_${new Date().getTime()}.webm`;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }, 100);
-            
-            const btn = document.getElementById('record-btn');
-            btn.innerText = "🔴 録画開始";
-            btn.classList.remove('recording-active');
-        };
-
-        mediaRecorder.start();
-        const btn = document.getElementById('record-btn');
-        btn.innerText = "⏹ 録画停止";
-        btn.classList.add('recording-active');
-    }
-
-    function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state !== "inactive") {
-            mediaRecorder.stop();
-        }
-    }
-
-    async function changeMyMedia() {
-        await getMedia(document.getElementById('switch-media').value);
-        if(!isSpotlighting) replaceAllTracks(localStream);
-    }
-
-    function replaceAllTracks(stream) {
-        const vt = stream.getVideoTracks()[0];
-        const at = stream.getAudioTracks()[0];
-        Object.values(peer.connections).forEach(conns => {
-            conns.forEach(call => {
-                if(call.peerConnection) {
-                    const senders = call.peerConnection.getSenders();
-                    const vs = senders.find(s => s.track && s.track.kind==='video');
-                    const as = senders.find(s => s.track && s.track.kind==='audio');
-                    if(vs && vt) vs.replaceTrack(vt).catch(console.error);
-                    if(as && at) as.replaceTrack(at).catch(console.error);
-                }
-            });
-        });
-        
-        // 録画中にソースが変わった場合、MediaRecorderは現在のストリームを追いかけますが、
-        // PeerJSのreplaceTrackなら継続可能です。srcObject自体を差し替えると録画が止まる場合があるため注意。
-    }
-
     function initTeacher() {
         document.getElementById('teacher-tools').classList.remove('hidden');
         document.getElementById('monitor-area').classList.remove('hidden');
@@ -324,13 +241,82 @@
         new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?id=" + currentRid, width: 80, height: 80 });
     }
 
+    // --- 生徒の入室待機ロジック ---
     function initStudent() {
         const tid = "T-ROOM-" + currentRid;
-        const conn = peer.connect(tid);
-        conn.on('open', () => conn.send({type:'JOIN', name:myName}));
-        conn.on('data', data => handleData(tid, data));
-        const call = peer.call(tid, localStream);
-        call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
+        
+        const tryConnect = () => {
+            // 既に接続されている場合は何もしない
+            if (connections[tid] && connections[tid].open) return;
+
+            document.getElementById('broadcast-status').innerText = "先生の入室を待機中...";
+            document.getElementById('broadcast-status').style.background = "var(--warning)";
+            document.getElementById('broadcast-status').style.color = "#000";
+
+            const conn = peer.connect(tid);
+            
+            conn.on('open', () => {
+                console.log("先生に接続しました！");
+                clearInterval(retryInterval); // 接続成功したら再試行を止める
+                document.getElementById('broadcast-status').innerText = "接続済み";
+                document.getElementById('broadcast-status').style.background = "#444";
+                document.getElementById('broadcast-status').style.color = "#fff";
+                
+                connections[tid] = conn;
+                conn.send({type:'JOIN', name:myName});
+                
+                // 先生に自分の映像を送る
+                const call = peer.call(tid, localStream);
+                call.on('stream', s => { 
+                    document.getElementById('main-broadcast-video').srcObject = s; 
+                });
+            });
+
+            // 接続が切れた場合
+            conn.on('close', () => {
+                console.log("先生が退出しました。再待機します...");
+                delete connections[tid];
+                startRetryLoop();
+            });
+        };
+
+        const startRetryLoop = () => {
+            if (retryInterval) clearInterval(retryInterval);
+            tryConnect();
+            retryInterval = setInterval(tryConnect, 3000); // 3秒おきにチェック
+        };
+
+        startRetryLoop();
+    }
+
+    function spotlightStudent(id) {
+        const studentVideo = document.getElementById('v-'+id);
+        if(!studentVideo) return;
+        isSpotlighting = true;
+        const studentStream = studentVideo.srcObject;
+        
+        document.getElementById('main-broadcast-video').srcObject = studentStream;
+        document.getElementById('reset-broadcast-btn').classList.remove('hidden');
+        document.getElementById('broadcast-status').innerText = "生徒画面を共有中";
+        document.getElementById('broadcast-status').style.background = "var(--warning)";
+
+        const teacherAudioTrack = localStream.getAudioTracks()[0];
+        const studentVideoTrack = studentStream.getVideoTracks()[0];
+
+        const mixedStream = new MediaStream();
+        if(studentVideoTrack) mixedStream.addTrack(studentVideoTrack);
+        if(teacherAudioTrack) mixedStream.addTrack(teacherAudioTrack);
+
+        replaceAllTracks(mixedStream);
+    }
+
+    function resetToTeacherStream() {
+        isSpotlighting = false;
+        document.getElementById('main-broadcast-video').srcObject = localStream;
+        document.getElementById('reset-broadcast-btn').classList.add('hidden');
+        document.getElementById('broadcast-status').innerText = "配信中";
+        document.getElementById('broadcast-status').style.background = "#444";
+        replaceAllTracks(localStream);
     }
 
     function addStudentToGrid(id, stream) {
@@ -350,29 +336,65 @@
     function removeStudent(id) {
         const card = document.getElementById('card-'+id);
         if(card) card.remove();
-        delete students[id];
-        delete connections[id];
+        delete students[id]; delete connections[id];
     }
 
-    function spotlightStudent(id) {
-        const studentVideo = document.getElementById('v-'+id);
-        if(!studentVideo) return;
-        isSpotlighting = true;
-        const studentStream = studentVideo.srcObject;
-        document.getElementById('main-broadcast-video').srcObject = studentStream;
-        document.getElementById('reset-broadcast-btn').classList.remove('hidden');
-        document.getElementById('broadcast-status').innerText = "生徒画面を共有中";
-        document.getElementById('broadcast-status').style.background = "var(--warning)";
-        replaceAllTracks(studentStream);
+    function replaceAllTracks(stream) {
+        const vt = stream.getVideoTracks()[0];
+        const at = stream.getAudioTracks()[0];
+        Object.values(peer.connections).forEach(conns => {
+            conns.forEach(call => {
+                if(call.peerConnection) {
+                    const senders = call.peerConnection.getSenders();
+                    const vs = senders.find(s => s.track && s.track.kind==='video');
+                    const as = senders.find(s => s.track && s.track.kind==='audio');
+                    if(vs && vt) vs.replaceTrack(vt).catch(console.error);
+                    if(as && at) as.replaceTrack(at).catch(console.error);
+                }
+            });
+        });
     }
 
-    function resetToTeacherStream() {
-        isSpotlighting = false;
-        document.getElementById('main-broadcast-video').srcObject = localStream;
-        document.getElementById('reset-broadcast-btn').classList.add('hidden');
-        document.getElementById('broadcast-status').innerText = "配信中";
-        document.getElementById('broadcast-status').style.background = "#444";
-        replaceAllTracks(localStream);
+    function toggleRecording() {
+        if (!mediaRecorder || mediaRecorder.state === "inactive") {
+            startRecording();
+        } else {
+            stopRecording();
+        }
+    }
+
+    function startRecording() {
+        const videoElement = document.getElementById('main-broadcast-video');
+        const stream = videoElement.srcObject;
+        if (!stream) return alert("録画する映像がありません。");
+        recordedChunks = [];
+        const options = { mimeType: 'video/webm; codecs=vp9,opus' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) options.mimeType = 'video/webm';
+        mediaRecorder = new MediaRecorder(stream, options);
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none'; a.href = url;
+            a.download = `record_${new Date().getTime()}.webm`;
+            document.body.appendChild(a); a.click();
+            setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
+            const btn = document.getElementById('record-btn');
+            btn.innerText = "🔴 録画開始"; btn.classList.remove('recording-active');
+        };
+        mediaRecorder.start();
+        const btn = document.getElementById('record-btn');
+        btn.innerText = "⏹ 録画停止"; btn.classList.add('recording-active');
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    }
+
+    async function changeMyMedia() {
+        await getMedia(document.getElementById('switch-media').value);
+        if(!isSpotlighting) replaceAllTracks(localStream);
     }
 
     function handleData(id, data) {
@@ -382,22 +404,15 @@
             if(label) label.innerText = data.name;
         }
         if(data.type === 'CHAT') addChat(data.name, data.msg);
-        if(data.type === 'EXIT') {
-            alert("強制退出させられました。");
-            location.reload();
-        }
+        if(data.type === 'EXIT') { alert("強制退出させられました。"); location.reload(); }
     }
 
     function forceExitAll() {
-        if(confirm("全員を強制退出させますか？")) {
-            Object.values(connections).forEach(c => c.send({type:'EXIT'}));
-        }
+        if(confirm("全員を強制退出させますか？")) Object.values(connections).forEach(c => c.send({type:'EXIT'}));
     }
 
     function kickStudent(id) {
-        if(confirm("この生徒を退出させますか？")) {
-            if(connections[id]) connections[id].send({type:'EXIT'});
-        }
+        if(confirm("この生徒を退出させますか？")) { if(connections[id]) connections[id].send({type:'EXIT'}); }
     }
 
     function toggleMic() {
