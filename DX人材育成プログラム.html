@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v5.0 Full Suite</title>
+    <title>EDU-ULTIMATE v5.1 Broadcaster</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -18,35 +18,27 @@
             overflow: hidden; user-select: none;
         }
         
-        /* セットアップ画面 */
         #setup-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 10000; padding: 20px; }
         .modal-box { background: #222; padding: 25px; border-radius: 24px; text-align: center; width: 100%; max-width: 360px; border: 1px solid #444; }
         .modal-box input, .modal-box select { width: 100%; padding: 14px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; font-size: 16px; }
         
-        /* ヘッダー */
         header { background: #111; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; height: var(--header-h); border-bottom: 1px solid #333; flex-shrink: 0; }
         .room-id-badge { font-size: 12px; opacity: 0.8; }
 
-        /* レイアウト */
         .main-layout { display: flex; flex: 1; overflow: hidden; flex-direction: row; }
         .sidebar { width: var(--sidebar-w); background: #111; border-right: 1px solid #333; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
         .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; overflow: hidden; }
         
-        /* メイン映像 */
         .broadcast-container { flex: 1.5; position: relative; background: #000; display: flex; justify-content: center; align-items: center; min-height: 200px; border-bottom: 2px solid #333; }
         #main-broadcast-video { width: 100%; height: 100%; object-fit: contain; }
         
-        /* グリッド（参加者一覧） */
         .monitor-grid { flex: 1; background: #111; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 12px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
         .student-card { background: #222; padding: 8px; border-radius: 12px; border: 1px solid #444; text-align: center; position: relative; transition: 0.1s; }
-        .student-card:active { transform: scale(0.98); }
         .student-card video { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; object-fit: cover; cursor: pointer; }
 
-        /* 音量メーター */
         .vol-container { width: 100%; height: 4px; background: #444; border-radius: 2px; margin: 5px 0; overflow: hidden; }
         .vol-bar { height: 100%; width: 0%; background: var(--success); transition: width 0.1s; }
 
-        /* ボタン */
         button { cursor: pointer; border: none; font-weight: bold; border-radius: 12px; transition: 0.2s; font-size: 14px; padding: 12px; touch-action: manipulation; }
         button:active { filter: brightness(0.7); }
         .btn-primary { background: #0097e6; color: white; width: 100%; }
@@ -73,7 +65,7 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.0</h2>
+        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.1</h2>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" pattern="\d*">
         <select id="start-media-type">
@@ -96,7 +88,7 @@
 <div class="main-layout">
     <div class="content-area">
         <div class="broadcast-container">
-            <div style="position:absolute; top:8px; left:8px; z-index:10;"><span style="background:red; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">● LIVE / FOCUS</span></div>
+            <div id="live-indicator" style="position:absolute; top:8px; left:8px; z-index:10;"><span style="background:red; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">● LIVE</span></div>
             <video id="main-broadcast-video" autoplay playsinline></video>
         </div>
         <div id="monitor-area" class="monitor-grid"></div>
@@ -116,10 +108,10 @@
                 </div>
             </div>
             <select id="switch-media" onchange="changeMyMedia()" style="width:100%; margin-top:10px; background:#111; color:white; border:1px solid #444; font-size:12px; padding:8px;">
-                <option value="camera">📷 カメラに切替</option>
-                <option value="screen">💻 画面共有に切替</option>
+                <option value="camera">📷 カメラ切替</option>
+                <option value="screen">💻 画面共有切替</option>
             </select>
-            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; font-size:12px;" onclick="resetToTeacherStream()">🔄 自分の配信に戻す</button>
+            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; font-size:12px;" onclick="resetToTeacherStream()">🔄 全員に自分の配信を戻す</button>
         </div>
 
         <div id="teacher-tools" class="hidden">
@@ -143,6 +135,7 @@
     let students = {};
     let audioCtx;
     let mediaRecorder, recordedChunks = [];
+    let isReStreaming = false;
 
     function initAudioContext() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -187,7 +180,7 @@
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
-        } catch(e) { alert("メディア取得失敗。許可してください。"); }
+        } catch(e) { alert("メディア取得失敗"); }
     }
 
     async function getMedia(type) {
@@ -205,7 +198,7 @@
         }
         localStream = new MediaStream([...videoStream.getVideoTracks(), ...(micStream ? micStream.getAudioTracks() : [])]);
         document.getElementById('my-video').srcObject = localStream;
-        if(myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
+        if(myRole === 'teacher' && !isReStreaming) document.getElementById('main-broadcast-video').srcObject = localStream;
     }
 
     function setupVolumeMeter(stream, barId) {
@@ -233,7 +226,7 @@
 
     function initTeacher() {
         document.getElementById('teacher-tools').classList.remove('hidden');
-        document.getElementById('broadcast-status').innerText = "配信/会議中";
+        document.getElementById('broadcast-status').innerText = "配信中";
         new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?id=" + currentRid, width: 80, height: 80 });
     }
 
@@ -250,7 +243,7 @@
         if(data.type === 'JOIN') {
             students[id] = {name: data.name};
             if(myRole === 'teacher') broadcastUserList();
-            addChat("システム", data.name + "さんが入室しました");
+            addChat("システム", data.name + "さんが参加");
         }
         if(data.type === 'USER_LIST') {
             data.users.forEach(u => {
@@ -267,7 +260,7 @@
         }
         if(data.type === 'HELLO') students[id] = {name: data.name};
         if(data.type === 'CHAT') addChat(data.name, data.msg);
-        if(data.type === 'EXIT') { alert("退出しました"); location.reload(); }
+        if(data.type === 'EXIT') location.reload();
     }
 
     function broadcastUserList() {
@@ -286,7 +279,7 @@
             <div style="font-size:10px; margin-top:2px;">${name}</div>
             <div class="vol-container"><div id="${volBarId}" class="vol-bar"></div></div>
             <div style="display:flex; gap:2px;">
-                <button class="btn-mini btn-warning" onclick="spotlightStudent('${id}')">注目</button>
+                <button class="btn-mini btn-warning" onclick="spotlightStudent('${id}')">全体共有</button>
                 ${myRole==='teacher' ? `<button class="btn-mini btn-danger" onclick="kickStudent('${id}')">✕</button>` : ''}
             </div>
         `;
@@ -295,17 +288,53 @@
         setupVolumeMeter(stream, volBarId);
     }
 
+    // ★今回の主要機能：生徒の映像を全体にブロードキャストする
     function spotlightStudent(id) {
         const v = document.getElementById('v-'+id);
-        if(v) {
-            document.getElementById('main-broadcast-video').srcObject = v.srcObject;
+        if(!v) return;
+        const studentStream = v.srcObject;
+        document.getElementById('main-broadcast-video').srcObject = studentStream;
+        
+        if(myRole === 'teacher') {
+            isReStreaming = true;
+            replaceOutgoingTracks(studentStream);
+            document.getElementById('reset-broadcast-btn').classList.remove('hidden');
+            document.getElementById('broadcast-status').innerText = "生徒画面を全体共有中";
+            document.getElementById('broadcast-status').style.background = "var(--warning)";
+            document.getElementById('broadcast-status').style.color = "black";
+        } else {
+            // 生徒の場合は自分のローカル画面が切り替わるだけ
             document.getElementById('reset-broadcast-btn').classList.remove('hidden');
         }
     }
 
     function resetToTeacherStream() {
-        if(myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
+        isReStreaming = false;
+        if(myRole === 'teacher') {
+            document.getElementById('main-broadcast-video').srcObject = localStream;
+            replaceOutgoingTracks(localStream);
+            document.getElementById('broadcast-status').innerText = "配信中";
+            document.getElementById('broadcast-status').style.background = "#444";
+            document.getElementById('broadcast-status').style.color = "white";
+        }
         document.getElementById('reset-broadcast-btn').classList.add('hidden');
+    }
+
+    // ★全通信のトラックを差し替える関数
+    function replaceOutgoingTracks(stream) {
+        const vt = stream.getVideoTracks()[0];
+        const at = stream.getAudioTracks()[0];
+        Object.values(peer.connections).forEach(conns => {
+            conns.forEach(call => {
+                if(call.peerConnection) {
+                    const senders = call.peerConnection.getSenders();
+                    const vs = senders.find(s => s.track && s.track.kind==='video');
+                    const as = senders.find(s => s.track && s.track.kind==='audio');
+                    if(vs && vt) vs.replaceTrack(vt);
+                    if(as && at) as.replaceTrack(at);
+                }
+            });
+        });
     }
 
     function removeStudent(id) {
@@ -313,37 +342,6 @@
         if(card) card.remove();
         delete students[id];
         delete connections[id];
-    }
-
-    function kickStudent(id) {
-        if(confirm("この生徒を退出させますか？")) connections[id].send({type:'EXIT'});
-    }
-
-    function forceExitAll() {
-        if(confirm("全員を強制退出させますか？")) Object.values(connections).forEach(c => c.send({type:'EXIT'}));
-    }
-
-    // 録画機能
-    function toggleRecording() {
-        if (!mediaRecorder || mediaRecorder.state === "inactive") {
-            const stream = document.getElementById('main-broadcast-video').srcObject;
-            if (!stream) return alert("映像がありません");
-            recordedChunks = [];
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                a.download = `rec_${Date.now()}.webm`; a.click();
-            };
-            mediaRecorder.start();
-            document.getElementById('record-btn').innerText = "⏹ 録画停止";
-            document.getElementById('record-btn').classList.add('recording-active');
-        } else {
-            mediaRecorder.stop();
-            document.getElementById('record-btn').innerText = "🔴 録画開始";
-            document.getElementById('record-btn').classList.remove('recording-active');
-        }
     }
 
     function toggleMic() {
@@ -365,7 +363,7 @@
     }
 
     function addChat(name, msg) {
-        const div = document.createElement('div'); div.style.marginBottom = "4px";
+        const div = document.createElement('div');
         div.innerHTML = `<span style="color:var(--accent)">${name}:</span> ${msg}`;
         const box = document.getElementById('chat-messages');
         box.appendChild(div); box.scrollTop = box.scrollHeight;
@@ -381,22 +379,34 @@
         }
     }
 
+    function forceExitAll() { if(confirm("全員を退出させますか？")) Object.values(connections).forEach(c => c.send({type:'EXIT'})); }
+    function kickStudent(id) { if(confirm("退出させますか？")) connections[id].send({type:'EXIT'}); }
+
+    function toggleRecording() {
+        if (!mediaRecorder || mediaRecorder.state === "inactive") {
+            const stream = document.getElementById('main-broadcast-video').srcObject;
+            if (!stream) return;
+            recordedChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                a.download = `rec_${Date.now()}.webm`; a.click();
+            };
+            mediaRecorder.start();
+            document.getElementById('record-btn').innerText = "⏹ 停止";
+            document.getElementById('record-btn').classList.add('recording-active');
+        } else {
+            mediaRecorder.stop();
+            document.getElementById('record-btn').innerText = "🔴 録画";
+            document.getElementById('record-btn').classList.remove('recording-active');
+        }
+    }
+
     async function changeMyMedia() {
         await getMedia(document.getElementById('switch-media').value);
-        setupVolumeMeter(localStream, 'my-vol-bar');
-        const vt = localStream.getVideoTracks()[0];
-        const at = localStream.getAudioTracks()[0];
-        Object.values(peer.connections).forEach(conns => {
-            conns.forEach(call => {
-                if(call.peerConnection) {
-                    const senders = call.peerConnection.getSenders();
-                    const vs = senders.find(s => s.track && s.track.kind==='video');
-                    const as = senders.find(s => s.track && s.track.kind==='audio');
-                    if(vs && vt) vs.replaceTrack(vt);
-                    if(as && at) as.replaceTrack(at);
-                }
-            });
-        });
+        if(!isReStreaming) replaceOutgoingTracks(localStream);
     }
 </script>
 </body>
