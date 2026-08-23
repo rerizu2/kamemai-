@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-MEETING v4.6 (Teacher Screen Share Only)</title>
+    <title>EDU-MEETING v4.6 (Restricted Share)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -61,7 +61,7 @@
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" pattern="\d*">
         <select id="start-media-type">
             <option value="camera">📷 カメラで開始</option>
-            <option value="screen">💻 画面共有で開始(ホストのみ)</option>
+            <option value="screen">💻 画面共有で開始（ホストのみ）</option>
         </select>
         <button class="btn-primary" style="margin-top:5px;" onclick="start('teacher')">ホストとして開始</button>
         <button class="btn-success" style="margin-top:10px;" onclick="start('student')">参加者として参加</button>
@@ -97,12 +97,12 @@
                     <button id="cam-btn" class="btn-success" onclick="toggleCam()" style="font-size:12px; padding:6px;">📷 ON</button>
                 </div>
             </div>
-            <!-- このセレクトボックスは参加者の場合は非表示にする -->
+            <!-- 切替メニュー：生徒の場合はJavaScriptで非表示にされる -->
             <select id="switch-media" onchange="changeMyMedia()" style="width:100%; margin-top:8px; background:#000; color:white; border:1px solid #444; font-size:12px; padding:8px;">
                 <option value="camera">📷 カメラ切替</option>
                 <option value="screen">💻 画面共有切替</option>
             </select>
-            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; font-size:12px;" onclick="resetToTeacherStream()">🔄 ホストの配信を表示</button>
+            <button id="reset-broadcast-btn" class="btn-warning hidden" style="margin-top:8px; font-size:12px;" onclick="resetToTeacherStream()">🔄 ホストの配信に戻す</button>
         </div>
 
         <div id="teacher-tools" class="hidden">
@@ -137,12 +137,15 @@
         if(!currentRid) return alert("部屋IDを入力してください");
         myRole = role;
 
-        // ★ 参加者（生徒）の場合は、画面共有が選択されていても強制的にカメラにする
-        let selectedMedia = document.getElementById('start-media-type').value;
-        if(role === 'student') selectedMedia = 'camera';
+        // ★制限: 生徒の場合は画面共有メニューを隠し、カメラを強制
+        let mediaType = document.getElementById('start-media-type').value;
+        if(role === 'student') {
+            mediaType = 'camera'; 
+            document.getElementById('switch-media').classList.add('hidden');
+        }
 
         try {
-            await getMedia(selectedMedia);
+            await getMedia(mediaType);
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('self-name-label').innerText = myName;
 
@@ -166,19 +169,23 @@
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
-        } catch(e) { alert("カメラ/マイクの使用を許可してください"); }
+        } catch(e) { alert("メディア取得失敗"); }
     }
 
     async function getMedia(type) {
         if(localStream) localStream.getTracks().forEach(t => t.stop());
+        
+        // ★制限: 生徒が万が一画面共有を呼び出してもカメラに強制
+        if(myRole === 'student') type = 'camera';
+
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
         let videoStream;
         if(type === 'camera') {
             videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
             document.getElementById('my-video').style.transform = "scaleX(-1)";
         } else {
-            // 先生のみここが実行可能
             videoStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            document.getElementById('my-video').style.transform = "none";
         }
         localStream = new MediaStream([...videoStream.getVideoTracks(), ...(micStream ? micStream.getAudioTracks() : [])]);
         document.getElementById('my-video').srcObject = localStream;
@@ -198,9 +205,11 @@
         function update() {
             if (!document.getElementById(barId)) return;
             analyser.getByteFrequencyData(dataArray);
-            let sum = 0; for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
             let average = sum / dataArray.length;
-            if (bar) bar.style.width = Math.min(100, average * 2.5) + "%";
+            let volume = Math.min(100, average * 2.5);
+            if (bar) bar.style.width = volume + "%";
             requestAnimationFrame(update);
         }
         update();
@@ -212,9 +221,6 @@
     }
 
     function initStudent() {
-        // ★ 参加者の場合は、メディア切り替えボタン自体を非表示にする
-        document.getElementById('switch-media').classList.add('hidden');
-
         const tid = "T-ROOM-" + currentRid;
         const conn = peer.connect(tid);
         conn.on('open', () => conn.send({type:'JOIN', name:myName}));
@@ -277,6 +283,7 @@
     }
 
     function resetToTeacherStream() {
+        // ホストの場合のみ自分のメインカメラに戻す
         if(myRole === 'teacher') document.getElementById('main-broadcast-video').srcObject = localStream;
         document.getElementById('reset-broadcast-btn').classList.add('hidden');
     }
@@ -284,7 +291,8 @@
     function removeStudent(id) {
         const card = document.getElementById('card-'+id);
         if(card) card.remove();
-        delete students[id]; delete connections[id];
+        delete students[id];
+        delete connections[id];
     }
 
     function toggleMic() {
@@ -328,7 +336,6 @@
     }
 
     async function changeMyMedia() {
-        // ホストのみ切り替え可能
         await getMedia(document.getElementById('switch-media').value);
         setupVolumeMeter(localStream, 'my-vol-bar');
         const vt = localStream.getVideoTracks()[0];
