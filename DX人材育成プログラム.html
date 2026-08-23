@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v5.1 Broadcaster</title>
+    <title>EDU-ULTIMATE v5.2 Auto-Reconnect</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -65,7 +65,7 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.1</h2>
+        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.2</h2>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" pattern="\d*">
         <select id="start-media-type">
@@ -136,6 +136,7 @@
     let audioCtx;
     let mediaRecorder, recordedChunks = [];
     let isReStreaming = false;
+    let isConnectedToHost = false;
 
     function initAudioContext() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -160,6 +161,7 @@
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('self-name-label').innerText = myName;
 
+            // 先生は固定ID、生徒はランダムID
             const myPeerId = role === 'teacher' ? "T-ROOM-" + currentRid : "S-" + Math.random().toString(36).substr(2, 9);
             peer = new Peer(myPeerId);
             
@@ -180,13 +182,19 @@
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
+
+            peer.on('error', err => {
+                console.warn("PeerError:", err.type);
+                if(err.type === 'peer-unavailable') {
+                    // 生徒が先生を探して見つからない場合のエラーは無視（再試行ループで処理）
+                }
+            });
         } catch(e) { alert("メディア取得失敗"); }
     }
 
     async function getMedia(type) {
         if(localStream) localStream.getTracks().forEach(t => t.stop());
         if(myRole === 'student') type = 'camera';
-
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
         let videoStream;
         if(type === 'camera') {
@@ -230,13 +238,35 @@
         new QRCode(document.getElementById("qrcode"), { text: location.href.split('?')[0] + "?id=" + currentRid, width: 80, height: 80 });
     }
 
+    // ★ 生徒側の接続ロジック（先生が見つかるまで3秒おきにリトライ）
     function initStudent() {
         const tid = "T-ROOM-" + currentRid;
-        const conn = peer.connect(tid);
-        conn.on('open', () => conn.send({type:'JOIN', name:myName}));
-        conn.on('data', data => handleData(tid, data));
-        const call = peer.call(tid, localStream);
-        call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
+        document.getElementById('broadcast-status').innerText = "先生を待機中...";
+
+        const tryConnect = () => {
+            if (isConnectedToHost || peer.destroyed) return;
+
+            const conn = peer.connect(tid);
+            conn.on('open', () => {
+                isConnectedToHost = true;
+                connections[tid] = conn;
+                conn.send({type:'JOIN', name:myName});
+                addChat("システム", "先生に接続しました");
+                document.getElementById('broadcast-status').innerText = "接続済み";
+
+                const call = peer.call(tid, localStream);
+                call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
+            });
+
+            conn.on('error', () => {
+                isConnectedToHost = false;
+                setTimeout(tryConnect, 3000);
+            });
+
+            // 一定時間反応がなければリトライ
+            setTimeout(() => { if(!isConnectedToHost) tryConnect(); }, 5000);
+        };
+        tryConnect();
     }
 
     function handleData(id, data) {
@@ -288,22 +318,14 @@
         setupVolumeMeter(stream, volBarId);
     }
 
-    // ★今回の主要機能：生徒の映像を全体にブロードキャストする
     function spotlightStudent(id) {
         const v = document.getElementById('v-'+id);
         if(!v) return;
         const studentStream = v.srcObject;
         document.getElementById('main-broadcast-video').srcObject = studentStream;
-        
         if(myRole === 'teacher') {
             isReStreaming = true;
             replaceOutgoingTracks(studentStream);
-            document.getElementById('reset-broadcast-btn').classList.remove('hidden');
-            document.getElementById('broadcast-status').innerText = "生徒画面を全体共有中";
-            document.getElementById('broadcast-status').style.background = "var(--warning)";
-            document.getElementById('broadcast-status').style.color = "black";
-        } else {
-            // 生徒の場合は自分のローカル画面が切り替わるだけ
             document.getElementById('reset-broadcast-btn').classList.remove('hidden');
         }
     }
@@ -313,14 +335,10 @@
         if(myRole === 'teacher') {
             document.getElementById('main-broadcast-video').srcObject = localStream;
             replaceOutgoingTracks(localStream);
-            document.getElementById('broadcast-status').innerText = "配信中";
-            document.getElementById('broadcast-status').style.background = "#444";
-            document.getElementById('broadcast-status').style.color = "white";
         }
         document.getElementById('reset-broadcast-btn').classList.add('hidden');
     }
 
-    // ★全通信のトラックを差し替える関数
     function replaceOutgoingTracks(stream) {
         const vt = stream.getVideoTracks()[0];
         const at = stream.getAudioTracks()[0];
@@ -342,6 +360,7 @@
         if(card) card.remove();
         delete students[id];
         delete connections[id];
+        if(id.startsWith("T-ROOM-")) isConnectedToHost = false;
     }
 
     function toggleMic() {
@@ -380,7 +399,7 @@
     }
 
     function forceExitAll() { if(confirm("全員を退出させますか？")) Object.values(connections).forEach(c => c.send({type:'EXIT'})); }
-    function kickStudent(id) { if(confirm("退出させますか？")) connections[id].send({type:'EXIT'}); }
+    function kickStudent(id) { if(confirm("退出させますか？")) if(connections[id]) connections[id].send({type:'EXIT'}); }
 
     function toggleRecording() {
         if (!mediaRecorder || mediaRecorder.state === "inactive") {
