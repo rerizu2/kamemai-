@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v5.3 Reactions</title>
+    <title>EDU-ULTIMATE v5.4 Full Access</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -32,7 +32,6 @@
         .broadcast-container { flex: 1.5; position: relative; background: #000; display: flex; justify-content: center; align-items: center; min-height: 200px; border-bottom: 2px solid #333; }
         #main-broadcast-video { width: 100%; height: 100%; object-fit: contain; }
         
-        /* リアクション表示エリア */
         #reaction-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 100; }
         .floating-reaction { 
             position: absolute; bottom: 20px; left: 50%; 
@@ -63,7 +62,6 @@
         .hidden { display: none !important; }
         #chat-messages { flex: 1; min-height: 100px; overflow-y: auto; font-size: 13px; background: #000; padding: 8px; border-radius: 10px; border: 1px solid #333; }
 
-        /* リアクションパレット */
         .reaction-palette { display: flex; justify-content: space-around; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 12px; margin-top: 5px; }
         .btn-reaction { background: none; padding: 5px; font-size: 20px; width: auto; }
 
@@ -79,12 +77,12 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.3</h2>
+        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.4</h2>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" pattern="\d*">
         <select id="start-media-type">
             <option value="camera">📷 カメラで開始</option>
-            <option value="screen">💻 画面共有で開始（ホストのみ）</option>
+            <option value="screen">💻 画面共有で開始</option>
         </select>
         <button class="btn-primary" style="margin-top:5px;" onclick="start('teacher')">先生（ホスト）として開始</button>
         <button class="btn-success" style="margin-top:10px;" onclick="start('student')">生徒として参加</button>
@@ -128,6 +126,7 @@
                 <button class="btn-reaction" onclick="sendReaction('❤️')">❤️</button>
                 <button class="btn-reaction" onclick="sendReaction('😂')">😂</button>
             </div>
+            <!-- 生徒でも表示されるように設定 -->
             <select id="switch-media" onchange="changeMyMedia()" style="width:100%; margin-top:10px; background:#111; color:white; border:1px solid #444; font-size:12px; padding:8px; border-radius:10px;">
                 <option value="camera">📷 カメラ切替</option>
                 <option value="screen">💻 画面共有切替</option>
@@ -169,11 +168,8 @@
         if(!currentRid) return alert("部屋IDを入力してください");
         myRole = role;
 
-        let mediaType = document.getElementById('start-media-type').value;
-        if(role === 'student') {
-            mediaType = 'camera'; 
-            document.getElementById('switch-media').classList.add('hidden');
-        }
+        const mediaType = document.getElementById('start-media-type').value;
+        // 生徒でも画面共有メニューを表示したままにする
 
         try {
             await getMedia(mediaType);
@@ -200,12 +196,11 @@
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
-        } catch(e) { alert("メディア取得失敗"); }
+        } catch(e) { alert("メディア取得失敗。"); }
     }
 
     async function getMedia(type) {
         if(localStream) localStream.getTracks().forEach(t => t.stop());
-        if(myRole === 'student') type = 'camera';
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
         let videoStream;
         if(type === 'camera') {
@@ -244,19 +239,16 @@
         tryConnect();
     }
 
-    // ★ リアクション送信機能
     function sendReaction(emoji) {
         showReaction(emoji, "自分");
         Object.values(connections).forEach(c => c.send({type:'REACTION', name:myName, emoji:emoji}));
     }
 
-    // ★ リアクション表示機能（アニメーション）
     function showReaction(emoji, sender) {
         const layer = document.getElementById('reaction-layer');
         const div = document.createElement('div');
         div.className = 'floating-reaction';
-        const randomLeft = 20 + Math.random() * 60; // 20%〜80%の間でランダム
-        div.style.left = randomLeft + "%";
+        div.style.left = (20 + Math.random() * 60) + "%";
         div.innerHTML = `<span style="font-size:35px">${emoji}</span><span style="font-size:10px; background:rgba(0,0,0,0.5); padding:2px 5px; border-radius:5px;">${sender}</span>`;
         layer.appendChild(div);
         setTimeout(() => div.remove(), 3000);
