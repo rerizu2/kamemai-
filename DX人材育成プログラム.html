@@ -2,7 +2,7 @@
 <html lang="ja"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v5.4 Full Access (Device Selectable)</title>
+    <title>EDU-ULTIMATE v5.5 (Auto-Reconnect)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -80,7 +80,7 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.4</h2>
+        <h2 style="color:var(--accent); margin-bottom:10px; font-size:20px;">EDU-ULTIMATE v5.5</h2>
         <input type="text" id="user-name" placeholder="名前を入力">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)" pattern="\d*">
         <select id="start-media-type">
@@ -123,7 +123,6 @@
                 </div>
             </div>
 
-            <!-- デバイス選択メニュー -->
             <div style="margin-top:10px; border-top:1px solid #444; pt:10px;">
                 <label style="font-size:10px; color:var(--accent);">🎤 マイク選択</label>
                 <select id="mic-select" class="device-select" onchange="changeMyMedia()"></select>
@@ -169,6 +168,7 @@
     let students = {};
     let audioCtx, mediaRecorder, recordedChunks = [];
     let isReStreaming = false, isConnectedToHost = false;
+    let reconnectTimer = null;
 
     function initAudioContext() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -179,26 +179,14 @@
         const devices = await navigator.mediaDevices.enumerateDevices();
         const micSelect = document.getElementById('mic-select');
         const camSelect = document.getElementById('cam-select');
-        
-        const oldMic = micSelect.value;
-        const oldCam = camSelect.value;
-
-        micSelect.innerHTML = "";
-        camSelect.innerHTML = "";
-
+        micSelect.innerHTML = ""; camSelect.innerHTML = "";
         devices.forEach(device => {
             const option = document.createElement('option');
             option.value = device.deviceId;
             option.text = device.label || `${device.kind} (${device.deviceId.slice(0, 5)})`;
-            if (device.kind === 'audioinput') {
-                micSelect.appendChild(option);
-            } else if (device.kind === 'videoinput') {
-                camSelect.appendChild(option);
-            }
+            if (device.kind === 'audioinput') micSelect.appendChild(option);
+            else if (device.kind === 'videoinput') camSelect.appendChild(option);
         });
-
-        if (oldMic) micSelect.value = oldMic;
-        if (oldCam) camSelect.value = oldCam;
     }
 
     async function start(role) {
@@ -212,9 +200,7 @@
         document.getElementById('switch-media').value = mediaType;
 
         try {
-            // 初回の権限取得
             await getMedia(mediaType);
-            // 権限取得後にデバイスリストを更新（ラベルが表示されるようになるため）
             await updateDeviceList();
             
             document.getElementById('setup-screen').classList.add('hidden');
@@ -240,19 +226,25 @@
                 conn.on('data', data => handleData(conn.peer, data));
                 conn.on('close', () => removeStudent(conn.peer));
             });
+
+            // グローバルエラーハンドリング
+            peer.on('error', err => {
+                console.warn("Peer Error:", err.type);
+                if(err.type === 'peer-unavailable' && myRole === 'student') {
+                    isConnectedToHost = false;
+                    document.getElementById('broadcast-status').innerText = "ホスト待ち...";
+                }
+            });
+
         } catch(e) { console.error(e); alert("メディア取得失敗。"); }
     }
 
     async function getMedia(type) {
         const micId = document.getElementById('mic-select').value;
         const camId = document.getElementById('cam-select').value;
-
-        // 既存トラックの停止
         if(localStream) localStream.getTracks().forEach(t => t.stop());
-
         const audioConstraints = micId ? { deviceId: { exact: micId } } : true;
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints }).catch(() => null);
-        
         let videoStream;
         if(type === 'camera') {
             const videoConstraints = camId ? { deviceId: { exact: camId } } : { facingMode: "user" };
@@ -262,22 +254,15 @@
             videoStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
             document.getElementById('my-video').style.transform = "none";
         }
-
         localStream = new MediaStream([...videoStream.getVideoTracks(), ...(micStream ? micStream.getAudioTracks() : [])]);
         document.getElementById('my-video').srcObject = localStream;
-        
-        if(myRole === 'teacher' && !isReStreaming) {
-            document.getElementById('main-broadcast-video').srcObject = localStream;
-        }
-        
-        // 音量メーターの再セットアップ
+        if(myRole === 'teacher' && !isReStreaming) document.getElementById('main-broadcast-video').srcObject = localStream;
         setupVolumeMeter(localStream, 'my-vol-bar');
     }
 
     async function changeMyMedia() {
         const type = document.getElementById('switch-media').value;
         await getMedia(type);
-        // 通信中の相手に新しいトラックを送信
         if(!isReStreaming) replaceOutgoingTracks(localStream);
     }
 
@@ -296,8 +281,6 @@
         });
     }
 
-    // --- 以下、既存のロジックを維持 ---
-
     function initTeacher() {
         document.getElementById('teacher-tools').classList.remove('hidden');
         document.getElementById('broadcast-status').innerText = "配信中";
@@ -306,22 +289,53 @@
         new QRCode(qrContainer, { text: location.href.split('?')[0] + "?id=" + currentRid, width: 80, height: 80 });
     }
 
+    // 生徒側の初期化ロジック（自動再試行付き）
     function initStudent() {
         const tid = "T-ROOM-" + currentRid;
+        
         const tryConnect = () => {
-            if (isConnectedToHost || peer.destroyed) return;
+            if (isConnectedToHost || !peer || peer.destroyed) return;
+
+            document.getElementById('broadcast-status').innerText = "ホスト入室待ち...";
+            console.log("ホストへの接続を試みています...");
+            
             const conn = peer.connect(tid);
+            
+            // タイムアウト設定（5秒反応がなければリトライ対象にする）
+            const timeout = setTimeout(() => {
+                if(!isConnectedToHost) {
+                    conn.close();
+                    tryConnect();
+                }
+            }, 5000);
+
             conn.on('open', () => {
+                clearTimeout(timeout);
                 isConnectedToHost = true;
                 connections[tid] = conn;
+                document.getElementById('broadcast-status').innerText = "接続済み";
                 conn.send({type:'JOIN', name:myName});
+                
                 const call = peer.call(tid, localStream);
-                call.on('stream', s => { document.getElementById('main-broadcast-video').srcObject = s; });
+                call.on('stream', s => { 
+                    document.getElementById('main-broadcast-video').srcObject = s; 
+                    document.getElementById('broadcast-status').innerText = "配信受信中";
+                });
             });
-            conn.on('error', () => { isConnectedToHost = false; setTimeout(tryConnect, 3000); });
-            setTimeout(() => { if(!isConnectedToHost) tryConnect(); }, 5000);
+
+            conn.on('close', () => {
+                isConnectedToHost = false;
+                setTimeout(tryConnect, 3000);
+            });
         };
+
+        // 初回実行
         tryConnect();
+        
+        // 接続できていない場合は定期的にチェック
+        reconnectTimer = setInterval(() => {
+            if(!isConnectedToHost) tryConnect();
+        }, 3000);
     }
 
     function sendReaction(emoji) {
@@ -410,8 +424,6 @@
     function setupVolumeMeter(stream, barId) {
         const audioTracks = stream.getAudioTracks();
         if (audioTracks.length === 0) return;
-        
-        // 既存のコンテキストがある場合は閉じる（メモリリーク防止）
         const meterContext = new (window.AudioContext || window.webkitAudioContext)();
         const source = meterContext.createMediaStreamSource(new MediaStream([audioTracks[0]]));
         const analyser = meterContext.createAnalyser();
@@ -419,12 +431,8 @@
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const bar = document.getElementById(barId);
-        
         function update() {
-            if (!document.getElementById(barId)) {
-                meterContext.close();
-                return;
-            }
+            if (!document.getElementById(barId)) { meterContext.close(); return; }
             analyser.getByteFrequencyData(dataArray);
             let average = dataArray.reduce((p, c) => p + c) / dataArray.length;
             if (bar) bar.style.width = Math.min(100, average * 2.5) + "%";
@@ -439,7 +447,8 @@
         delete students[id]; delete connections[id];
         if(id.startsWith("T-ROOM-")) {
             isConnectedToHost = false;
-            addChat("システム", "ホストとの接続が切れました");
+            addChat("システム", "ホストとの接続が切れました。再接続を待機します...");
+            document.getElementById('main-broadcast-video').srcObject = null;
         }
     }
 
@@ -499,5 +508,4 @@
         }
     }
 </script>
-
 </body></html>
