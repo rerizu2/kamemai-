@@ -2,7 +2,7 @@
 <html lang="ja"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v14.0 (View Sync Fixed)</title>
+    <title>EDU-ULTIMATE v15.0 (Final Stable)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -16,15 +16,15 @@
         .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
         .sidebar { width: 280px; background: #111; border-left: 1px solid #333; padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
         .broadcast-box { flex: 1.5; background: #000; position: relative; display: flex; justify-content: center; align-items: center; border-bottom: 2px solid #333; overflow: hidden; }
-        #main-video { width: 100%; height: 100%; object-fit: contain; }
+        #main-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
         #view-label { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--accent); font-size: 11px; z-index: 10; }
         .monitor-grid { flex: 1; display: flex; gap: 10px; padding: 10px; overflow-x: auto; background: #050505; }
         .student-mode .monitor-grid { display: none; }
         .card { width: 150px; flex-shrink: 0; background: #222; border-radius: 10px; overflow: hidden; position: relative; border: 1px solid #333; }
         .card video { width: 100%; height: 85px; object-fit: cover; background: #000; }
         button { cursor: pointer; border: none; font-weight: bold; border-radius: 8px; padding: 10px; transition: 0.2s; }
-        .btn-blue { background: #0097e6; color: white; }
-        .btn-green { background: var(--success); color: white; }
+        .btn-blue { background: #0097e6; color: white; width: 100%; }
+        .btn-green { background: var(--success); color: white; width: 100%; }
         .btn-red { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: black; }
         .btn-mini { padding: 4px; font-size: 10px; width: 100%; margin-top: 2px; }
@@ -38,7 +38,7 @@
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent)">EDU-ULTIMATE v14</h2>
+        <h2 style="color:var(--accent)">EDU-ULTIMATE v15</h2>
         <input type="text" id="user-name" placeholder="お名前">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)">
         <select id="start-mode">
@@ -59,7 +59,7 @@
 <div class="main-layout">
     <div class="content-area">
         <div class="broadcast-box">
-            <div id="view-label">待機中</div>
+            <div id="view-label">映像を待機中...</div>
             <video id="main-video" autoplay playsinline></video>
         </div>
         <div id="monitor-grid" class="monitor-grid"></div>
@@ -67,9 +67,8 @@
 
     <div class="sidebar">
         <div id="teacher-tools" class="hidden teacher-panel">
-            <div style="font-size:11px; font-weight:bold; margin-bottom:8px; color:var(--warning);">📺 配信コントロール</div>
-            <!-- このボタンで確実に先生の画面に戻るように修正 -->
-            <button class="btn-warning" style="width:100%; font-size:11px; padding:8px; margin-bottom:8px;" onclick="setGlobalView('teacher')">🔄 全員の画面を先生に戻す</button>
+            <div style="font-size:11px; font-weight:bold; margin-bottom:8px; color:var(--warning);">📺 配信管理</div>
+            <button class="btn-warning" style="width:100%; font-size:11px; padding:8px; margin-bottom:8px;" onclick="setGlobalView('teacher')">🔄 全員を自分（教員）に戻す</button>
             <button class="btn-blue" style="width:100%; margin-bottom:8px; font-size:11px;" onclick="handleRecord()" id="rec-btn">🔴 録画</button>
             <div id="qrcode" style="background:white; padding:5px; border-radius:8px; display:flex; justify-content:center;"></div>
         </div>
@@ -117,13 +116,13 @@
         myRole = role;
         myName = document.getElementById('user-name').value || "ゲスト";
         roomID = document.getElementById('room-id').value;
-        if (!roomID) return alert("IDを入力してください");
+        if (!roomID) return alert("部屋IDを入力してください");
 
         await getStream(document.getElementById('start-mode').value);
         const peerID = (role === 'teacher') ? `T-ROOM-${roomID}` : `S-${Math.random().toString(36).substr(2, 8)}`;
         peer = new Peer(peerID);
 
-        peer.on('open', () => {
+        peer.on('open', id => {
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('role-label').innerText = role.toUpperCase();
             document.getElementById('room-display').innerText = "ROOM: " + roomID;
@@ -132,7 +131,6 @@
             if (role === 'teacher') {
                 document.getElementById('teacher-tools').classList.remove('hidden');
                 new QRCode(document.getElementById("qrcode"), { text: location.href, width: 70, height: 70 });
-                // 先生は最初、自分を映す
                 currentGlobalViewId = peer.id;
                 applyView(peer.id);
             } else {
@@ -141,10 +139,15 @@
             }
         });
 
+        // 教員・生徒共通：着信したら映像を返す
         peer.on('call', call => {
             call.answer(localStream);
-            call.on('stream', s => addRemoteStream(call.peer, s));
-            call.on('close', () => removePeer(call.peer));
+            call.on('stream', s => {
+                remoteStreams[call.peer] = s;
+                addRemoteStream(call.peer, s);
+                // もし今、このIDを映すように命じられていたら、即座に適用
+                if (currentGlobalViewId === call.peer) applyView(call.peer);
+            });
         });
 
         peer.on('connection', conn => setupDataConnection(conn));
@@ -156,6 +159,7 @@
         setupDataConnection(conn);
         conn.on('open', () => {
             conn.send({ type: 'join', name: myName });
+            // 生徒側から先生へ即座に発信
             peer.call(tID, localStream);
         });
     }
@@ -171,10 +175,9 @@
             students[peerId] = { name: data.name };
             if (myRole === 'teacher') {
                 broadcastList();
-                // 今の配信ターゲット（自分か誰か）を入室した生徒に送る
+                // 新入生に「誰を映すべきか」を教える
                 connections[peerId].send({ type: 'sync_view', targetId: currentGlobalViewId });
             }
-            addChat("システム", data.name + "さんが参加");
         }
         if (data.type === 'list') {
             data.list.forEach(u => {
@@ -191,32 +194,12 @@
         }
         if (data.type === 'hello') students[peerId] = { name: data.name };
         if (data.type === 'chat') addChat(data.name, data.msg);
-        
-        // 配信画面の同期命令
-        if (data.type === 'sync_view') {
-            applyView(data.targetId);
-        }
+        if (data.type === 'sync_view') applyView(data.targetId); // 先生からの同期命令
         if (data.type === 'EXIT_NOW') removePeer(peerId);
     }
 
-    function removePeer(id) {
-        if (document.getElementById(`card-${id}`)) document.getElementById(`card-${id}`).remove();
-        if (currentGlobalViewId === id) {
-            // 映していた生徒が消えたら先生（T-ROOMで始まるID）を探して戻す
-            const teacherId = Object.keys(connections).find(k => k.startsWith("T-ROOM-")) || "";
-            if (teacherId) applyView(teacherId);
-        }
-        delete connections[id]; delete students[id]; delete remoteStreams[id];
-    }
-
-    function broadcastList() {
-        const list = Object.keys(students).map(id => ({ id, name: students[id].name }));
-        list.push({ id: peer.id, name: myName });
-        Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'list', list }); });
-    }
-
     function addRemoteStream(id, stream) {
-        remoteStreams[id] = stream; // ここで保存
+        remoteStreams[id] = stream;
         const isT = id.startsWith("T-ROOM-");
 
         if (myRole === 'teacher' && !isT) {
@@ -234,48 +217,39 @@
             setupVol(stream, `vol-${id}`);
         }
         
-        // 初めて先生のストリームを受け取った時、または現在先生を映すべき時
+        // 先生の映像が届いたら、指定がない限りは先生を表示
         if (isT && (currentGlobalViewId === "" || currentGlobalViewId === id)) {
             applyView(id);
         }
     }
 
-    // 先生が配信ターゲットを切り替える
     function setGlobalView(targetId) {
-        // targetIdが 'teacher' なら自分のpeer.idを使う
         const id = (targetId === 'teacher') ? peer.id : targetId;
         currentGlobalViewId = id;
-        
-        // 全員に同期命令を出す
-        const msg = { type: 'sync_view', targetId: id };
-        Object.values(connections).forEach(c => { if(c.open) c.send(msg); });
-        
-        // 自分も切り替える
+        Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'sync_view', targetId: id }); });
         applyView(id);
     }
 
-    // 実際に画面（main-video）を切り替える関数
     function applyView(id) {
         if (!id) return;
         currentGlobalViewId = id;
-        
         const mv = document.getElementById('main-video');
-        // idが自分ならlocalStream、そうでなければremoteStreamsから探す
         const stream = (id === peer.id) ? localStream : remoteStreams[id];
         
         if (stream) {
             mv.srcObject = stream;
             const name = (id.startsWith("T-ROOM-")) ? "先生" : (students[id]?.name || "生徒");
-            document.getElementById('view-label').innerText = name + " の画面を表示中";
+            document.getElementById('view-label').innerText = name + " の映像を表示中";
             mv.play().catch(()=>{});
         } else {
-            console.warn("Stream not found for ID:", id);
+            document.getElementById('view-label').innerText = "映像を読み込み中...";
         }
     }
 
     async function updateMedia() {
         const mode = document.getElementById('mode-select').value;
         await getStream(mode);
+        // 送信中の全コネクションのトラックを差し替え
         Object.values(peer.connections).forEach(conns => {
             conns.forEach(c => {
                 if (c.peerConnection) {
@@ -287,8 +261,22 @@
                 }
             });
         });
-        // もし自分が配信対象なら、メインビデオも更新
         if (currentGlobalViewId === peer.id) applyView(peer.id);
+    }
+
+    function removePeer(id) {
+        if (document.getElementById(`card-${id}`)) document.getElementById(`card-${id}`).remove();
+        if (currentGlobalViewId === id) {
+            const tID = Object.keys(connections).find(k => k.startsWith("T-ROOM-")) || "";
+            if (tID) applyView(tID);
+        }
+        delete connections[id]; delete students[id]; delete remoteStreams[id];
+    }
+
+    function broadcastList() {
+        const list = Object.keys(students).map(id => ({ id, name: students[id].name }));
+        list.push({ id: peer.id, name: myName });
+        Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'list', list }); });
     }
 
     function setupVol(stream, barId) {
@@ -355,6 +343,7 @@
         if(peer) peer.destroy();
     });
 
-    window.onclick = () => { document.querySelectorAll('video').forEach(v => v.play()); };
+    // 自動再生対策
+    window.onclick = () => { document.querySelectorAll('video').forEach(v => v.play().catch(()=>{})); };
 </script>
 </body></html>
