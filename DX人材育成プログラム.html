@@ -2,14 +2,14 @@
 <html lang="ja"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v9.5 (Fixed Streaming)</title>
+    <title>EDU-ULTIMATE v10.0 (Privacy Mode)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        :root { --accent: #00fbff; --bg: #0a0a0a; --danger: #ff4757; --success: #2ecc71; --warning: #f1c40f; }
+        :root { --accent: #00fbff; --bg: #0a0a0a; --danger: #ff4757; --success: #2ecc71; }
         body { font-family: sans-serif; background: var(--bg); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* セットアップ */
+        /* ログイン */
         #setup-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 10000; }
         .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 320px; border: 1px solid #444; }
         input, select { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
@@ -19,32 +19,32 @@
         .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
         .sidebar { width: 280px; background: #111; border-left: 1px solid #333; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 
-        /* メインビデオ */
+        /* メインビデオ (先生の画面用) */
         .broadcast-box { flex: 1.5; background: #000; position: relative; display: flex; justify-content: center; align-items: center; border-bottom: 2px solid #333; }
-        #main-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+        #main-video { width: 100%; height: 100%; object-fit: contain; }
         #view-label { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--accent); font-size: 12px; }
 
-        /* 下部グリッド */
+        /* 監視グリッド (先生だけに表示) */
         .monitor-grid { flex: 1; display: flex; gap: 10px; padding: 10px; overflow-x: auto; background: #050505; }
-        .card { width: 160px; flex-shrink: 0; background: #222; border-radius: 10px; overflow: hidden; position: relative; text-align: center; border: 1px solid #333; }
+        .student-only-view { display: none !important; } /* 生徒側では隠す */
+        
+        .card { width: 160px; flex-shrink: 0; background: #222; border-radius: 10px; overflow: hidden; position: relative; border: 1px solid #333; }
         .card video { width: 100%; height: 90px; object-fit: cover; background: #000; }
         
-        /* 操作 */
         button { cursor: pointer; border: none; font-weight: bold; border-radius: 8px; padding: 10px; }
         .btn-blue { background: #0097e6; color: white; width: 100%; }
         .btn-green { background: var(--success); color: white; width: 100%; }
         .btn-red { background: var(--danger); color: white; }
         .vol-bar { height: 4px; background: var(--success); width: 0%; transition: 0.1s; }
         #chat-msgs { flex: 1; background: #000; border-radius: 8px; padding: 8px; overflow-y: auto; font-size: 12px; border: 1px solid #333; }
-        
-        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent)">EDU-ULTIMATE v9.5</h2>
+        <h2 style="color:var(--accent)">EDU-ULTIMATE v10</h2>
+        <p style="font-size:12px; color:#aaa; margin-top:-10px;">生徒同士の映像は見えません</p>
         <input type="text" id="user-name" placeholder="お名前">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)">
         <select id="start-mode">
@@ -65,9 +65,10 @@
 <div class="main-layout">
     <div class="content-area">
         <div class="broadcast-box">
-            <div id="view-label">待機中</div>
+            <div id="view-label">先生の入室待ち...</div>
             <video id="main-video" autoplay playsinline></video>
         </div>
+        <!-- 教員のみが使用する監視エリア -->
         <div id="monitor-grid" class="monitor-grid"></div>
     </div>
 
@@ -86,7 +87,7 @@
         </div>
 
         <div id="teacher-tools" class="hidden">
-            <button class="btn-blue" style="margin-bottom:5px;" onclick="handleRecord()" id="rec-btn">🔴 録画開始</button>
+            <button class="btn-blue" style="margin-bottom:5px; font-size:12px;" onclick="handleRecord()" id="rec-btn">🔴 録画開始</button>
             <div id="qrcode" style="background:white; padding:5px; border-radius:8px; display:flex; justify-content:center;"></div>
         </div>
 
@@ -101,10 +102,8 @@
     let connections = {}, students = {};
     let recorder, recordedChunks = [];
 
-    // 1. ストリーム取得 (映像と音声を確実にミックス)
     async function getStream(mode) {
         if (localStream) localStream.getTracks().forEach(t => t.stop());
-        
         const audio = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
         let video;
         if (mode === 'camera') {
@@ -112,16 +111,11 @@
         } else {
             video = await navigator.mediaDevices.getDisplayMedia({ video: true });
         }
-
-        localStream = new MediaStream([
-            ...video.getVideoTracks(),
-            ...(audio ? audio.getAudioTracks() : [])
-        ]);
+        localStream = new MediaStream([...video.getVideoTracks(), ...(audio ? audio.getAudioTracks() : [])]);
         document.getElementById('my-preview').srcObject = localStream;
         return localStream;
     }
 
-    // 2. セッション開始
     async function startSession(role) {
         myRole = role;
         myName = document.getElementById('user-name').value || "ゲスト";
@@ -143,44 +137,40 @@
                 document.getElementById('teacher-tools').classList.remove('hidden');
                 new QRCode(document.getElementById("qrcode"), { text: location.href, width: 70, height: 70 });
                 document.getElementById('main-video').srcObject = localStream;
-                document.getElementById('view-label').innerText = "あなたの配信画面";
+                document.getElementById('view-label').innerText = "あなたの授業画面";
             } else {
+                // 生徒の場合、監視グリッドを物理的に消す
+                document.getElementById('monitor-grid').classList.add('student-only-view');
                 joinRoom();
             }
         });
 
-        // 通話着信時の処理
         peer.on('call', call => {
             call.answer(localStream);
             call.on('stream', s => addRemoteVideo(call.peer, s));
         });
 
-        // データ接続
         peer.on('connection', conn => handleData(conn));
     }
 
-    // 3. ルーム参加 (生徒側)
     function joinRoom() {
         const tID = `T-ROOM-${roomID}`;
-        // 教員にチャット接続
         const conn = peer.connect(tID);
         handleData(conn);
         conn.on('open', () => {
             conn.send({ type: 'join', name: myName });
-            // 教員にビデオ通話を開始
             const call = peer.call(tID, localStream);
             call.on('stream', s => addRemoteVideo(tID, s));
         });
     }
 
-    // 4. データハンドリング
     function handleData(conn) {
         connections[conn.peer] = conn;
         conn.on('data', data => {
             if (data.type === 'join') {
                 students[conn.peer] = { name: data.name };
                 if (myRole === 'teacher') broadcastList();
-                addChat("入室", data.name + "さんが参加");
+                addChat("システム", data.name + "さんが参加しました");
             }
             if (data.type === 'list') {
                 data.list.forEach(u => {
@@ -196,6 +186,7 @@
             }
             if (data.type === 'hello') students[conn.peer] = { name: data.name };
             if (data.type === 'chat') addChat(data.name, data.msg);
+            if (data.type === 'exit') location.reload();
         });
     }
 
@@ -205,46 +196,49 @@
         Object.values(connections).forEach(c => c.send({ type: 'list', list }));
     }
 
-    // 5. リモート映像の表示 (ここが最重要)
     function addRemoteVideo(id, stream) {
-        if (document.getElementById(`card-${id}`)) return;
-
         const isT = id.startsWith("T-ROOM-");
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.id = `card-${id}`;
-        card.innerHTML = `
-            <video id="vid-${id}" autoplay playsinline></video>
-            <div style="font-size:10px; padding:3px;">${isT ? '先生' : (students[id]?.name || '生徒')}</div>
-            <div class="vol-bar" id="vol-${id}"></div>
-        `;
-        document.getElementById('monitor-grid').appendChild(card);
-        const v = document.getElementById(`vid-${id}`);
-        v.srcObject = stream;
 
-        // 先生の映像ならメインに強制セット
-        if (isT && myRole === 'student') {
+        // 【生徒の場合】先生以外の映像は処理しない
+        if (myRole === 'student' && !isT) return;
+
+        // 【先生または生徒(先生の映像のみ)】
+        if (isT) {
             const mv = document.getElementById('main-video');
             mv.srcObject = stream;
-            document.getElementById('view-label').innerText = "先生の画面を視聴中";
-            // 強制再生を試行
-            setTimeout(() => mv.play().catch(() => {
-                document.getElementById('view-label').innerText = "クリックして再生";
-            }), 500);
+            document.getElementById('view-label').innerText = "先生の画面";
+            mv.play().catch(() => { document.getElementById('view-label').innerText = "クリックして再生"; });
         }
 
-        card.onclick = () => {
-            document.getElementById('main-video').srcObject = stream;
-            document.getElementById('view-label').innerText = (isT ? "先生" : "生徒") + "を表示中";
-        };
-        setupVol(stream, `vol-${id}`);
+        // 【先生の場合のみ】全生徒のカードをグリッドに表示
+        if (myRole === 'teacher' && !isT) {
+            if (document.getElementById(`card-${id}`)) return;
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.id = `card-${id}`;
+            card.innerHTML = `
+                <video id="vid-${id}" autoplay playsinline></video>
+                <div style="font-size:10px; padding:3px; text-align:center;">${students[id]?.name || '生徒'}</div>
+                <div class="vol-bar" id="vol-${id}"></div>
+                <button style="width:100%; font-size:9px; padding:2px;" onclick="spotlight('${id}')">拡大</button>
+            `;
+            document.getElementById('monitor-grid').appendChild(card);
+            document.getElementById(`vid-${id}`).srcObject = stream;
+            setupVol(stream, `vol-${id}`);
+        }
     }
 
-    // 6. 各種ツール
+    function spotlight(id) {
+        const v = document.getElementById(`vid-${id}`);
+        if (v) {
+            document.getElementById('main-video').srcObject = v.srcObject;
+            document.getElementById('view-label').innerText = students[id]?.name + " の画面";
+        }
+    }
+
     async function updateMedia() {
         const mode = document.getElementById('mode-select').value;
         await getStream(mode);
-        // トラックの差し替え
         Object.values(peer.connections).forEach(conns => {
             conns.forEach(c => {
                 if (c.peerConnection) {
@@ -320,7 +314,6 @@
         }
     }
 
-    // ブラウザの自動再生制限対策：クリックされたら全ビデオを再生
     window.onclick = () => {
         document.querySelectorAll('video').forEach(v => v.play());
     };
