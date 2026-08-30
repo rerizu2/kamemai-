@@ -2,50 +2,43 @@
 <html lang="ja"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v12.0 (Teacher Director)</title>
+    <title>EDU-ULTIMATE v13.0 (Auto-Cleanup)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         :root { --accent: #00fbff; --bg: #0a0a0a; --danger: #ff4757; --success: #2ecc71; --warning: #f1c40f; }
         body { font-family: sans-serif; background: var(--bg); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
         #setup-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; justify-content: center; align-items: center; z-index: 10000; }
         .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; width: 320px; border: 1px solid #444; }
         input, select { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
-        
         header { background: #111; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
         .main-layout { display: flex; flex: 1; overflow: hidden; }
         .content-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
         .sidebar { width: 280px; background: #111; border-left: 1px solid #333; padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
-
         .broadcast-box { flex: 1.5; background: #000; position: relative; display: flex; justify-content: center; align-items: center; border-bottom: 2px solid #333; overflow: hidden; }
         #main-video { width: 100%; height: 100%; object-fit: contain; transition: object-fit 0.3s; }
         #view-label { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--accent); font-size: 11px; z-index: 10; }
-
         .monitor-grid { flex: 1; display: flex; gap: 10px; padding: 10px; overflow-x: auto; background: #050505; }
         .student-mode .monitor-grid { display: none; }
-
         .card { width: 150px; flex-shrink: 0; background: #222; border-radius: 10px; overflow: hidden; position: relative; border: 1px solid #333; }
         .card video { width: 100%; height: 85px; object-fit: cover; background: #000; }
-        
         button { cursor: pointer; border: none; font-weight: bold; border-radius: 8px; padding: 10px; transition: 0.2s; }
         .btn-blue { background: #0097e6; color: white; }
         .btn-green { background: var(--success); color: white; }
         .btn-red { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: black; }
         .btn-mini { padding: 4px; font-size: 10px; width: 100%; margin-top: 2px; }
-        
         .vol-bar { height: 4px; background: var(--success); width: 0%; transition: 0.1s; }
         #chat-msgs { flex: 1; background: #000; border-radius: 8px; padding: 8px; overflow-y: auto; font-size: 12px; border: 1px solid #333; min-height: 100px; }
         .hidden { display: none !important; }
         .teacher-panel { background: #331111; padding: 10px; border-radius: 12px; border: 1px solid #552222; }
     </style>
 </head>
-<body class="">
+<body>
 
 <div id="setup-screen">
     <div class="modal-box">
-        <h2 style="color:var(--accent)">EDU-ULTIMATE v12</h2>
+        <h2 style="color:var(--accent)">EDU-ULTIMATE v13</h2>
         <input type="text" id="user-name" placeholder="お名前">
         <input type="number" id="room-id" placeholder="部屋ID (4桁)">
         <select id="start-mode">
@@ -66,25 +59,20 @@
 <div class="main-layout">
     <div class="content-area">
         <div class="broadcast-box">
-            <div id="view-label">先生の入室待ち...</div>
+            <div id="view-label">待機中</div>
             <video id="main-video" autoplay playsinline></video>
         </div>
         <div id="monitor-grid" class="monitor-grid"></div>
     </div>
 
     <div class="sidebar">
-        <!-- 先生専用：画面調整パネル -->
         <div id="teacher-tools" class="hidden teacher-panel">
             <div style="font-size:11px; font-weight:bold; margin-bottom:8px; color:var(--warning);">📺 画面表示の調整</div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:8px;">
-                <button class="btn-warning" style="font-size:10px; padding:5px;" onclick="setGlobalView('teacher')">自分を映す</button>
-                <button class="btn-blue" style="font-size:10px; padding:5px;" onclick="toggleFitMode()">拡大/全体切替</button>
-            </div>
-            <button class="btn-blue" style="width:100%; margin-bottom:8px; font-size:11px;" onclick="handleRecord()" id="rec-btn">🔴 全員の画面を録画</button>
+            <button class="btn-warning" style="width:100%; font-size:10px; padding:5px; margin-bottom:5px;" onclick="setGlobalView('teacher')">自分を映す</button>
+            <button class="btn-blue" style="width:100%; margin-bottom:8px; font-size:11px;" onclick="handleRecord()" id="rec-btn">🔴 録画</button>
             <div id="qrcode" style="background:white; padding:5px; border-radius:8px; display:flex; justify-content:center;"></div>
         </div>
 
-        <!-- 共通：マイコントロール -->
         <div style="background:#222; padding:10px; border-radius:12px; text-align:center;">
             <video id="my-preview" autoplay playsinline muted style="width:100%; height:90px; object-fit:cover; border-radius:6px; background:#000;"></video>
             <div id="my-name" style="font-size:11px; margin:5px 0;">Name</div>
@@ -132,11 +120,10 @@
         if (!roomID) return alert("IDを入力してください");
 
         await getStream(document.getElementById('start-mode').value);
-
         const peerID = (role === 'teacher') ? `T-ROOM-${roomID}` : `S-${Math.random().toString(36).substr(2, 8)}`;
-        peer = new Peer(peerID);
+        peer = new Peer(peerID, { debug: 1 });
 
-        peer.on('open', id => {
+        peer.on('open', () => {
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('role-label').innerText = role.toUpperCase();
             document.getElementById('room-display').innerText = "ROOM: " + roomID;
@@ -146,7 +133,6 @@
                 document.getElementById('teacher-tools').classList.remove('hidden');
                 new QRCode(document.getElementById("qrcode"), { text: location.href, width: 70, height: 70 });
                 applyView(peerID);
-                currentGlobalViewId = peerID;
             } else {
                 document.body.classList.add('student-mode');
                 joinRoom();
@@ -156,69 +142,102 @@
         peer.on('call', call => {
             call.answer(localStream);
             call.on('stream', s => addRemoteStream(call.peer, s));
+            // メディア接続が切れた場合
+            call.on('close', () => removePeer(call.peer));
+            call.on('error', () => removePeer(call.peer));
         });
 
-        peer.on('connection', conn => handleData(conn));
+        peer.on('connection', conn => setupDataConnection(conn));
+
+        peer.on('error', err => {
+            if(err.type === 'peer-unavailable') {
+                const targetId = err.message.split(' ').pop();
+                removePeer(targetId);
+            }
+        });
     }
 
     function joinRoom() {
         const tID = `T-ROOM-${roomID}`;
         const conn = peer.connect(tID);
-        handleData(conn);
+        setupDataConnection(conn);
         conn.on('open', () => {
             conn.send({ type: 'join', name: myName });
             peer.call(tID, localStream);
         });
     }
 
-    function handleData(conn) {
+    function setupDataConnection(conn) {
         connections[conn.peer] = conn;
-        conn.on('data', data => {
-            if (data.type === 'join') {
-                students[conn.peer] = { name: data.name };
-                if (myRole === 'teacher') {
-                    broadcastList();
-                    // 新しく入った生徒に今の表示状態を教える
-                    conn.send({ type: 'sync_view', targetId: currentGlobalViewId, fit: currentFitMode });
+        conn.on('data', data => handleData(conn.peer, data));
+        
+        // 切断を即座に検知
+        conn.on('close', () => removePeer(conn.peer));
+        conn.on('error', () => removePeer(conn.peer));
+    }
+
+    function handleData(peerId, data) {
+        if (data.type === 'join') {
+            students[peerId] = { name: data.name };
+            if (myRole === 'teacher') {
+                broadcastList();
+                connections[peerId].send({ type: 'sync_view', targetId: currentGlobalViewId, fit: currentFitMode });
+            }
+            addChat("システム", data.name + "さんが入室");
+        }
+        if (data.type === 'list') {
+            data.list.forEach(u => {
+                if (u.id !== peer.id && !connections[u.id]) {
+                    students[u.id] = { name: u.name };
+                    const c = peer.connect(u.id);
+                    setupDataConnection(c);
+                    c.on('open', () => {
+                        c.send({ type: 'hello', name: myName });
+                        peer.call(u.id, localStream);
+                    });
                 }
-                addChat("システム", data.name + "さんが参加");
-            }
-            if (data.type === 'list') {
-                data.list.forEach(u => {
-                    if (u.id !== peer.id && !connections[u.id]) {
-                        students[u.id] = { name: u.name };
-                        const c = peer.connect(u.id);
-                        handleData(c);
-                        c.on('open', () => {
-                            c.send({ type: 'hello', name: myName });
-                            peer.call(u.id, localStream);
-                        });
-                    }
-                });
-            }
-            if (data.type === 'hello') students[conn.peer] = { name: data.name };
-            if (data.type === 'chat') addChat(data.name, data.msg);
-            
-            // 演出コマンドの受信
-            if (data.type === 'sync_view') {
-                currentFitMode = data.fit;
-                document.getElementById('main-video').style.objectFit = currentFitMode;
-                applyView(data.targetId);
-            }
-        });
+            });
+        }
+        if (data.type === 'hello') students[peerId] = { name: data.name };
+        if (data.type === 'chat') addChat(data.name, data.msg);
+        if (data.type === 'sync_view') {
+            currentFitMode = data.fit;
+            document.getElementById('main-video').style.objectFit = data.fit;
+            applyView(data.targetId);
+        }
+        if (data.type === 'EXIT_NOW') removePeer(peerId);
+    }
+
+    // 強制削除ロジック
+    function removePeer(id) {
+        console.log("Removing Peer:", id);
+        if (document.getElementById(`card-${id}`)) {
+            document.getElementById(`card-${id}`).remove();
+        }
+        if (currentGlobalViewId === id) {
+            // もし映していた生徒が落ちたら、メイン画面を先生に戻す
+            const teacherId = Object.keys(students).find(k => k.startsWith("T-ROOM-")) || peer.id;
+            applyView(teacherId);
+        }
+        delete connections[id];
+        delete students[id];
+        delete remoteStreams[id];
+        
+        // 先生の場合、リストが更新されたことを全員に通知
+        if (myRole === 'teacher') broadcastList();
     }
 
     function broadcastList() {
         const list = Object.keys(students).map(id => ({ id, name: students[id].name }));
         list.push({ id: peer.id, name: myName });
-        Object.values(connections).forEach(c => c.send({ type: 'list', list }));
+        Object.values(connections).forEach(c => {
+            if(c.open) c.send({ type: 'list', list });
+        });
     }
 
     function addRemoteStream(id, stream) {
         remoteStreams[id] = stream;
-        const isT = id.startsWith("T-ROOM-");
-
-        if (myRole === 'teacher' && !isT) {
+        if (myRole === 'teacher' && !id.startsWith("T-ROOM-")) {
             if (document.getElementById(`card-${id}`)) return;
             const card = document.createElement('div');
             card.className = 'card'; card.id = `card-${id}`;
@@ -232,28 +251,14 @@
             document.getElementById(`vid-${id}`).srcObject = stream;
             setupVol(stream, `vol-${id}`);
         }
-        
-        // 先生がまだ誰も指名していない場合、とりあえず先生を映す
-        if (isT && currentGlobalViewId === "") {
-            applyView(id);
-        }
+        if (id.startsWith("T-ROOM-") && currentGlobalViewId === "") applyView(id);
     }
 
-    // 先生が画面構成を調整・配信
     function setGlobalView(targetId) {
         currentGlobalViewId = (targetId === 'teacher') ? peer.id : targetId;
         const msg = { type: 'sync_view', targetId: currentGlobalViewId, fit: currentFitMode };
-        Object.values(connections).forEach(c => c.send(msg));
+        Object.values(connections).forEach(c => { if(c.open) c.send(msg); });
         applyView(currentGlobalViewId);
-    }
-
-    function toggleFitMode() {
-        currentFitMode = (currentFitMode === "contain") ? "cover" : "contain";
-        document.getElementById('main-video').style.objectFit = currentFitMode;
-        if (myRole === 'teacher') {
-            const msg = { type: 'sync_view', targetId: currentGlobalViewId, fit: currentFitMode };
-            Object.values(connections).forEach(c => c.send(msg));
-        }
     }
 
     function applyView(id) {
@@ -263,7 +268,7 @@
             const mv = document.getElementById('main-video');
             mv.srcObject = stream;
             const name = (id.startsWith("T-ROOM-")) ? "先生" : (students[id]?.name || "生徒");
-            document.getElementById('view-label').innerText = name + " の画面を共有中 (" + (currentFitMode === "contain" ? "全体表示" : "ズーム表示") + ")";
+            document.getElementById('view-label').innerText = name + " を表示中";
             mv.play().catch(()=>{});
         }
     }
@@ -271,7 +276,6 @@
     async function updateMedia() {
         const mode = document.getElementById('mode-select').value;
         await getStream(mode);
-        // 送信トラック差し替え
         Object.values(peer.connections).forEach(conns => {
             conns.forEach(c => {
                 if (c.peerConnection) {
@@ -283,7 +287,6 @@
                 }
             });
         });
-        // 自分が表示対象ならメイン画面も更新
         if (currentGlobalViewId === peer.id) applyView(peer.id);
     }
 
@@ -316,7 +319,7 @@
         if (e.key === 'Enter' && e.target.value) {
             const msg = e.target.value;
             addChat("自分", msg);
-            Object.values(connections).forEach(c => c.send({ type: 'chat', name: myName, msg }));
+            Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'chat', name: myName, msg }); });
             e.target.value = "";
         }
     };
@@ -339,15 +342,23 @@
             recorder.ondataavailable = e => recordedChunks.push(e.data);
             recorder.onstop = () => {
                 const b = new Blob(recordedChunks, { type: 'video/webm' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'lesson_record.webm'; a.click();
+                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'lesson.webm'; a.click();
             };
             recorder.start();
-            document.getElementById('rec-btn').innerText = "⏹ 録画中（停止）";
+            document.getElementById('rec-btn').innerText = "⏹ 録画中...";
         } else {
             recorder.stop();
-            document.getElementById('rec-btn').innerText = "🔴 全員の画面を録画";
+            document.getElementById('rec-btn').innerText = "🔴 録画";
         }
     }
+
+    // タブを閉じる直前にEXIT信号を投げる
+    window.addEventListener('beforeunload', () => {
+        Object.values(connections).forEach(c => {
+            if(c.open) c.send({ type: 'EXIT_NOW' });
+        });
+        if(peer) peer.destroy();
+    });
 
     window.onclick = () => { document.querySelectorAll('video').forEach(v => v.play()); };
 </script>
