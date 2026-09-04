@@ -3,666 +3,715 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v32.0 HYPER-PERFORMANCE</title>
+    <title>EDU-ULTIMATE v34.0 HYPER-COMMANDER</title>
     
-    <!-- Libraries -->
+    <!-- External Libraries -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Outfit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --primary: #00f2ff;
-            --primary-glow: rgba(0, 242, 255, 0.4);
-            --danger: #ff3e3e;
+            --accent: #00fbff;
+            --accent-glow: rgba(0, 251, 255, 0.4);
+            --danger: #ff0055;
             --success: #00ff88;
-            --warning: #ffcc00;
-            --bg-darker: #020406;
-            --bg-main: #0a0e14;
-            --bg-panel: rgba(20, 25, 35, 0.85);
-            --border: rgba(255, 255, 255, 0.08);
-            --text-main: #e2e8f0;
-            --text-dim: #94a3b8;
-            --font-main: 'Outfit', sans-serif;
-            --font-code: 'JetBrains Mono', monospace;
-            --sidebar-w: 360px;
-            --header-h: 70px;
-            --glass: blur(25px) saturate(180%);
+            --bg-deep: #010204;
+            --bg-card: rgba(15, 20, 30, 0.95);
+            --border: rgba(255, 255, 255, 0.1);
+            --glass: blur(25px) saturate(160%);
+            --sidebar-w: 380px;
+            --header-h: 75px;
         }
 
+        /* Reset & Base */
         * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
         body, html { 
             margin: 0; padding: 0; width: 100%; height: 100%; 
-            background: var(--bg-darker); color: var(--text-main); 
-            font-family: var(--font-main); overflow: hidden; 
+            background: var(--bg-deep); color: #f8f9fa; 
+            font-family: 'Outfit', sans-serif; overflow: hidden; 
         }
 
         /* --- Setup Screen --- */
-        #setup-screen {
-            position: fixed; inset: 0; z-index: 10000;
-            background: radial-gradient(circle at center, #1a2a44 0%, #000 100%);
+        #setup-layer {
+            position: fixed; inset: 0; z-index: 99999;
+            background: radial-gradient(circle at 30% 30%, #1a2a44 0%, #000 100%);
             display: flex; justify-content: center; align-items: center;
         }
-        .setup-container {
-            background: var(--bg-panel); backdrop-filter: var(--glass);
+        .setup-card {
+            background: var(--bg-card); backdrop-filter: var(--glass);
             padding: 50px; border-radius: 40px; border: 1px solid var(--border);
-            width: 500px; text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            width: 500px; text-align: center; box-shadow: 0 50px 100px rgba(0,0,0,0.8);
+            border: 1px solid var(--accent-glow);
         }
-        .setup-container h1 { font-size: 38px; font-weight: 800; margin-bottom: 10px; color: var(--primary); letter-spacing: -1px; }
-        .setup-container p { color: var(--text-dim); margin-bottom: 30px; }
-        .input-group { margin-bottom: 20px; text-align: left; }
-        .input-group label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--primary); text-transform: uppercase; }
-        input, select {
-            width: 100%; padding: 15px; border-radius: 15px; border: 1px solid var(--border);
-            background: rgba(0,0,0,0.3); color: white; font-size: 16px; transition: 0.3s;
+        .setup-card h1 { font-size: 45px; font-weight: 900; color: var(--accent); margin: 0 0 10px; letter-spacing: -2px; }
+        .setup-card p { color: #8a99af; margin-bottom: 40px; font-size: 15px; }
+        .input-box { margin-bottom: 25px; text-align: left; }
+        .input-box label { font-size: 12px; font-weight: 800; color: var(--accent); display: block; margin-bottom: 8px; text-transform: uppercase; }
+        input {
+            width: 100%; padding: 18px; border-radius: 15px; border: 1px solid var(--border);
+            background: rgba(0,0,0,0.5); color: #fff; font-size: 16px; transition: 0.3s;
         }
-        input:focus { border-color: var(--primary); box-shadow: 0 0 15px var(--primary-glow); }
-        .setup-btns { display: flex; flex-direction: column; gap: 12px; margin-top: 30px; }
-        .btn-core {
-            padding: 18px; border-radius: 15px; border: none; font-weight: 800; cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 16px;
+        input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 20px var(--accent-glow); }
+        .btn-main {
+            width: 100%; padding: 20px; border-radius: 15px; border: none; font-weight: 900; cursor: pointer;
+            transition: 0.3s; font-size: 16px; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px;
         }
-        .btn-core:hover { transform: translateY(-3px); }
-        .btn-t { background: var(--primary); color: #000; }
-        .btn-s { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
+        .btn-t { background: var(--accent); color: #000; }
+        .btn-s { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
+        .btn-main:hover { transform: translateY(-3px); box-shadow: 0 15px 30px rgba(0,0,0,0.4); }
 
-        /* --- Main UI Structure --- */
-        #main-app { display: none; width: 100%; height: 100%; flex-direction: column; }
-        #main-app.active { display: flex; }
+        /* --- Application Layout --- */
+        #app-root { display: none; width: 100%; height: 100%; flex-direction: column; }
+        #app-root.active { display: flex; }
 
         header {
-            height: var(--header-h); background: rgba(0,0,0,0.6); backdrop-filter: var(--glass);
+            height: var(--header-h); background: rgba(0,0,0,0.7); backdrop-filter: var(--glass);
             border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;
-            align-items: center; padding: 0 30px; z-index: 500;
+            align-items: center; padding: 0 35px; z-index: 1000;
         }
-        .header-logo { display: flex; align-items: center; gap: 15px; font-weight: 800; font-size: 20px; }
-        .room-tag { background: var(--primary-glow); color: var(--primary); padding: 5px 15px; border-radius: 20px; font-size: 12px; }
+        .logo-area { display: flex; align-items: center; gap: 15px; }
+        .room-badge { background: rgba(0, 251, 255, 0.1); color: var(--accent); padding: 7px 18px; border-radius: 50px; font-size: 12px; font-weight: 900; border: 1px solid var(--accent); }
 
-        .app-body { display: flex; flex: 1; overflow: hidden; }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
 
-        /* --- Stage Area --- */
-        .stage-container { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); position: relative; }
-        .stage-viewport { flex: 1; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
-        #main-video { width: 100%; height: 100%; object-fit: contain; z-index: 1; }
-        #canvas-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
-        #canvas-layer.active { pointer-events: auto; cursor: crosshair; }
+        /* Stage (Main Viewport) */
+        .stage-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
+        .stage-view { flex: 1; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        #main-video { width: 100%; height: 100%; object-fit: contain; z-index: 1; transition: 0.5s; }
+        #board-canvas { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+        #board-canvas.active { pointer-events: auto; cursor: crosshair; }
 
-        /* Floating Indicators */
-        .indicator { position: absolute; z-index: 100; display: flex; gap: 10px; }
-        .top-left { top: 20px; left: 20px; }
-        .top-right { top: 20px; right: 20px; }
-        .badge { background: rgba(0,0,0,0.75); border: 1px solid var(--border); padding: 8px 15px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(10px); }
-        .live-pulse { width: 8px; height: 8px; background: var(--danger); border-radius: 50%; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        /* Indicators */
+        .hud { position: absolute; z-index: 100; pointer-events: none; }
+        .hud-tl { top: 25px; left: 25px; }
+        .hud-tr { top: 25px; right: 25px; }
+        .info-pill { background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); border: 1px solid var(--border); padding: 12px 22px; border-radius: 18px; display: flex; align-items: center; gap: 12px; }
+        .live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1); } }
 
-        /* Monitor Shelf */
-        .monitor-shelf { height: 180px; background: rgba(0,0,0,0.4); border-top: 1px solid var(--border); display: flex; padding: 15px; gap: 15px; overflow-x: auto; scrollbar-width: none; }
-        .user-node { 
-            width: 200px; height: 140px; background: var(--bg-panel); border-radius: 20px; flex-shrink: 0; 
+        /* Video Shelf */
+        .video-shelf {
+            height: 180px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 25px; gap: 20px; overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .video-shelf::-webkit-scrollbar { display: none; }
+        .u-card {
+            width: 200px; height: 145px; background: #0a101a; border-radius: 20px; flex-shrink: 0;
             overflow: hidden; border: 1px solid var(--border); position: relative; transition: 0.3s;
+            cursor: pointer;
         }
-        .user-node:hover { border-color: var(--primary); }
-        .user-node video { width: 100%; height: 100px; object-fit: cover; }
-        .user-node .node-info { padding: 8px; font-size: 11px; font-weight: 600; text-align: center; }
-        .vol-track { position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: rgba(0,0,0,0.5); }
-        .vol-fill { height: 100%; background: var(--success); width: 0%; transition: 0.1s; }
+        .u-card.active-spot { border: 2px solid var(--accent); box-shadow: 0 0 25px var(--accent-glow); transform: scale(1.02); }
+        .u-card video { width: 100%; height: 110px; object-fit: cover; }
+        .u-card .meta { font-size: 11px; font-weight: 800; text-align: center; padding: 6px; background: rgba(0,0,0,0.6); color: #fff; }
+        .v-bar-bg { position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: rgba(255,255,255,0.05); }
+        .v-bar-fill { height: 100%; background: var(--success); width: 0%; transition: 0.1s; }
 
-        /* --- Sidebar --- */
-        .sidebar { 
-            width: var(--sidebar-w); background: var(--bg-panel); backdrop-filter: var(--glass);
-            border-left: 1px solid var(--border); display: flex; flex-direction: column;
+        /* Sidebar System */
+        .sidebar { width: var(--sidebar-w); background: var(--bg-card); backdrop-filter: var(--glass); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+        .nav-tabs { display: flex; border-bottom: 1px solid var(--border); }
+        .tab-link { flex: 1; padding: 22px; background: none; border: none; color: #5c6d84; cursor: pointer; transition: 0.3s; font-size: 20px; }
+        .tab-link.active { color: var(--accent); border-bottom: 3px solid var(--accent); background: rgba(0,251,255,0.05); }
+
+        .pane { flex: 1; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 25px; }
+        .label-text { font-size: 12px; font-weight: 900; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 18px; opacity: 0.8; }
+
+        /* Action Grid */
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .action-btn {
+            background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: #fff;
+            padding: 18px 5px; border-radius: 18px; cursor: pointer; display: flex; flex-direction: column;
+            align-items: center; gap: 10px; font-size: 11px; font-weight: 600; transition: 0.2s;
         }
-        .side-tabs { display: flex; border-bottom: 1px solid var(--border); }
-        .tab-btn { flex: 1; padding: 15px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 18px; transition: 0.3s; }
-        .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); background: rgba(0,242,255,0.05); }
+        .action-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--accent); color: var(--accent); }
+        .action-btn.active { background: var(--accent); color: #000; font-weight: 800; border-color: var(--accent); }
+        .action-btn.danger.active { background: var(--danger); color: #fff; border-color: var(--danger); }
 
-        .side-content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
-        .panel-box { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 20px; padding: 15px; }
-        .panel-label { font-size: 11px; font-weight: 800; color: var(--primary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
-
-        /* Control Grid */
-        .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-        .ctrl-btn { 
-            background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-main);
-            padding: 12px 5px; border-radius: 12px; cursor: pointer; display: flex; flex-direction: column;
-            align-items: center; gap: 5px; font-size: 10px; transition: 0.2s;
+        /* User Item */
+        .user-row {
+            background: rgba(255,255,255,0.03); border-radius: 15px; padding: 15px;
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+            border: 1px solid var(--border); transition: 0.3s;
         }
-        .ctrl-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--primary); }
-        .ctrl-btn.active { background: var(--primary); color: #000; font-weight: 800; }
-        .ctrl-btn.danger.active { background: var(--danger); color: #fff; }
+        .user-row:hover { border-color: var(--accent-glow); background: rgba(255,255,255,0.05); }
+        .u-name-box { display: flex; align-items: center; gap: 12px; }
+        .u-name { font-size: 14px; font-weight: 700; color: #fff; }
+        .row-btns { display: flex; gap: 8px; }
+        .row-btn { padding: 6px 12px; border-radius: 8px; border: none; font-size: 10px; font-weight: 900; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
+        .btn-focus { background: var(--accent); color: #000; }
+        .btn-screen { background: var(--success); color: #000; }
 
-        /* Chat System */
-        #chat-flow { flex: 1; display: flex; flex-direction: column; min-height: 250px; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px; overflow-y: auto; gap: 10px; }
-        .msg-bubble { font-size: 13px; line-height: 1.5; }
-        .msg-bubble b { color: var(--primary); margin-right: 5px; }
-        .chat-input-area { display: flex; gap: 10px; margin-top: 10px; }
-        .chat-input-area input { flex: 1; padding: 12px; border-radius: 12px; font-size: 13px; }
+        /* Chat UI */
+        #chat-view { flex: 1; background: rgba(0,0,0,0.3); border-radius: 20px; padding: 20px; overflow-y: auto; margin-bottom: 15px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border); }
+        .chat-bubble { font-size: 14px; line-height: 1.5; border-radius: 15px; padding: 10px 16px; background: rgba(255,255,255,0.06); width: fit-content; max-width: 85%; position: relative; }
+        .chat-bubble.me { align-self: flex-end; background: rgba(0, 251, 255, 0.1); border: 1px solid var(--accent-glow); }
+        .chat-bubble .sender { display: block; font-size: 10px; font-weight: 900; color: var(--accent); margin-bottom: 5px; text-transform: uppercase; }
 
-        /* Whiteboard Toolbar */
-        #wb-tools { 
-            position: absolute; right: 20px; top: 80px; background: var(--bg-panel); 
-            border: 1px solid var(--primary); border-radius: 15px; padding: 10px; 
-            display: none; flex-direction: column; gap: 15px; z-index: 1000;
+        .chat-control { display: flex; gap: 12px; }
+        .chat-control input { flex: 1; padding: 15px; border-radius: 12px; font-size: 15px; }
+
+        /* Drawing Toolbar */
+        #wb-toolbar {
+            position: absolute; right: 25px; top: 120px; background: var(--bg-card);
+            border: 2px solid var(--accent); border-radius: 20px; padding: 15px;
+            display: none; flex-direction: column; gap: 18px; z-index: 1100; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        .tool-icon { font-size: 20px; cursor: pointer; color: var(--text-dim); transition: 0.2s; text-align: center; }
-        .tool-icon.active { color: var(--primary); }
+        .tool-btn { width: 35px; height: 35px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #fff; transition: 0.2s; }
+        .tool-btn.active { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent-glow); }
+        .col-pick { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+        .col-pick.active { border-color: #fff; transform: scale(1.1); }
 
-        /* Code Editor Mockup */
-        #code-editor { font-family: var(--font-code); background: #000; color: #00ff88; padding: 15px; border-radius: 15px; font-size: 12px; display: none; height: 300px; overflow-y: auto; white-space: pre; border: 1px solid var(--border); }
+        /* Notification Toast */
+        #toast-zone { position: fixed; top: 100px; left: 35px; z-index: 10000; display: flex; flex-direction: column; gap: 12px; }
+        .toast { background: var(--bg-card); border-left: 6px solid var(--accent); padding: 18px 30px; border-radius: 15px; font-size: 15px; font-weight: 600; animation: slideIn 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
+        @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-        /* Notifications */
-        #toast-wrap { position: fixed; bottom: 30px; right: 400px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
-        .toast { background: var(--bg-panel); border-left: 4px solid var(--primary); padding: 15px 25px; border-radius: 10px; animation: slideUp 0.4s ease-out; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Reactions */
-        .reaction-container { position: fixed; pointer-events: none; inset: 0; z-index: 2000; overflow: hidden; }
-        .emoji { position: absolute; bottom: -50px; font-size: 40px; animation: flyUp 3s linear forwards; }
-        @keyframes flyUp {
-            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-            100% { transform: translateY(-110vh) rotate(360deg); opacity: 0; }
-        }
+        /* Effects */
+        .fx-container { position: fixed; inset: 0; pointer-events: none; z-index: 99999; overflow: hidden; }
+        .fx-item { position: absolute; font-size: 50px; bottom: -100px; animation: fly 3.5s linear forwards; }
+        @keyframes fly { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(-120vh) rotate(720deg); opacity: 0; } }
 
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<!-- 1. Setup Screen -->
-<div id="setup-screen">
-    <div class="setup-container">
-        <h1>EDU-ULTIMATE <span style="font-weight:300">v32.0</span></h1>
-        <p>Next-Gen Educational Telepresence System</p>
+<!-- 1. Setup Layer -->
+<div id="setup-layer">
+    <div class="setup-card">
+        <h1>EDU-ULTIMATE</h1>
+        <p>Quantum-Grade Collaborative Classroom</p>
         
-        <div class="input-group">
-            <label>Full Name</label>
-            <input type="text" id="in-name" placeholder="Enter your display name">
+        <div class="input-box">
+            <label>Identification Name</label>
+            <input type="text" id="in-name" placeholder="Ex: Professor Smith">
         </div>
-        <div class="input-group">
-            <label>Classroom ID</label>
-            <input type="number" id="in-room" placeholder="4-digit numeric ID">
-        </div>
-        <div class="input-group">
-            <label>Start Mode</label>
-            <select id="in-mode">
-                <option value="cam">Interactive Camera</option>
-                <option value="screen">Direct Screen Share (Host Only)</option>
-            </select>
+        <div class="input-box">
+            <label>Nexus Room ID</label>
+            <input type="number" id="in-room" placeholder="Enter 4-digit ID">
         </div>
 
-        <div class="setup-btns">
-            <button class="btn-core btn-t" onclick="initCore('teacher')">Launch as Teacher</button>
-            <button class="btn-core btn-s" onclick="initCore('student')">Join as Student</button>
-        </div>
+        <button class="btn-main btn-t" onclick="startNexus('teacher')">Initialize as Teacher</button>
+        <button class="btn-main btn-s" onclick="startNexus('student')">Connect as Student</button>
     </div>
 </div>
 
-<!-- 2. Main App -->
-<div id="main-app">
+<!-- 2. Application UI -->
+<div id="app-root">
     <header>
-        <div class="header-logo">
-            <i class="fas fa-microchip" style="color:var(--primary)"></i>
-            <span>ULTIMATE CORE</span>
-            <div class="room-tag" id="tag-room">ROOM: ----</div>
+        <div class="logo-area">
+            <i class="fas fa-atom" style="color:var(--accent); font-size:28px;"></i>
+            <span style="font-weight:900; letter-spacing:2px; font-size:22px; color:var(--accent)">ULTIMATE v34</span>
+            <div class="room-badge" id="display-room">ROOM: ----</div>
         </div>
-        <div style="display:flex; align-items:center; gap:25px;">
-            <div id="rec-status" class="hidden" style="color:var(--danger); font-weight:800; font-size:12px;">
-                <i class="fas fa-circle" style="animation:pulse 1s infinite"></i> RECORDING...
+        <div style="display:flex; align-items:center; gap:30px;">
+            <div id="rec-status" class="hidden" style="color:var(--danger); font-weight:900; font-size:14px; display:flex; align-items:center; gap:8px;">
+                <div class="live-dot"></div> RECORDING
             </div>
-            <div id="clock" style="font-family:var(--font-code); font-size:20px; font-weight:600;">00:00:00</div>
-            <button class="btn-core" style="padding:10px 25px; background:var(--danger); font-size:12px; color:#fff;" onclick="location.reload()">TERMINATE</button>
+            <div id="digital-clock" style="font-family:'JetBrains Mono'; font-size:24px; font-weight:700; color:#fff;">00:00:00</div>
+            <button class="action-btn danger" style="padding:10px 25px; border:none; border-radius:12px; font-size:13px;" onclick="location.reload()">TERMINATE</button>
         </div>
     </header>
 
-    <div class="app-body">
-        <div class="stage-container">
-            <div class="stage-viewport" id="viewport" onclick="mediaUnlock()">
-                <div class="indicator top-left">
-                    <div class="badge"><div class="live-pulse"></div> <span id="main-view-label">STANDBY</span></div>
+    <div class="main-container">
+        <!-- Main Stage -->
+        <div class="stage-area">
+            <div class="stage-view" id="stage-wrapper" onclick="forceUnlock()">
+                <div class="hud hud-tl">
+                    <div class="info-pill">
+                        <div class="live-dot" style="background:var(--success); animation:none;"></div>
+                        <span id="target-view-name" style="font-weight:900; font-size:13px; text-transform:uppercase;">Broadcasting: Standby</span>
+                    </div>
                 </div>
-                <div class="indicator top-right">
-                    <div class="badge" id="hand-count" style="display:none; color:var(--warning)"><i class="fas fa-hand-paper"></i> <span>0</span></div>
-                </div>
-
-                <canvas id="canvas-layer"></canvas>
+                
+                <canvas id="board-canvas"></canvas>
                 <video id="main-video" autoplay playsinline></video>
 
-                <!-- Tools Floating -->
-                <div id="wb-tools">
-                    <div class="tool-icon active" onclick="setTool('pen', this)" title="Pen"><i class="fas fa-pen-nib"></i></div>
-                    <div class="tool-icon" onclick="setTool('rect', this)" title="Rectangle"><i class="fas fa-square"></i></div>
-                    <div class="tool-icon" onclick="setTool('circle', this)" title="Circle"><i class="fas fa-circle"></i></div>
-                    <div class="tool-icon" onclick="setTool('eraser', this)" title="Eraser"><i class="fas fa-eraser"></i></div>
-                    <hr style="border:0; border-top:1px solid var(--border)">
-                    <div style="width:24px; height:24px; border-radius:50%; background:#00f2ff; cursor:pointer;" onclick="setCol('#00f2ff')"></div>
-                    <div style="width:24px; height:24px; border-radius:50%; background:#ff3e3e; cursor:pointer;" onclick="setCol('#ff3e3e')"></div>
-                    <div style="width:24px; height:24px; border-radius:50%; background:#00ff88; cursor:pointer;" onclick="setCol('#00ff88')"></div>
-                    <div class="tool-icon" onclick="clearBoard()" style="color:var(--danger)"><i class="fas fa-trash-alt"></i></div>
+                <div id="wb-toolbar">
+                    <div class="tool-btn active" onclick="updateTool('pen', this)"><i class="fas fa-pencil-alt"></i></div>
+                    <div class="tool-btn" onclick="updateTool('rect', this)"><i class="fas fa-vector-square"></i></div>
+                    <div class="tool-btn" onclick="updateTool('eraser', this)"><i class="fas fa-eraser"></i></div>
+                    <hr style="border:none; border-top:1px solid var(--border); margin:5px 0;">
+                    <div class="col-pick active" onclick="updateCol('#00fbff', this)" style="background:#00fbff"></div>
+                    <div class="col-pick" onclick="updateCol('#ff0055', this)" style="background:#ff0055"></div>
+                    <div class="col-pick" onclick="updateCol('#00ff88', this)" style="background:#00ff88"></div>
+                    <div class="tool-btn" onclick="wipeBoard()" style="color:var(--danger); margin-top:10px;"><i class="fas fa-trash-alt"></i></div>
                 </div>
             </div>
 
-            <div class="monitor-shelf" id="monitor-grid">
-                <!-- Self Card -->
-                <div class="user-node" id="card-self">
-                    <video id="self-preview" autoplay playsinline muted></video>
-                    <div class="node-info">ME (YOU)</div>
-                    <div class="vol-track"><div class="vol-fill" id="my-vol"></div></div>
+            <div class="video-shelf" id="monitor-grid">
+                <!-- Self Monitor -->
+                <div class="u-card" id="card-self">
+                    <video id="preview-self" autoplay playsinline muted></video>
+                    <div class="meta">LOCAL (YOU)</div>
+                    <div class="v-bar-bg"><div class="v-bar-fill" id="meter-self"></div></div>
                 </div>
             </div>
         </div>
 
+        <!-- Right Side Panel -->
         <div class="sidebar">
-            <div class="side-tabs">
-                <button class="tab-btn active" onclick="setTab('ctrl', this)"><i class="fas fa-th-large"></i></button>
-                <button class="tab-btn" onclick="setTab('chat', this)"><i class="fas fa-comments"></i></button>
-                <button class="tab-btn" onclick="setTab('code', this)"><i class="fas fa-code"></i></button>
+            <div class="nav-tabs">
+                <button class="tab-link active" onclick="switchPane('ctrl', this)"><i class="fas fa-gamepad"></i></button>
+                <button class="tab-link" onclick="switchPane('chat', this)"><i class="fas fa-comment-alt"></i></button>
+                <button class="tab-link" onclick="switchPane('users', this)"><i class="fas fa-user-friends"></i></button>
             </div>
 
-            <div class="side-content">
-                <!-- Tab: Controls -->
-                <div id="tab-ctrl">
-                    <div id="teacher-section" class="hidden">
-                        <div class="panel-label">Class Orchestration</div>
-                        <div class="ctrl-grid">
-                            <button class="ctrl-btn" onclick="cmdAllMic(false)"><i class="fas fa-microphone-slash"></i><span>Mute All</span></button>
-                            <button class="ctrl-btn" onclick="cmdAllMic(true)"><i class="fas fa-microphone"></i><span>Unmute All</span></button>
-                            <button class="ctrl-btn" id="btn-wb" onclick="toggleWB()"><i class="fas fa-chalkboard"></i><span>Whiteboard</span></button>
-                            <button class="ctrl-btn" id="btn-rec" onclick="toggleRec()"><i class="fas fa-record-vinyl"></i><span>Record</span></button>
-                            <button class="ctrl-btn" onclick="startPoll()"><i class="fas fa-poll-h"></i><span>Quick Poll</span></button>
-                            <button class="ctrl-btn" onclick="syncAllToTeacher()"><i class="fas fa-sync"></i><span>Force Sync</span></button>
-                        </div>
-                        <div style="height:20px;"></div>
-                    </div>
-
-                    <div class="panel-label">Personal Devices</div>
-                    <div class="ctrl-grid">
-                        <button class="ctrl-btn" id="btn-mic" onclick="toggleMic()"><i class="fas fa-microphone"></i><span>Mic</span></button>
-                        <button class="ctrl-btn" id="btn-cam" onclick="toggleCam()"><i class="fas fa-video"></i><span>Camera</span></button>
-                        <button class="ctrl-btn" id="btn-raise" onclick="raiseHand()"><i class="fas fa-hand-paper"></i><span>Raise</span></button>
-                    </div>
-
-                    <div style="height:20px;"></div>
-                    <div class="panel-label">Quick Reactions</div>
-                    <div class="ctrl-grid">
-                        <button class="ctrl-btn" onclick="sendReaction('👏')">👏<span>Clap</span></button>
-                        <button class="ctrl-btn" onclick="sendReaction('🔥')">🔥<span>Fire</span></button>
-                        <button class="ctrl-btn" onclick="sendReaction('💡')">💡<span>Idea</span></button>
-                    </div>
-
-                    <div style="height:20px;"></div>
-                    <div class="panel-label">Participants</div>
-                    <div id="user-list" style="display:flex; flex-direction:column; gap:5px;"></div>
-                </div>
-
-                <!-- Tab: Chat -->
-                <div id="tab-chat" class="hidden" style="height:100%; display:flex; flex-direction:column;">
-                    <div id="chat-flow"></div>
-                    <div class="chat-input-area">
-                        <input type="text" id="chat-in" placeholder="Type message..." onkeypress="if(event.key==='Enter')sendChat()">
-                        <button class="ctrl-btn" style="background:var(--primary); color:#000; width:50px;" onclick="sendChat()"><i class="fas fa-paper-plane"></i></button>
+            <div class="pane" id="pane-ctrl">
+                <div id="host-exclusive" class="hidden">
+                    <div class="label-text">Nexus Commander</div>
+                    <div class="grid-3">
+                        <button class="action-btn" onclick="broadcastMic(false)"><i class="fas fa-microphone-slash"></i><span>Mute All</span></button>
+                        <button class="action-btn" onclick="broadcastMic(true)"><i class="fas fa-microphone"></i><span>Open All</span></button>
+                        <button class="action-btn" id="wb-toggle" onclick="toggleNexusBoard()"><i class="fas fa-chalkboard"></i><span>Board</span></button>
+                        <button class="action-btn" id="rec-btn" onclick="toggleNexusRec()"><i class="fas fa-circle"></i><span>Record</span></button>
+                        <button class="action-btn" onclick="globalSpotlight(peer.id)"><i class="fas fa-user-shield"></i><span>Focus Me</span></button>
+                        <button class="action-btn" onclick="fireNexusFX('⭐')"><i class="fas fa-award"></i><span>Reward</span></button>
                     </div>
                 </div>
 
-                <!-- Tab: Code -->
-                <div id="tab-code" class="hidden">
-                    <div class="panel-label">Shared IDE Mockup</div>
-                    <div id="code-editor" contenteditable="true" oninput="syncCode()">// Write code here...</div>
-                    <p style="font-size:10px; color:var(--text-dim); margin-top:10px;">Teacher can sync this to all students.</p>
+                <div class="label-text">User Terminal</div>
+                <div class="grid-3">
+                    <button class="action-btn" id="mic-btn" onclick="toggleMyMic()"><i class="fas fa-microphone"></i><span>Mic</span></button>
+                    <button class="action-btn" id="cam-btn" onclick="toggleMyCam()"><i class="fas fa-video"></i><span>Cam</span></button>
+                    <button class="action-btn" id="screen-btn" onclick="swapMyScreen()"><i class="fas fa-desktop"></i><span>Desktop</span></button>
                 </div>
+
+                <div style="margin-top:20px; padding:20px; background:rgba(0,0,0,0.3); border-radius:20px; border:1px solid var(--border);">
+                    <div class="label-text" style="margin-bottom:10px;">Quantum Reaction</div>
+                    <div style="display:flex; justify-content:space-between; font-size:30px;">
+                        <span style="cursor:pointer;" onclick="fireNexusFX('👏')">👏</span>
+                        <span style="cursor:pointer;" onclick="fireNexusFX('🔥')">🔥</span>
+                        <span style="cursor:pointer;" onclick="fireNexusFX('👍')">👍</span>
+                        <span style="cursor:pointer;" onclick="fireNexusFX('💯')">💯</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pane hidden" id="pane-chat">
+                <div id="chat-view"></div>
+                <div class="chat-control">
+                    <input type="text" id="chat-input" placeholder="Secure transmission..." onkeypress="if(event.key==='Enter')dispatchChat()">
+                    <button class="action-btn" style="width:60px; background:var(--accent); color:#000;" onclick="dispatchChat()"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+
+            <div class="pane hidden" id="pane-users">
+                <div class="label-text">Participant Directory</div>
+                <div id="user-roster"></div>
             </div>
         </div>
     </div>
 </div>
 
-<div id="toast-wrap"></div>
-<div class="reaction-container" id="react-container"></div>
+<div id="toast-zone"></div>
+<div class="fx-container" id="fx-root"></div>
 
-<!-- Logic Engine -->
 <script>
 /**
- * EDU-ULTIMATE v32.0 ENGINE
- * Logic: Peer-to-Peer Full Mesh Networking with Unified Signal Protocol
+ * EDU-ULTIMATE v34.0 - Hyper-Commander Logic Engine
  */
-let peer, localStream, role, roomID, myName;
-let conns = {}, users = {}, streams = {};
-let micOn = false, camOn = true, wbActive = false, screenActive = false;
-let canvas, ctx, drawing = false, tool = 'pen', color = '#00f2ff', startPos = {x:0, y:0};
-let recorder, recordedChunks = [], hands = new Set();
-let audioCtx, analyzer, dataArray;
+let peer, localStream, role, myName, roomID;
+let conns = {}, remoteStreams = {}, metaData = {};
+let micOn = false, camOn = true, wbOn = false, screenOn = false;
+let canvas, ctx, painting = false, tool = 'pen', color = '#00fbff', lastPos = {x:0, y:0};
+let audioCtx, recorder, chunks = [];
 
-async function initCore(r) {
+async function startNexus(r) {
     role = r;
     myName = document.getElementById('in-name').value || (role==='teacher'?'Teacher':'Student');
     roomID = document.getElementById('in-room').value;
-    if(!roomID || roomID.length < 4) return alert("Valid 4-digit Room ID required.");
+    if(!roomID || roomID.length < 4) return alert("Room ID must be 4 digits.");
 
-    const mode = document.getElementById('in-mode').value;
-    localStream = await getMedia(mode);
-    if(!localStream) return;
-
-    const myID = (role === 'teacher') ? `EDU-SYS-${roomID}-HOST` : `EDU-USR-${roomID}-${Math.random().toString(36).substr(2,9)}`;
-    peer = new Peer(myID, { debug: 1 });
+    // 初期ストリーム取得
+    localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+    localStream.getAudioTracks().forEach(t => t.enabled = false);
+    
+    const pid = (role === 'teacher') ? `NEXUS-HOST-${roomID}` : `NEXUS-STUDENT-${roomID}-${Math.random().toString(36).substr(2,7)}`;
+    peer = new Peer(pid);
 
     peer.on('open', id => {
-        document.getElementById('setup-screen').classList.add('hidden');
-        document.getElementById('main-app').classList.add('active');
-        document.getElementById('tag-room').innerText = `ROOM: ${roomID}`;
-        document.getElementById('self-preview').srcObject = localStream;
-        
-        setupAnalyzer(localStream, 'my-vol');
-        initClock();
-        
-        if(role === 'teacher') {
-            document.getElementById('teacher-section').classList.remove('hidden');
-            document.getElementById('wb-tools').style.display = 'flex';
-            initCanvas();
-            document.getElementById('code-editor').style.display = 'block';
+        document.getElementById('setup-layer').classList.add('hidden');
+        document.getElementById('app-root').classList.add('active');
+        document.getElementById('display-room').innerText = `ID: ${roomID}`;
+        document.getElementById('preview-self').srcObject = localStream;
+
+        initVolumeMeter(localStream, 'meter-self');
+        runClock();
+
+        if(role === 'teacher'){
+            document.getElementById('host-exclusive').classList.remove('hidden');
+            initNexusCanvas();
+            updateGlobalView(peer.id);
         } else {
-            connectToHost();
+            connectToNexusHost();
         }
-        pushToast("System Online", `Connected as ${myName}`);
+        notifyToast("NEXUS LINKED", `Identity verified: ${myName}`);
     });
 
     peer.on('call', call => {
         call.answer(localStream);
-        call.on('stream', s => {
-            streams[call.peer] = s;
-            updateMonitor(call.peer, s);
-            if(call.peer.includes('HOST')) focusView(call.peer);
+        call.on('stream', stream => {
+            remoteStreams[call.peer] = stream;
+            createMonitorCard(call.peer, stream);
+            if(call.peer.includes('HOST')) updateGlobalView(call.peer);
         });
     });
 
-    peer.on('connection', c => bindEvents(c));
+    peer.on('connection', c => setupDataChannel(c));
 }
 
-async function getMedia(mode) {
-    try {
-        let s;
-        if(mode === 'screen') s = await navigator.mediaDevices.getDisplayMedia({video:true, audio:true});
-        else s = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-        
-        s.getAudioTracks().forEach(t => t.enabled = false);
-        return s;
-    } catch(e) { alert("Media access denied."); return null; }
-}
-
-function connectToHost() {
-    const hostID = `EDU-SYS-${roomID}-HOST`;
+function connectToNexusHost() {
+    const hostID = `NEXUS-HOST-${roomID}`;
     const c = peer.connect(hostID);
-    bindEvents(c);
+    setupDataChannel(c);
     c.on('open', () => {
-        c.send({type:'join', name:myName});
+        c.send({type:'nexus-join', name:myName});
         peer.call(hostID, localStream);
     });
 }
 
-function bindEvents(c) {
+function setupDataChannel(c) {
     conns[c.peer] = c;
     c.on('data', data => {
         switch(data.type) {
-            case 'join':
-                users[c.peer] = {name:data.name, mic:false, cam:true};
+            case 'nexus-join':
+                metaData[c.peer] = {name:data.name};
                 if(role === 'teacher') {
-                    syncUserList();
+                    broadcastDirectory();
                     peer.call(c.peer, localStream);
                 }
-                pushToast("New Participant", `${data.name} joined the room.`);
-                renderUserList();
+                refreshRoster();
                 break;
-            case 'list':
+            case 'nexus-dir':
                 data.list.forEach(u => {
-                    if(u.id !== peer.id && !conns[u.id]) {
-                        users[u.id] = {name:u.name};
+                    if(u.id !== peer.id && !conns[u.id]){
+                        metaData[u.id] = {name:u.name};
                         const nc = peer.connect(u.id);
-                        bindEvents(nc);
+                        setupDataChannel(nc);
                         nc.on('open', () => {
-                            nc.send({type:'hello', name:myName});
+                            nc.send({type:'nexus-hello', name:myName});
                             peer.call(u.id, localStream);
                         });
                     }
                 });
-                renderUserList();
+                refreshRoster();
                 break;
-            case 'hello':
-                users[c.peer] = {name:data.name};
-                renderUserList();
+            case 'nexus-hello':
+                metaData[c.peer] = {name:data.name};
+                refreshRoster();
                 break;
-            case 'chat': addChat(data.name, data.msg); break;
-            case 'draw': drawFromRemote(data); break;
-            case 'wb-clear': ctx.clearRect(0,0,canvas.width, canvas.height); break;
-            case 'mic-master': applyMic(data.val); break;
-            case 'focus': focusView(data.id); break;
-            case 'react': spawnEmoji(data.emoji); break;
-            case 'hand': updateHand(c.peer, data.val); break;
-            case 'code-sync': document.getElementById('code-editor').innerText = data.code; break;
+            case 'nexus-chat': renderChat(data.name, data.msg, false); break;
+            case 'nexus-draw': remoteDrawBoard(data); break;
+            case 'nexus-clear': ctx.clearRect(0,0,canvas.width, canvas.height); break;
+            case 'nexus-mic-cmd': forceMic(data.val); break;
+            case 'nexus-focus': updateGlobalView(data.id); break;
+            case 'nexus-fx': runEmojiFX(data.emoji); break;
+            // 生徒側の画面共有を「強制」で起動するコマンド
+            case 'nexus-force-screen': beginForcedScreenShare(); break;
         }
     });
     c.on('close', () => {
-        delete conns[c.peer]; delete users[c.peer];
-        const node = document.getElementById(`node-${c.peer}`);
-        if(node) node.remove();
-        renderUserList();
+        delete conns[c.peer];
+        const card = document.getElementById(`card-${c.peer}`);
+        if(card) card.remove();
+        refreshRoster();
     });
 }
 
-/** --- Media Controls --- **/
-function toggleMic() { micOn = !micOn; applyMic(micOn); }
-function applyMic(v) {
-    localStream.getAudioTracks().forEach(t => t.enabled = v);
-    micOn = v;
-    document.getElementById('btn-mic').classList.toggle('active', v);
+/** 
+ * Teacher Control: Global Focus
+ */
+function globalSpotlight(pid) {
+    if(role !== 'teacher') return;
+    updateGlobalView(pid);
+    transmit({type:'nexus-focus', id:pid});
+    notifyToast("QUANTUM FOCUS", "全生徒の視点を同期しました");
 }
-function toggleCam() {
-    camOn = !camOn;
-    localStream.getVideoTracks().forEach(t => t.enabled = camOn);
-    document.getElementById('btn-cam').classList.toggle('active', camOn);
+
+function updateGlobalView(id) {
+    const mainVid = document.getElementById('main-video');
+    const stream = (id === peer.id) ? localStream : remoteStreams[id];
+    if(stream) {
+        mainVid.srcObject = stream;
+        mainVid.muted = (id === peer.id);
+        const nameLabel = id.includes('HOST') ? "PROFESSOR" : (metaData[id]?.name || "PARTICIPANT");
+        document.getElementById('target-view-name').innerText = `Link Active: ${nameLabel}`;
+    }
+    document.querySelectorAll('.u-card').forEach(c => c.classList.remove('active-spot'));
+    const target = document.getElementById(id === peer.id ? 'card-self' : `card-${id}`);
+    if(target) target.classList.add('active-spot');
 }
-function focusView(id) {
-    const v = document.getElementById('main-video');
-    const s = (id === peer.id) ? localStream : streams[id];
-    if(s) {
-        v.srcObject = s;
-        v.muted = (id === peer.id);
-        const label = (id.includes('HOST')) ? "TEACHER" : (users[id]?.name || "PARTICIPANT");
-        document.getElementById('main-view-label').innerText = label;
+
+/** 
+ * Teacher Control: Force Student Screen Share
+ */
+function forceStudentShare(targetID) {
+    if(role !== 'teacher') return;
+    const c = conns[targetID];
+    if(c) {
+        c.send({type:'nexus-force-screen'});
+        notifyToast("SCREEN COMMAND", "生徒の端末に共有コマンドを送信しました");
     }
 }
-function cmdAllMic(v) { broadcast({type:'mic-master', val:v}); }
 
-/** --- Whiteboard Logic (Advanced Vector) --- **/
-function initCanvas() {
-    canvas = document.getElementById('canvas-layer');
+// 生徒側で呼ばれる強制実行関数
+async function beginForcedScreenShare() {
+    try {
+        // ブラウザの仕様上、ここでのみ「ソース選択」ダイアログが出ますが、
+        // アプリケーション独自の「共有しますか？」という確認はスキップされます。
+        const ss = await navigator.mediaDevices.getDisplayMedia({video:true});
+        const st = ss.getVideoTracks()[0];
+        const ct = localStream.getVideoTracks()[0];
+        
+        localStream.removeTrack(ct);
+        localStream.addTrack(st);
+        
+        Object.values(peer.connections).forEach(pcs => {
+            pcs.forEach(pc => {
+                if(pc.type === 'media') {
+                    const snd = pc.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                    if(snd) snd.replaceTrack(st);
+                }
+            });
+        });
+
+        document.getElementById('preview-self').srcObject = localStream;
+        screenOn = true;
+        document.getElementById('screen-btn').classList.add('active');
+
+        st.onended = () => terminateScreenShare();
+        notifyToast("NEXUS SHARED", "デスクトップの共有を開始しました");
+    } catch(e) {
+        notifyToast("ERROR", "共有がキャンセルまたは拒否されました");
+    }
+}
+
+async function terminateScreenShare() {
+    const st = localStream.getVideoTracks()[0];
+    const ncam = await navigator.mediaDevices.getUserMedia({video:true});
+    const nt = ncam.getVideoTracks()[0];
+    
+    localStream.removeTrack(st);
+    localStream.addTrack(nt);
+    st.stop();
+
+    Object.values(peer.connections).forEach(pcs => {
+        pcs.forEach(pc => {
+            if(pc.type === 'media') {
+                const snd = pc.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                if(snd) snd.replaceTrack(nt);
+            }
+        });
+    });
+
+    document.getElementById('preview-self').srcObject = localStream;
+    screenOn = false;
+    document.getElementById('screen-btn').classList.remove('active');
+}
+
+/** Whiteboard Nexus **/
+function initNexusCanvas() {
+    canvas = document.getElementById('board-canvas');
     ctx = canvas.getContext('2d');
     const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
     resize(); window.onresize = resize;
 
-    canvas.onmousedown = (e) => {
-        if(!wbActive) return;
-        drawing = true;
-        startPos = { x: e.offsetX / canvas.width, y: e.offsetY / canvas.height };
-        if(tool === 'pen') transmitDraw(startPos.x, startPos.y, true);
-    };
-    canvas.onmousemove = (e) => {
-        if(!drawing) return;
-        const cur = { x: e.offsetX / canvas.width, y: e.offsetY / canvas.height };
-        if(tool === 'pen') transmitDraw(cur.x, cur.y, false);
-    };
-    canvas.onmouseup = (e) => {
-        if(tool !== 'pen' && drawing) {
-            const end = { x: e.offsetX / canvas.width, y: e.offsetY / canvas.height };
-            transmitShape(tool, startPos, end);
-        }
-        drawing = false;
-    };
-}
-function transmitDraw(x, y, isNew) {
-    const data = { type:'draw', mode:'pen', x, y, isNew, color, size:3 };
-    drawFromRemote(data);
-    broadcast(data);
-}
-function transmitShape(t, s, e) {
-    const data = { type:'draw', mode:t, start:s, end:e, color, size:3 };
-    drawFromRemote(data);
-    broadcast(data);
-}
-function drawFromRemote(d) {
-    ctx.strokeStyle = d.color; ctx.fillStyle = d.color; ctx.lineWidth = d.size; ctx.lineCap = 'round';
-    const w = canvas.width, h = canvas.height;
+    const fetchPos = e => ({ x: e.offsetX / canvas.width, y: e.offsetY / canvas.height });
 
-    if(d.mode === 'pen') {
-        if(d.isNew) { ctx.beginPath(); ctx.moveTo(d.x*w, d.y*h); }
-        else { ctx.lineTo(d.x*w, d.y*h); ctx.stroke(); }
-    } else if(d.mode === 'rect') {
-        ctx.strokeRect(d.start.x*w, d.start.y*h, (d.end.x-d.start.x)*w, (d.end.y-d.start.y)*h);
-    } else if(d.mode === 'circle') {
-        const r = Math.sqrt(Math.pow((d.end.x-d.start.x)*w,2) + Math.pow((d.end.y-d.start.y)*h,2));
-        ctx.beginPath(); ctx.arc(d.start.x*w, d.start.y*h, r, 0, Math.PI*2); ctx.stroke();
-    } else if(d.mode === 'eraser') {
-        ctx.clearRect(d.start.x*w - 20, d.start.y*h - 20, 40, 40);
+    canvas.onmousedown = e => { if(!wbOn) return; painting = true; lastPos = fetchPos(e); };
+    canvas.onmousemove = e => {
+        if(!painting) return;
+        const cur = fetchPos(e);
+        const d = { type:'nexus-draw', t:tool, f:lastPos, to:cur, c:color };
+        remoteDrawBoard(d);
+        transmit(d);
+        lastPos = cur;
+    };
+    canvas.onmouseup = () => painting = false;
+}
+
+function remoteDrawBoard(d) {
+    ctx.strokeStyle = d.c; ctx.lineWidth = d.t==='eraser'? 45 : 4; ctx.lineCap = 'round';
+    ctx.globalCompositeOperation = d.t==='eraser' ? 'destination-out' : 'source-over';
+    
+    const w = canvas.width, h = canvas.height;
+    if(d.t === 'pen' || d.t === 'eraser') {
+        ctx.beginPath();
+        ctx.moveTo(d.f.x * w, d.f.y * h);
+        ctx.lineTo(d.to.x * w, d.to.y * h);
+        ctx.stroke();
+    } else if(d.t === 'rect') {
+        ctx.strokeRect(d.f.x * w, d.f.y * h, (d.to.x - d.f.x) * w, (d.to.y - d.f.y) * h);
     }
 }
-function toggleWB() {
-    wbActive = !wbActive;
-    document.getElementById('canvas-layer').classList.toggle('active', wbActive);
-    document.getElementById('btn-wb').classList.toggle('active', wbActive);
-}
-function setTool(t, el) {
-    tool = t;
-    document.querySelectorAll('.tool-icon').forEach(i => i.classList.remove('active'));
-    el.classList.add('active');
-}
-function setCol(c) { color = c; }
-function clearBoard() { ctx.clearRect(0,0,canvas.width, canvas.height); broadcast({type:'wb-clear'}); }
 
-/** --- Utilities --- **/
-function broadcast(data) {
-    Object.values(conns).forEach(c => { if(c.open) c.send(data); });
+function toggleNexusBoard() {
+    wbOn = !wbOn;
+    document.getElementById('board-canvas').classList.toggle('active', wbOn);
+    document.getElementById('wb-toolbar').style.display = wbOn ? 'flex' : 'none';
+    document.getElementById('wb-toggle').classList.toggle('active', wbOn);
 }
-function syncUserList() {
-    const list = Object.keys(users).map(id => ({id, name:users[id].name}));
-    list.push({id:peer.id, name:myName});
-    broadcast({type:'list', list});
+
+function wipeBoard() {
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    transmit({type:'nexus-clear'});
 }
-function renderUserList() {
-    const container = document.getElementById('user-list');
-    container.innerHTML = "";
-    Object.keys(users).forEach(id => {
-        const d = document.createElement('div');
-        d.className = 'badge'; d.style.justifyContent = 'space-between';
-        d.innerHTML = `<span>${users[id].name}</span>` + 
-                     (role==='teacher'? `<button class="ctrl-btn" style="padding:2px 8px" onclick="focusView('${id}')">Spotlight</button>` : "");
-        container.appendChild(d);
+
+/** Core UI & Logic **/
+function createMonitorCard(id, stream) {
+    if(document.getElementById(`card-${id}`)) return;
+    const grid = document.getElementById('monitor-grid');
+    const card = document.createElement('div');
+    card.className = 'u-card'; card.id = `card-${id}`;
+    card.onclick = () => { if(role === 'teacher') globalSpotlight(id); };
+    card.innerHTML = `<video id="vid-${id}" autoplay playsinline></video>
+                     <div class="meta">${metaData[id]?.name || 'Nexus Node'}</div>
+                     <div class="v-bar-bg"><div class="v-bar-fill" id="met-${id}"></div></div>`;
+    grid.appendChild(card);
+    document.getElementById(`vid-${id}`).srcObject = stream;
+    initVolumeMeter(stream, `met-${id}`);
+}
+
+function refreshRoster() {
+    const r = document.getElementById('user-roster');
+    r.innerHTML = "";
+    Object.keys(conns).forEach(id => {
+        const item = document.createElement('div');
+        item.className = 'user-row';
+        const btns = (role === 'teacher') ? 
+            `<div class="row-btns">
+                <button class="row-btn btn-focus" onclick="globalSpotlight('${id}')">Focus</button>
+                <button class="row-btn btn-screen" onclick="forceStudentShare('${id}')">Get Screen</button>
+            </div>` : "";
+        item.innerHTML = `<div class="u-name-box"><div class="live-dot" style="background:var(--success); animation:none;"></div><span class="u-name">${metaData[id]?.name || 'User'}</span></div>${btns}`;
+        r.appendChild(item);
     });
 }
-function updateMonitor(id, s) {
-    if(document.getElementById(`node-${id}`)) return;
-    const grid = document.getElementById('monitor-grid');
-    const node = document.createElement('div');
-    node.className = 'user-node'; node.id = `node-${id}`;
-    node.innerHTML = `<video id="video-${id}" autoplay playsinline></video>
-                     <div class="node-info">${users[id]?.name || 'Participant'}</div>
-                     <div class="vol-track"><div class="vol-fill" id="vol-${id}"></div></div>`;
-    grid.appendChild(node);
-    document.getElementById(`video-${id}`).srcObject = s;
-    setupAnalyzer(s, `vol-${id}`);
-}
-function setupAnalyzer(s, barId) {
+
+function initVolumeMeter(s, bid) {
     try {
         if(!audioCtx) audioCtx = new AudioContext();
         const src = audioCtx.createMediaStreamSource(s);
         const alz = audioCtx.createAnalyser(); alz.fftSize = 256;
         src.connect(alz);
-        const data = new Uint8Array(alz.frequencyBinCount);
-        const loop = () => {
-            if(!document.getElementById(barId)) return;
-            alz.getByteFrequencyData(data);
-            let sum = data.reduce((a,b)=>a+b, 0);
-            let avg = sum / data.length;
-            document.getElementById(barId).style.width = Math.min(100, avg*2) + "%";
-            requestAnimationFrame(loop);
+        const d = new Uint8Array(alz.frequencyBinCount);
+        const l = () => {
+            const el = document.getElementById(bid);
+            if(!el) return;
+            alz.getByteFrequencyData(d);
+            const a = d.reduce((p,c)=>p+c)/d.length;
+            el.style.width = Math.min(100, a*2.5) + "%";
+            requestAnimationFrame(l);
         };
-        loop();
+        l();
     } catch(e){}
 }
-function pushToast(t, m) {
-    const w = document.getElementById('toast-wrap');
+
+function notifyToast(t, m) {
+    const z = document.getElementById('toast-zone');
     const el = document.createElement('div'); el.className = 'toast';
-    el.innerHTML = `<b>${t}</b><br><small>${m}</small>`;
-    w.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+    el.innerHTML = `<span style="color:var(--accent); font-weight:900;">[ ${t} ]</span><br>${m}`; z.appendChild(el);
+    setTimeout(() => el.remove(), 4500);
 }
-function addChat(n, m) {
-    const f = document.getElementById('chat-flow');
-    const d = document.createElement('div'); d.className = 'msg-bubble';
-    d.innerHTML = `<b>${n}:</b> ${m}`;
-    f.appendChild(d); f.scrollTop = f.scrollHeight;
+
+function transmit(data) {
+    Object.values(conns).forEach(c => { if(c.open) c.send(data); });
 }
-function sendChat() {
-    const i = document.getElementById('chat-in'); if(!i.value) return;
-    addChat("You", i.value); broadcast({type:'chat', name:myName, msg:i.value});
+
+function broadcastDirectory() {
+    const list = Object.keys(metaData).map(id => ({id, name:metaData[id].name}));
+    list.push({id:peer.id, name:myName});
+    transmit({type:'nexus-dir', list});
+}
+
+function dispatchChat() {
+    const i = document.getElementById('chat-input'); if(!i.value) return;
+    renderChat(myName, i.value, true);
+    transmit({type:'nexus-chat', name:myName, msg:i.value});
     i.value = "";
 }
-function sendReaction(emoji) {
-    spawnEmoji(emoji); broadcast({type:'react', emoji});
+
+function renderChat(name, msg, isMe) {
+    const v = document.getElementById('chat-view');
+    const d = document.createElement('div');
+    d.className = `chat-bubble ${isMe?'me':''}`;
+    d.innerHTML = `<span class="sender">${name}</span>${msg}`;
+    v.appendChild(d); v.scrollTop = v.scrollHeight;
 }
-function spawnEmoji(emoji) {
-    const c = document.getElementById('react-container');
-    const el = document.createElement('div'); el.className = 'emoji';
-    el.innerText = emoji; el.style.left = Math.random() * 80 + 10 + "vw";
-    c.appendChild(el);
-    setTimeout(() => el.remove(), 3000);
+
+function toggleMyMic() {
+    micOn = !micOn; forceMic(micOn);
+    document.getElementById('mic-btn').classList.toggle('active', micOn);
 }
-function raiseHand() {
-    const btn = document.getElementById('btn-raise');
-    const active = btn.classList.toggle('active');
-    broadcast({type:'hand', val:active});
+function forceMic(v) {
+    localStream.getAudioTracks().forEach(t => t.enabled = v);
+    micOn = v;
 }
-function updateHand(id, val) {
-    if(val) hands.add(id); else hands.delete(id);
-    const badge = document.getElementById('hand-count');
-    badge.style.display = hands.size > 0 ? 'flex' : 'none';
-    badge.querySelector('span').innerText = hands.size;
+function toggleMyCam() {
+    camOn = !camOn; localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+    document.getElementById('cam-btn').classList.toggle('active', camOn);
 }
-function syncCode() {
-    if(role !== 'teacher') return;
-    const code = document.getElementById('code-editor').innerText;
-    broadcast({type:'code-sync', code});
+
+function runClock() {
+    setInterval(() => {
+        const d = new Date();
+        document.getElementById('digital-clock').innerText = d.toTimeString().split(' ')[0];
+    }, 1000);
 }
-function toggleRec() {
+
+function switchPane(p, b) {
+    document.querySelectorAll('.pane').forEach(el => el.classList.add('hidden'));
+    document.getElementById(`pane-${p}`).classList.remove('hidden');
+    document.querySelectorAll('.tab-link').forEach(el => el.classList.remove('active'));
+    b.classList.add('active');
+}
+
+function forceUnlock() { if(audioCtx) audioCtx.resume(); document.querySelectorAll('video').forEach(v=>v.play().catch(()=>{})); }
+function updateTool(t, el) { tool = t; document.querySelectorAll('.tool-btn').forEach(d=>d.classList.remove('active')); el.classList.add('active'); }
+function updateCol(c, el) { color = c; document.querySelectorAll('.col-pick').forEach(d=>d.classList.remove('active')); el.classList.add('active'); }
+
+function fireNexusFX(emoji) {
+    runEmojiFX(emoji);
+    transmit({type:'nexus-fx', emoji});
+}
+function runEmojiFX(e) {
+    const r = document.getElementById('fx-root');
+    const el = document.createElement('div');
+    el.innerText = e; el.className = 'fx-item';
+    el.style.left = Math.random()*85+5+'vw';
+    r.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+/** Broadcast controls */
+function broadcastMic(v) { transmit({type:'nexus-mic-cmd', val:v}); forceMic(v); }
+
+/** Recorder Management */
+function toggleNexusRec() {
     if(!recorder || recorder.state === 'inactive') {
-        const stream = document.getElementById('main-video').srcObject;
-        if(!stream) return;
-        recorder = new MediaRecorder(stream);
-        recorder.ondataavailable = e => recordedChunks.push(e.data);
+        const s = document.getElementById('main-video').srcObject; if(!s) return;
+        recorder = new MediaRecorder(s);
+        recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
-            const blob = new Blob(recordedChunks, {type:'video/webm'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `LECTURE_${Date.now()}.webm`; a.click();
+            const b = new Blob(chunks, {type:'video/webm'});
+            const u = URL.createObjectURL(b);
+            const a = document.createElement('a'); a.href = u; a.download = `NEXUS-LECTURE-${Date.now()}.webm`; a.click();
         };
         recorder.start();
         document.getElementById('rec-status').classList.remove('hidden');
-        document.getElementById('btn-rec').classList.add('active');
+        document.getElementById('rec-btn').classList.add('active');
     } else {
         recorder.stop();
         document.getElementById('rec-status').classList.add('hidden');
-        document.getElementById('btn-rec').classList.remove('active');
+        document.getElementById('rec-btn').classList.remove('active');
     }
 }
-function initClock() {
-    setInterval(() => {
-        const now = new Date();
-        document.getElementById('clock').innerText = now.toTimeString().split(' ')[0];
-    }, 1000);
-}
-function setTab(t, btn) {
-    ['tab-ctrl', 'tab-chat', 'tab-code'].forEach(id => document.getElementById(id).classList.add('hidden'));
-    document.getElementById('tab-'+t).classList.remove('hidden');
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-}
-function mediaUnlock() {
-    if(audioCtx) audioCtx.resume();
-    document.querySelectorAll('video').forEach(v => v.play().catch(()=>{}));
+
+async function swapMyScreen() {
+    if(!screenOn) await beginForcedScreenShare();
+    else await terminateScreenShare();
 }
 </script>
 </body>
