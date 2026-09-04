@@ -3,739 +3,684 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDU-ULTIMATE v35.0 ARCHITECT-REBORN</title>
+    <title>EDU-ULTIMATE v36.0 PRIVACY-CORE</title>
     
-    <!-- External Resources -->
+    <!-- External Libs -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --accent: #00ffcc;
-            --accent-glow: rgba(0, 255, 204, 0.4);
-            --danger: #ff3366;
-            --success: #00ff88;
-            --bg-base: #020305;
-            --bg-panel: rgba(10, 15, 25, 0.96);
+            --accent: #00e5ff;
+            --accent-dim: rgba(0, 229, 255, 0.15);
+            --danger: #ff1744;
+            --success: #00e676;
+            --bg-base: #01040a;
+            --bg-panel: rgba(13, 20, 30, 0.98);
             --border: rgba(255, 255, 255, 0.08);
-            --glass: blur(30px) saturate(180%);
-            --sidebar-w: 400px;
-            --header-h: 80px;
-            --font-main: 'Outfit', sans-serif;
+            --sidebar-w: 380px;
+            --header-h: 75px;
         }
 
-        /* Global Reset */
         * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
         body, html { 
             margin: 0; padding: 0; width: 100%; height: 100%; 
-            background: var(--bg-base); color: #e0e6ed; 
-            font-family: var(--font-main); overflow: hidden; 
+            background: var(--bg-base); color: #eceff4; 
+            font-family: 'Outfit', sans-serif; overflow: hidden; 
         }
 
-        /* --- Initialization Overlay --- */
-        #init-layer {
+        /* --- Launcher Overlay --- */
+        #launcher {
             position: fixed; inset: 0; z-index: 100000;
-            background: radial-gradient(circle at center, #1a2030 0%, #000 100%);
+            background: radial-gradient(circle at center, #1a2a40 0%, #000 100%);
             display: flex; justify-content: center; align-items: center;
         }
-        .init-card {
-            background: var(--bg-panel); backdrop-filter: var(--glass);
-            padding: 60px; border-radius: 40px; border: 1px solid var(--border);
-            width: 520px; text-align: center; box-shadow: 0 50px 120px rgba(0,0,0,0.9);
+        .launcher-card {
+            background: var(--bg-panel); backdrop-filter: blur(20px);
+            padding: 50px; border-radius: 40px; border: 1px solid var(--border);
+            width: 500px; text-align: center; box-shadow: 0 50px 100px rgba(0,0,0,0.8);
         }
-        .init-card h1 { font-size: 48px; font-weight: 900; color: var(--accent); margin: 0 0 10px; letter-spacing: -2px; }
-        .init-card p { color: #8090a0; margin-bottom: 45px; font-size: 16px; font-weight: 400; }
-        .field-group { margin-bottom: 25px; text-align: left; }
-        .field-group label { font-size: 12px; font-weight: 800; color: var(--accent); display: block; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .launcher-card h1 { font-size: 40px; font-weight: 900; color: var(--accent); margin: 0 0 10px; letter-spacing: -1.5px; }
+        .launcher-card p { color: #708090; margin-bottom: 40px; font-size: 15px; }
+        .form-input { margin-bottom: 25px; text-align: left; }
+        .form-input label { font-size: 12px; font-weight: 800; color: var(--accent); display: block; margin-bottom: 10px; text-transform: uppercase; }
         input {
             width: 100%; padding: 18px; border-radius: 15px; border: 1px solid var(--border);
-            background: rgba(0,0,0,0.4); color: #fff; font-size: 17px; transition: 0.3s;
+            background: rgba(0,0,0,0.5); color: #fff; font-size: 16px; transition: 0.3s;
         }
-        input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 25px var(--accent-glow); }
+        input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 20px var(--accent-dim); }
         .btn-launch {
-            width: 100%; padding: 22px; border-radius: 16px; border: none; font-weight: 900; cursor: pointer;
-            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 18px; margin-top: 15px; text-transform: uppercase;
+            width: 100%; padding: 20px; border-radius: 15px; border: none; font-weight: 900; cursor: pointer;
+            transition: 0.3s; font-size: 17px; margin-top: 15px; text-transform: uppercase;
         }
-        .btn-host { background: var(--accent); color: #000; }
-        .btn-join { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
-        .btn-launch:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+        .btn-teacher { background: var(--accent); color: #000; }
+        .btn-student { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
+        .btn-launch:hover { transform: translateY(-3px); box-shadow: 0 15px 30px rgba(0,0,0,0.4); }
 
-        /* --- Primary Application UI --- */
-        #app-root { display: none; width: 100%; height: 100%; flex-direction: column; }
-        #app-root.active { display: flex; }
+        /* --- Main UI Structure --- */
+        #app-shell { display: none; width: 100%; height: 100%; flex-direction: column; }
+        #app-shell.active { display: flex; }
 
         header {
-            height: var(--header-h); background: rgba(0,0,0,0.7); backdrop-filter: var(--glass);
+            height: var(--header-h); background: rgba(0,0,0,0.7); backdrop-filter: blur(15px);
             border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;
-            align-items: center; padding: 0 40px; z-index: 5000;
+            align-items: center; padding: 0 30px; z-index: 1000;
         }
-        .brand-zone { display: flex; align-items: center; gap: 18px; }
-        .room-tag { background: var(--accent-glow); color: var(--accent); padding: 8px 20px; border-radius: 50px; font-size: 13px; font-weight: 900; border: 1px solid var(--accent); }
+        .brand-logo { display: flex; align-items: center; gap: 15px; font-weight: 900; font-size: 22px; color: var(--accent); }
+        .room-badge { background: var(--accent-dim); padding: 5px 15px; border-radius: 50px; border: 1px solid var(--accent); font-size: 12px; color: var(--accent); font-weight: 800; }
 
-        .main-workspace { display: flex; flex: 1; overflow: hidden; }
+        .container { display: flex; flex: 1; overflow: hidden; }
 
-        /* Central Stage Area */
-        .stage-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
+        /* Stage */
+        .stage-wrapper { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
         .viewport { flex: 1; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
-        #primary-video { width: 100%; height: 100%; object-fit: contain; z-index: 1; transition: opacity 0.5s; }
-        #collab-canvas { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
-        #collab-canvas.active { pointer-events: auto; cursor: crosshair; }
+        #main-display { width: 100%; height: 100%; object-fit: contain; z-index: 1; }
+        #whiteboard { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+        #whiteboard.active { pointer-events: auto; cursor: crosshair; }
 
-        /* Stage HUD elements */
-        .hud-element { position: absolute; z-index: 150; pointer-events: none; }
-        .hud-top-l { top: 30px; left: 30px; }
-        .hud-top-r { top: 30px; right: 30px; }
-        .status-pill { background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); border: 1px solid var(--border); padding: 14px 26px; border-radius: 20px; display: flex; align-items: center; gap: 15px; pointer-events: auto; }
-        .live-indicator { width: 12px; height: 12px; border-radius: 50%; background: var(--danger); animation: heartbeat 1.5s infinite; }
-        @keyframes heartbeat { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
+        /* Stage Overlay */
+        .stage-hud { position: absolute; z-index: 100; pointer-events: none; }
+        .hud-tl { top: 20px; left: 20px; }
+        .hud-tr { top: 20px; right: 20px; }
+        .badge { background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; color: #fff; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
-        /* Horizontal Video Shelf */
-        .video-strip {
-            height: 200px; background: rgba(0,0,0,0.6); border-top: 1px solid var(--border);
-            display: flex; align-items: center; padding: 0 30px; gap: 25px; overflow-x: auto;
+        /* Bottom Shelf */
+        .video-shelf {
+            height: 170px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 20px; gap: 15px; overflow-x: auto;
             scrollbar-width: none;
         }
-        .video-strip::-webkit-scrollbar { display: none; }
-        .node-card {
-            width: 220px; height: 160px; background: #0d111a; border-radius: 25px; flex-shrink: 0;
-            overflow: hidden; border: 1px solid var(--border); position: relative; transition: 0.4s;
-            cursor: pointer;
+        .card-node {
+            width: 190px; height: 140px; background: #0b111a; border-radius: 20px; flex-shrink: 0;
+            overflow: hidden; border: 1px solid var(--border); position: relative; transition: 0.3s;
         }
-        .node-card.focused { border: 3px solid var(--accent); box-shadow: 0 0 30px var(--accent-glow); transform: scale(1.05); }
-        .node-card video { width: 100%; height: 125px; object-fit: cover; background: #000; }
-        .node-card .meta-tag { font-size: 11px; font-weight: 800; text-align: center; padding: 7px; background: rgba(0,0,0,0.7); color: #fff; text-transform: uppercase; letter-spacing: 0.5px; }
-        .audio-track-bg { position: absolute; bottom: 0; left: 0; width: 100%; height: 5px; background: rgba(255,255,255,0.05); }
-        .audio-track-fill { height: 100%; background: var(--success); width: 0%; transition: 0.1s; }
+        .card-node.highlight { border: 2px solid var(--accent); box-shadow: 0 0 20px var(--accent-dim); }
+        .card-node video { width: 100%; height: 105px; object-fit: cover; }
+        .card-node .tag { font-size: 10px; font-weight: 800; text-align: center; padding: 5px; background: rgba(0,0,0,0.6); }
+        .vol-indicator { position: absolute; bottom: 0; left: 0; height: 4px; background: var(--success); width: 0%; transition: 0.1s; }
 
-        /* Vertical Sidebar Control */
-        .control-sidebar { width: var(--sidebar-w); background: var(--bg-panel); backdrop-filter: var(--glass); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
-        .nav-tabs { display: flex; border-bottom: 1px solid var(--border); }
-        .nav-btn { flex: 1; padding: 25px; background: none; border: none; color: #506070; cursor: pointer; transition: 0.3s; font-size: 22px; }
-        .nav-btn.active { color: var(--accent); border-bottom: 4px solid var(--accent); background: rgba(0,255,204,0.05); }
+        /* Sidebar Control */
+        .sidebar { width: var(--sidebar-w); background: var(--bg-panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); }
+        .tab-trigger { flex: 1; padding: 20px; background: none; border: none; color: #506070; cursor: pointer; font-size: 20px; transition: 0.3s; }
+        .tab-trigger.active { color: var(--accent); border-bottom: 3px solid var(--accent); background: rgba(0,229,255,0.05); }
 
-        .pane-content { flex: 1; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; gap: 30px; }
-        .pane-label { font-size: 13px; font-weight: 900; color: var(--accent); text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 20px; opacity: 0.9; }
+        .pane { flex: 1; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 20px; }
+        .pane-label { font-size: 11px; font-weight: 900; color: var(--accent); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; }
 
-        /* Command Grid */
-        .cmd-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-        .cmd-btn {
-            background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: #fff;
-            padding: 20px 5px; border-radius: 20px; cursor: pointer; display: flex; flex-direction: column;
-            align-items: center; gap: 12px; font-size: 11px; font-weight: 700; transition: 0.3s;
+        /* Control Grid */
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .btn-ctrl {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: #fff;
+            padding: 15px 5px; border-radius: 15px; cursor: pointer; display: flex; flex-direction: column;
+            align-items: center; gap: 8px; font-size: 10px; font-weight: 600; transition: 0.2s;
         }
-        .cmd-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--accent); color: var(--accent); }
-        .cmd-btn.active { background: var(--accent); color: #000; font-weight: 800; border-color: var(--accent); }
-        .cmd-btn.danger.active { background: var(--danger); color: #fff; border-color: var(--danger); }
+        .btn-ctrl:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-ctrl.active { background: var(--accent); color: #000; font-weight: 800; }
+        .btn-ctrl.danger.active { background: var(--danger); color: #fff; }
 
-        /* Directory List */
-        .dir-row {
-            background: rgba(255,255,255,0.03); border-radius: 20px; padding: 18px;
-            display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
-            border: 1px solid var(--border); transition: 0.3s;
+        /* Participant Row */
+        .p-row {
+            background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px;
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+            border: 1px solid var(--border);
         }
-        .dir-row:hover { border-color: var(--accent-glow); background: rgba(255,255,255,0.05); }
-        .dir-name-wrap { display: flex; align-items: center; gap: 15px; }
-        .dir-name { font-size: 15px; font-weight: 700; }
-        .dir-btns { display: flex; gap: 10px; }
-        .dir-btn { padding: 8px 15px; border-radius: 10px; border: none; font-size: 11px; font-weight: 900; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
-        .btn-spotlight { background: var(--accent); color: #000; }
-        .btn-capture { background: var(--success); color: #000; }
+        .p-name { font-size: 13px; font-weight: 700; }
+        .p-actions { display: flex; gap: 8px; }
+        .btn-action { padding: 6px 12px; border-radius: 8px; border: none; font-size: 10px; font-weight: 800; cursor: pointer; text-transform: uppercase; }
+        .btn-focus { background: var(--accent); color: #000; }
+        .btn-req { background: var(--success); color: #000; }
 
-        /* Messaging UI */
-        #msg-history { flex: 1; background: rgba(0,0,0,0.3); border-radius: 25px; padding: 25px; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px; border: 1px solid var(--border); }
-        .msg-block { font-size: 15px; line-height: 1.6; border-radius: 20px; padding: 12px 18px; background: rgba(255,255,255,0.07); width: fit-content; max-width: 85%; position: relative; }
-        .msg-block.own { align-self: flex-end; background: rgba(0, 255, 204, 0.1); border: 1px solid var(--accent-glow); }
-        .msg-block .author { display: block; font-size: 10px; font-weight: 900; color: var(--accent); margin-bottom: 6px; text-transform: uppercase; }
+        /* Chat System */
+        #chat-window { flex: 1; background: rgba(0,0,0,0.3); border-radius: 20px; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border); margin-bottom: 10px; }
+        .chat-bubble { font-size: 14px; line-height: 1.5; border-radius: 12px; padding: 10px 15px; background: rgba(255,255,255,0.06); width: fit-content; max-width: 85%; }
+        .chat-bubble.own { align-self: flex-end; background: var(--accent-dim); border: 1px solid var(--accent); }
+        .chat-bubble b { display: block; font-size: 9px; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; }
 
-        .msg-input-wrap { display: flex; gap: 15px; }
-        .msg-input-wrap input { flex: 1; padding: 18px; border-radius: 15px; font-size: 16px; }
+        .chat-input { display: flex; gap: 10px; }
+        .chat-input input { flex: 1; padding: 12px; border-radius: 12px; font-size: 14px; }
 
-        /* Whiteboard Command Bar */
-        #wb-commander {
-            position: absolute; right: 30px; top: 130px; background: var(--bg-panel);
-            border: 2px solid var(--accent); border-radius: 25px; padding: 20px;
-            display: none; flex-direction: column; gap: 20px; z-index: 6000; box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        /* Whiteboard Toolbar */
+        #wb-toolbar {
+            position: absolute; right: 20px; top: 100px; background: var(--bg-panel);
+            border: 1px solid var(--accent); border-radius: 15px; padding: 12px;
+            display: none; flex-direction: column; gap: 15px; z-index: 2000; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        .tool-icon { width: 40px; height: 40px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; transition: 0.3s; }
-        .tool-icon.selected { background: var(--accent); color: #000; box-shadow: 0 0 20px var(--accent-glow); }
-        .color-dot { width: 35px; height: 35px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: 0.2s; }
-        .color-dot.selected { border-color: #fff; transform: scale(1.15); }
+        .tool-icon { width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; }
+        .tool-icon.selected { background: var(--accent); color: #000; }
+        .color-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+        .color-dot.selected { border-color: #fff; transform: scale(1.1); }
 
-        /* Feedback Notifications */
-        #toast-master { position: fixed; top: 110px; left: 40px; z-index: 10000; display: flex; flex-direction: column; gap: 15px; }
-        .toast-msg { background: var(--bg-panel); border-left: 8px solid var(--accent); padding: 20px 35px; border-radius: 20px; font-size: 16px; font-weight: 700; animation: slideReveal 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); box-shadow: 0 30px 60px rgba(0,0,0,0.7); border-top: 1px solid var(--border); }
-        @keyframes slideReveal { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        /* Notifications */
+        #toast-box { position: fixed; top: 100px; left: 30px; z-index: 10000; display: flex; flex-direction: column; gap: 12px; }
+        .toast { background: var(--bg-panel); border-left: 6px solid var(--accent); padding: 15px 25px; border-radius: 12px; font-size: 14px; font-weight: 700; animation: slideIn 0.4s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 
-        /* Dynamic FX */
-        .fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 999999; overflow: hidden; }
-        .fx-particle { position: absolute; font-size: 60px; bottom: -120px; animation: ascend 4s linear forwards; }
-        @keyframes ascend { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(-130vh) rotate(1080deg); opacity: 0; } }
+        /* Privacy Layer */
+        .privacy-shield { position: absolute; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; color: var(--accent); font-size: 10px; font-weight: 900; z-index: 5; text-transform: uppercase; letter-spacing: 1px; }
 
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<!-- Init Screen -->
-<div id="init-layer">
-    <div class="init-card">
+<div id="launcher">
+    <div class="launcher-card">
         <h1>EDU-ULTIMATE</h1>
-        <p>Architect-Grade Telepresence Engine v35.0</p>
+        <p>Student Privacy & High-Performance Command v36.0</p>
         
-        <div class="field-group">
-            <label>Operator Signature</label>
-            <input type="text" id="user-name" placeholder="Ex: Principal Johnson">
+        <div class="form-input">
+            <label>Name</label>
+            <input type="text" id="join-name" placeholder="Enter your name">
         </div>
-        <div class="field-group">
-            <label>Nexus Channel ID</label>
-            <input type="number" id="room-id" placeholder="Enter 4-digit ID">
+        <div class="form-input">
+            <label>Classroom ID</label>
+            <input type="number" id="join-room" placeholder="Enter 4-digit ID">
         </div>
 
-        <button class="btn-launch btn-host" onclick="startEngine('teacher')">Activate as Teacher</button>
-        <button class="btn-launch btn-join" onclick="startEngine('student')">Connect as Student</button>
+        <button class="btn-launch btn-teacher" onclick="initNexus('teacher')">Activate as Teacher</button>
+        <button class="btn-launch btn-student" onclick="initNexus('student')">Enter as Student</button>
     </div>
 </div>
 
-<!-- Main App Root -->
-<div id="app-root">
+<div id="app-shell">
     <header>
-        <div class="brand-zone">
-            <i class="fas fa-project-diagram" style="color:var(--accent); font-size:32px;"></i>
-            <span style="font-weight:900; letter-spacing:3px; font-size:24px; color:var(--accent)">ARCHITECT v35</span>
-            <div class="room-tag" id="room-display">ID: ----</div>
+        <div class="brand-logo">
+            <i class="fas fa-shield-halved"></i>
+            <span>NEXUS-CORE</span>
+            <div class="room-badge" id="room-display">ID: ----</div>
         </div>
-        <div style="display:flex; align-items:center; gap:40px;">
-            <div id="rec-tag" class="hidden" style="color:var(--danger); font-weight:900; font-size:16px; display:flex; align-items:center; gap:10px;">
-                <div class="live-indicator"></div> RECORDING SESSION
-            </div>
-            <div id="time-clock" style="font-family:'JetBrains Mono'; font-size:26px; font-weight:700; color:#fff;">00:00:00</div>
-            <button class="btn-launch danger" style="padding:12px 30px; margin:0; width:auto; border-radius:12px; font-size:14px; background:var(--danger); color:#fff;" onclick="location.reload()">TERMINATE</button>
+        <div style="display:flex; align-items:center; gap:25px;">
+            <div id="rec-status" class="hidden" style="color:var(--danger); font-weight:900; font-size:13px;"><i class="fas fa-circle"></i> RECORDING</div>
+            <div id="clock" style="font-family:'JetBrains Mono'; font-size:22px; font-weight:700;">00:00:00</div>
+            <button class="btn-ctrl danger" style="padding:10px 20px; width:auto; border-radius:10px;" onclick="location.reload()">EXIT</button>
         </div>
     </header>
 
-    <div class="main-workspace">
-        <!-- Center Stage -->
-        <div class="stage-area">
-            <div class="viewport" id="viewport-root" onclick="emergencyUnlock()">
-                <div class="hud-element hud-top-l">
-                    <div class="status-pill">
-                        <div class="live-indicator" style="background:var(--success); animation:none;"></div>
-                        <span id="active-viewer-name" style="font-weight:900; font-size:14px; text-transform:uppercase; letter-spacing:1px;">Stream Status: Calibrating</span>
-                    </div>
+    <div class="container">
+        <div class="stage-wrapper">
+            <div class="viewport" id="viewport-root" onclick="audioUnlock()">
+                <div class="stage-hud hud-tl">
+                    <div class="badge"><div class="dot"></div> <span id="display-view-name">OBSERVING: STANDBY</span></div>
                 </div>
                 
-                <canvas id="collab-canvas"></canvas>
-                <video id="primary-video" autoplay playsinline></video>
+                <canvas id="whiteboard"></canvas>
+                <video id="main-display" autoplay playsinline></video>
 
-                <div id="wb-commander">
-                    <div class="tool-icon selected" onclick="switchTool('pen', this)"><i class="fas fa-pencil-alt"></i></div>
-                    <div class="tool-icon" onclick="switchTool('rect', this)"><i class="fas fa-vector-square"></i></div>
-                    <div class="tool-icon" onclick="switchTool('eraser', this)"><i class="fas fa-eraser"></i></div>
-                    <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
-                    <div class="color-dot selected" onclick="switchColor('#00ffcc', this)" style="background:#00ffcc"></div>
-                    <div class="color-dot" onclick="switchColor('#ff3366', this)" style="background:#ff3366"></div>
-                    <div class="color-dot" onclick="switchColor('#00ff88', this)" style="background:#00ff88"></div>
-                    <div class="tool-icon" onclick="wipeNexusBoard()" style="color:var(--danger); margin-top:15px;"><i class="fas fa-trash-alt"></i></div>
+                <div id="wb-toolbar">
+                    <div class="tool-icon selected" onclick="setTool('pen', this)"><i class="fas fa-pen-nib"></i></div>
+                    <div class="tool-icon" onclick="setTool('eraser', this)"><i class="fas fa-eraser"></i></div>
+                    <hr style="border:none; border-top:1px solid var(--border); margin:5px 0;">
+                    <div class="color-dot selected" onclick="setCol('#00e5ff', this)" style="background:#00e5ff"></div>
+                    <div class="color-dot" onclick="setCol('#ff1744', this)" style="background:#ff1744"></div>
+                    <div class="color-dot" onclick="setCol('#00e676', this)" style="background:#00e676"></div>
+                    <div class="tool-icon" onclick="clearClassBoard()" style="color:var(--danger); margin-top:5px;"><i class="fas fa-trash"></i></div>
                 </div>
             </div>
 
-            <div class="video-strip" id="node-grid">
-                <!-- User Preview -->
-                <div class="node-card" id="card-local">
-                    <video id="preview-local" autoplay playsinline muted></video>
-                    <div class="meta-tag">LOCAL OPERATOR</div>
-                    <div class="audio-track-bg"><div class="audio-track-fill" id="vol-local"></div></div>
+            <div class="video-shelf" id="monitor-shelf">
+                <!-- Self Card -->
+                <div class="card-node" id="card-local">
+                    <video id="video-local" autoplay playsinline muted></video>
+                    <div class="tag">MY CAMERA</div>
+                    <div class="vol-indicator" id="vol-local"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Right Side Panel -->
-        <div class="control-sidebar">
-            <div class="nav-tabs">
-                <button class="nav-btn active" onclick="switchPane('ctrl', this)"><i class="fas fa-terminal"></i></button>
-                <button class="nav-btn" onclick="switchPane('chat', this)"><i class="fas fa-comments"></i></button>
-                <button class="nav-btn" onclick="switchPane('users', this)"><i class="fas fa-network-wired"></i></button>
+        <div class="sidebar">
+            <div class="tabs">
+                <button class="tab-trigger active" onclick="setPane('ctrl', this)"><i class="fas fa-terminal"></i></button>
+                <button class="tab-trigger" onclick="setPane('chat', this)"><i class="fas fa-comments"></i></button>
+                <button class="tab-trigger" onclick="setPane('users', this)"><i class="fas fa-users"></i></button>
             </div>
 
-            <div class="pane-content" id="pane-ctrl">
-                <div id="host-controls" class="hidden">
-                    <div class="pane-label">Orchestration Console</div>
-                    <div class="cmd-grid">
-                        <button class="cmd-btn" onclick="masterMicCommand(false)"><i class="fas fa-microphone-slash"></i><span>Silent All</span></button>
-                        <button class="cmd-btn" onclick="masterMicCommand(true)"><i class="fas fa-microphone"></i><span>Enable All</span></button>
-                        <button class="cmd-btn" id="btn-wb" onclick="toggleNexusBoard()"><i class="fas fa-palette"></i><span>Draw</span></button>
-                        <button class="cmd-btn" id="btn-rec" onclick="toggleNexusRecording()"><i class="fas fa-video"></i><span>Record</span></button>
-                        <button class="cmd-btn" onclick="forceGlobalFocus(peer.id)"><i class="fas fa-expand-arrows-alt"></i><span>Focus Me</span></button>
-                        <button class="cmd-btn" onclick="emitNexusReaction('⭐')"><i class="fas fa-medal"></i><span>Reward</span></button>
+            <div class="pane" id="pane-ctrl">
+                <div id="teacher-only" class="hidden">
+                    <div class="pane-label">Master Commands</div>
+                    <div class="grid-3">
+                        <button class="btn-ctrl" onclick="masterMic(false)"><i class="fas fa-microphone-slash"></i><span>Mute All</span></button>
+                        <button class="btn-ctrl" onclick="masterMic(true)"><i class="fas fa-microphone"></i><span>Open All</span></button>
+                        <button class="btn-ctrl" id="btn-wb" onclick="toggleWB()"><i class="fas fa-chalkboard"></i><span>Board</span></button>
+                        <button class="btn-ctrl" id="btn-rec" onclick="toggleRec()"><i class="fas fa-video"></i><span>Record</span></button>
+                        <button class="btn-ctrl" onclick="broadcastSpotlight(peer.id)"><i class="fas fa-star"></i><span>Focus Me</span></button>
+                        <button class="btn-ctrl" onclick="sendEmoji('👏')"><i class="fas fa-clapping-hands"></i><span>Reward</span></button>
                     </div>
                 </div>
 
-                <div class="pane-label">Device Hardware</div>
-                <div class="cmd-grid">
-                    <button class="cmd-btn" id="mic-toggle" onclick="toggleOwnAudio()"><i class="fas fa-microphone"></i><span>Mic</span></button>
-                    <button class="cmd-btn" id="cam-toggle" onclick="toggleOwnVideo()"><i class="fas fa-video"></i><span>Camera</span></button>
-                    <button class="cmd-btn" id="screen-toggle" onclick="toggleOwnScreen()"><i class="fas fa-desktop"></i><span>Share</span></button>
+                <div class="pane-label">Device Control</div>
+                <div class="grid-3">
+                    <button class="btn-ctrl" id="mic-toggle" onclick="toggleMic()"><i class="fas fa-microphone"></i><span>Mic</span></button>
+                    <button class="btn-ctrl" id="cam-toggle" onclick="toggleCam()"><i class="fas fa-video"></i><span>Cam</span></button>
+                    <button class="btn-ctrl" id="screen-toggle" onclick="toggleScreenShare()"><i class="fas fa-desktop"></i><span>Share</span></button>
                 </div>
 
-                <div style="margin-top:25px; padding:25px; background:rgba(0,0,0,0.4); border-radius:30px; border:1px solid var(--border);">
-                    <div class="pane-label" style="margin-bottom:15px;">Real-time Feedback</div>
-                    <div style="display:flex; justify-content:space-between; font-size:35px;">
-                        <span style="cursor:pointer;" onclick="emitNexusReaction('👏')">👏</span>
-                        <span style="cursor:pointer;" onclick="emitNexusReaction('🔥')">🔥</span>
-                        <span style="cursor:pointer;" onclick="emitNexusReaction('💡')">💡</span>
-                        <span style="cursor:pointer;" onclick="emitNexusReaction('🚀')">🚀</span>
+                <div style="margin-top:20px; padding:20px; background:rgba(0,0,0,0.3); border-radius:20px; border:1px solid var(--border);">
+                    <div class="pane-label" style="margin-bottom:10px;">Reactions</div>
+                    <div style="display:flex; justify-content:space-between; font-size:30px;">
+                        <span style="cursor:pointer;" onclick="sendEmoji('👏')">👏</span>
+                        <span style="cursor:pointer;" onclick="sendEmoji('🔥')">🔥</span>
+                        <span style="cursor:pointer;" onclick="sendEmoji('👍')">👍</span>
+                        <span style="cursor:pointer;" onclick="sendEmoji('💡')">💡</span>
                     </div>
                 </div>
             </div>
 
-            <div class="pane-content hidden" id="pane-chat">
-                <div id="msg-history"></div>
-                <div class="msg-input-wrap">
-                    <input type="text" id="msg-input" placeholder="Secure link active..." onkeypress="if(event.key==='Enter')dispatchNexusChat()">
-                    <button class="cmd-btn" style="width:70px; background:var(--accent); color:#000;" onclick="dispatchNexusChat()"><i class="fas fa-paper-plane"></i></button>
+            <div class="pane hidden" id="pane-chat">
+                <div id="chat-window"></div>
+                <div class="chat-input">
+                    <input type="text" id="chat-in" placeholder="Secure chat..." onkeypress="if(event.key==='Enter')dispatchChat()">
+                    <button class="btn-ctrl" style="width:60px; background:var(--accent); color:#000;" onclick="dispatchChat()"><i class="fas fa-paper-plane"></i></button>
                 </div>
             </div>
 
-            <div class="pane-content hidden" id="pane-users">
-                <div class="pane-label">Connected Nodes</div>
-                <div id="user-directory"></div>
+            <div class="pane hidden" id="pane-users">
+                <div class="pane-label">Live Directory</div>
+                <div id="roster-view"></div>
             </div>
         </div>
     </div>
 </div>
 
-<div id="toast-master"></div>
-<div class="fx-layer" id="fx-root"></div>
+<div id="toast-box"></div>
+<div id="fx-layer" style="position:fixed; inset:0; pointer-events:none; z-index:99999;"></div>
 
 <script>
 /**
- * EDU-ULTIMATE v35.0 - Architect Engine
+ * EDU-ULTIMATE v36.0 Logic Engine
+ * Privacy Focus & Dynamic Spotlighting
  */
-let peer, localStream, role, operatorName, roomID;
-let conns = {}, remoteStreams = {}, directoryData = {};
-let audioActive = true, videoActive = true, boardActive = false, screenActive = false;
-let canvas, ctx, isDrawing = false, activeTool = 'pen', activeColor = '#00ffcc', prevPos = {x:0, y:0};
-let audioContext, sessionRecorder, sessionChunks = [];
+let peer, localStream, role, myName, roomID;
+let conns = {}, streams = {}, pData = {};
+let micOn = false, camOn = true, wbOn = false, screenActive = false, currentSpotlight = null;
+let canvas, ctx, painting = false, tool = 'pen', color = '#00e5ff', lastPos = {x:0, y:0};
+let audioCtx, recorder, chunks = [];
 
-async function startEngine(mode) {
-    role = mode;
-    operatorName = document.getElementById('user-name').value || (role==='teacher'?'Teacher':'Student');
-    roomID = document.getElementById('room-id').value;
-    if(!roomID || roomID.length < 4) return alert("System requires a 4-digit Nexus ID.");
+async function initNexus(m) {
+    role = m;
+    myName = document.getElementById('join-name').value || (role==='teacher'?'Teacher':'Student');
+    roomID = document.getElementById('join-room').value;
+    if(!roomID || roomID.length < 4) return alert("System requires a 4-digit ID.");
 
-    // 初期化: マイクとカメラを同時取得
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-        // 最初はマイクをオンの状態にする（会話を確実にするため）
-        applyAudioState(true);
-    } catch(e) {
-        alert("Fatal Error: Media peripherals missing.");
-        return;
-    }
+    // Initial Media
+    localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+    localStream.getAudioTracks().forEach(t => t.enabled = false); // Initial Silent
     
-    const nexusID = (role === 'teacher') ? `ARCHITECT-HOST-${roomID}` : `ARCHITECT-NODE-${roomID}-${Math.random().toString(36).substr(2,7)}`;
-    peer = new Peer(nexusID);
+    const id = (role === 'teacher') ? `PRV-HOST-${roomID}` : `PRV-NODE-${roomID}-${Math.random().toString(36).substr(2,7)}`;
+    peer = new Peer(id);
 
     peer.on('open', id => {
-        document.getElementById('init-layer').classList.add('hidden');
-        document.getElementById('app-root').classList.add('active');
+        document.getElementById('launcher').classList.add('hidden');
+        document.getElementById('app-shell').classList.add('active');
         document.getElementById('room-display').innerText = `ID: ${roomID}`;
-        document.getElementById('preview-local').srcObject = localStream;
+        document.getElementById('video-local').srcObject = localStream;
 
-        initAudioSpectrum(localStream, 'vol-local');
-        updateClock();
+        initVolume(localStream, 'vol-local');
+        tickClock();
 
         if(role === 'teacher'){
-            document.getElementById('host-controls').classList.remove('hidden');
-            initNexusCanvas();
-            forceGlobalFocus(peer.id);
+            document.getElementById('teacher-only').classList.remove('hidden');
+            initCanvas();
+            broadcastSpotlight(peer.id);
         } else {
-            connectToHostNexus();
+            connectToHost();
         }
-        triggerToast("NEXUS ONLINE", `Authenticated as ${operatorName}`);
+        pushToast("CONNECTED", `Welcome, ${myName}`);
     });
 
     peer.on('call', call => {
-        // コールを受信した際、自身の全トラックを送信
+        // SECURITY FILTER: Students only accept calls from Host or designated Spotlight
+        if(role === 'student'){
+            const isHost = call.peer.includes('HOST');
+            const isSpotlight = (call.peer === currentSpotlight);
+            if(!isHost && !isSpotlight) return; // Silent Drop
+        }
+
         call.answer(localStream);
         call.on('stream', stream => {
-            remoteStreams[call.peer] = stream;
-            createRemoteNode(call.peer, stream);
-            if(call.peer.includes('HOST')) forceGlobalFocus(call.peer);
+            streams[call.peer] = stream;
+            upsertNode(call.peer, stream);
+            if(call.peer.includes('HOST')) applyView(call.peer);
         });
     });
 
-    peer.on('connection', c => setupDataSync(c));
+    peer.on('connection', c => setupChannel(c));
 }
 
-function connectToHostNexus() {
-    const hostID = `ARCHITECT-HOST-${roomID}`;
+function connectToHost() {
+    const hostID = `PRV-HOST-${roomID}`;
     const c = peer.connect(hostID);
-    setupDataSync(c);
+    setupChannel(c);
     c.on('open', () => {
-        c.send({type:'arc-join', name:operatorName});
+        c.send({type:'prv-join', name:myName});
         peer.call(hostID, localStream);
     });
 }
 
-function setupDataSync(c) {
+function setupChannel(c) {
     conns[c.peer] = c;
     c.on('data', data => {
         switch(data.type) {
-            case 'arc-join':
-                directoryData[c.peer] = {name:data.name};
+            case 'prv-join':
+                pData[c.peer] = {name:data.name};
                 if(role === 'teacher') {
-                    refreshBroadcastDirectory();
+                    broadcastDirectory();
                     peer.call(c.peer, localStream);
                 }
-                updateDirectoryView();
+                updateRoster();
                 break;
-            case 'arc-dir':
+            case 'prv-dir':
                 data.list.forEach(u => {
                     if(u.id !== peer.id && !conns[u.id]){
-                        directoryData[u.id] = {name:u.name};
+                        pData[u.id] = {name:u.name};
                         const nc = peer.connect(u.id);
-                        setupDataSync(nc);
+                        setupChannel(nc);
                         nc.on('open', () => {
-                            nc.send({type:'arc-hello', name:operatorName});
-                            peer.call(u.id, localStream);
+                            nc.send({type:'prv-hello', name:myName});
+                            // NOTE: Students DON'T call each other here. (Privacy)
                         });
                     }
                 });
-                updateDirectoryView();
+                updateRoster();
                 break;
-            case 'arc-hello':
-                directoryData[c.peer] = {name:data.name};
-                updateDirectoryView();
+            case 'prv-hello':
+                pData[c.peer] = {name:data.name};
+                updateRoster();
                 break;
-            case 'arc-chat': renderNexusChat(data.name, data.msg, false); break;
-            case 'arc-draw': syncRemoteDrawing(data); break;
-            case 'arc-clear': ctx.clearRect(0,0,canvas.width, canvas.height); break;
-            case 'arc-mic-cmd': applyAudioState(data.val); break;
-            case 'arc-focus': forceGlobalFocus(data.id); break;
-            case 'arc-fx': runVisualFX(data.emoji); break;
-            case 'arc-force-capture': executeForcedCapture(); break;
+            case 'prv-chat': renderChat(data.name, data.msg, false); break;
+            case 'prv-draw': renderDraw(data); break;
+            case 'prv-clear': ctx.clearRect(0,0,canvas.width, canvas.height); break;
+            case 'prv-mic-cmd': forceMic(data.val); break;
+            case 'prv-spotlight': executeSpotlight(data.id); break;
+            case 'prv-emoji': spawnEmoji(data.emoji); break;
+            case 'prv-force-screen': handleScreenCommand(); break;
         }
     });
     c.on('close', () => {
         delete conns[c.peer];
         const node = document.getElementById(`node-${c.peer}`);
         if(node) node.remove();
-        updateDirectoryView();
+        updateRoster();
     });
 }
 
-/** 
- * Teacher Authority: Global Sync
+/**
+ * Spotlight Broadcasting Logic
+ * TEACHER ONLY: Commands someone to broadcast to all
  */
-function forceGlobalFocus(pid) {
+function broadcastSpotlight(pid) {
     if(role !== 'teacher') return;
-    executeFocusUpdate(pid);
-    dispatchNexusData({type:'arc-focus', id:pid});
-    triggerToast("VIEW SYNCED", "All participants are now observing the focused node.");
+    executeSpotlight(pid);
+    dispatch({type:'prv-spotlight', id:pid});
+    pushToast("SPOTLIGHT", "Syncing all screens to focal node.");
 }
 
-function executeFocusUpdate(id) {
-    const mainVideo = document.getElementById('primary-video');
-    const stream = (id === peer.id) ? localStream : remoteStreams[id];
+function executeSpotlight(id) {
+    currentSpotlight = id;
+    applyView(id);
+
+    // If I am the spotlighted student, I must call everyone else
+    if(id === peer.id && role === 'student'){
+        Object.keys(conns).forEach(cid => {
+            if(!cid.includes('HOST')) peer.call(cid, localStream);
+        });
+    }
+}
+
+function applyView(id) {
+    const mainVid = document.getElementById('main-display');
+    const stream = (id === peer.id) ? localStream : streams[id];
     if(stream) {
-        mainVideo.srcObject = stream;
-        // 自分自身ならミュート（ハウリング防止）、他人ならミュート解除（会話可能に）
-        mainVideo.muted = (id === peer.id);
-        const nameLabel = id.includes('HOST') ? "TEACHER" : (directoryData[id]?.name || "STUDENT");
-        document.getElementById('active-viewer-name').innerText = `Observation Target: ${nameLabel}`;
-        
-        // 再生保証
-        mainVideo.play().catch(() => {});
+        mainVid.srcObject = stream;
+        mainVid.muted = (id === peer.id);
+        const name = id.includes('HOST') ? "TEACHER" : (pData[id]?.name || "FOCUSED NODE");
+        document.getElementById('display-view-name').innerText = `OBSERVING: ${name}`;
+        mainVid.play().catch(()=>{});
     }
-    document.querySelectorAll('.node-card').forEach(c => c.classList.remove('focused'));
-    const target = document.getElementById(id === peer.id ? 'card-local' : `card-${id}`);
-    if(target) target.classList.add('focused');
 }
 
 /** 
- * Teacher Authority: Forced Screen Capture
+ * Teacher Control: Force Student Screen Share
  */
-function triggerForcedCapture(targetID) {
+function forceStudentScreen(target) {
     if(role !== 'teacher') return;
-    const c = conns[targetID];
-    if(c) {
-        c.send({type:'arc-force-capture'});
-        triggerToast("CAPTURE SIGNAL", "Remote screen request transmitted.");
-    }
+    const c = conns[target];
+    if(c) c.send({type:'prv-force-screen'});
 }
 
-// 生徒側で強制実行（ハイブリッド音声維持）
-async function executeForcedCapture() {
+async function handleScreenCommand() {
     try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({video:true});
-        const screenTrack = screenStream.getVideoTracks()[0];
-        const micTrack = localStream.getAudioTracks()[0]; // 既存のマイクを保持
+        const ss = await navigator.mediaDevices.getDisplayMedia({video:true});
+        const st = ss.getVideoTracks()[0];
+        const ct = localStream.getVideoTracks()[0];
+        localStream.removeTrack(ct);
+        localStream.addTrack(st);
         
-        // 元のビデオトラックを停止
-        const oldVideoTrack = localStream.getVideoTracks()[0];
-        localStream.removeTrack(oldVideoTrack);
-        localStream.addTrack(screenTrack);
-        
-        // 全コネクションのビデオトラックのみを差し替え
         Object.values(peer.connections).forEach(pcs => {
             pcs.forEach(pc => {
                 if(pc.type === 'media') {
-                    const sender = pc.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                    if(sender) sender.replaceTrack(screenTrack);
+                    const snd = pc.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                    if(snd) snd.replaceTrack(st);
                 }
             });
         });
-
-        document.getElementById('preview-local').srcObject = localStream;
+        document.getElementById('video-local').srcObject = localStream;
         screenActive = true;
         document.getElementById('screen-toggle').classList.add('active');
-
-        screenTrack.onended = () => revertToCamera();
-        triggerToast("SCREEN LIVE", "Your desktop is now broadcasting with audio.");
-    } catch(e) {
-        triggerToast("CANCELLED", "Screen capture declined by user.");
-    }
+        st.onended = () => stopScreenShare();
+        pushToast("SHARING", "Screen broadcasting active.");
+    } catch(e){}
 }
 
-async function revertToCamera() {
-    const screenTrack = localStream.getVideoTracks()[0];
-    const camStream = await navigator.mediaDevices.getUserMedia({video:true});
-    const camTrack = camStream.getVideoTracks()[0];
-    
-    localStream.removeTrack(screenTrack);
-    localStream.addTrack(camTrack);
-    screenTrack.stop();
-
+async function stopScreenShare() {
+    const st = localStream.getVideoTracks()[0];
+    const ncam = await navigator.mediaDevices.getUserMedia({video:true});
+    const nt = ncam.getVideoTracks()[0];
+    localStream.removeTrack(st); localStream.addTrack(nt); st.stop();
     Object.values(peer.connections).forEach(pcs => {
         pcs.forEach(pc => {
             if(pc.type === 'media') {
-                const sender = pc.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                if(sender) sender.replaceTrack(camTrack);
+                const snd = pc.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                if(snd) snd.replaceTrack(nt);
             }
         });
     });
-
-    document.getElementById('preview-local').srcObject = localStream;
+    document.getElementById('video-local').srcObject = localStream;
     screenActive = false;
     document.getElementById('screen-toggle').classList.remove('active');
 }
 
-/** Audio Control System **/
-function toggleOwnAudio() {
-    audioActive = !audioActive;
-    applyAudioState(audioActive);
-    document.getElementById('mic-toggle').classList.toggle('active', audioActive);
-}
-
-function applyAudioState(v) {
-    if(localStream){
-        localStream.getAudioTracks().forEach(t => t.enabled = v);
-    }
-    audioActive = v;
-}
-
-/** Whiteboard Component **/
-function initNexusCanvas() {
-    canvas = document.getElementById('collab-canvas');
+/** Board Components **/
+function initCanvas() {
+    canvas = document.getElementById('whiteboard');
     ctx = canvas.getContext('2d');
-    const resizeBoard = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
-    resizeBoard(); window.onresize = resizeBoard;
-
-    const getRelativePos = e => ({ x: e.offsetX / canvas.width, y: e.offsetY / canvas.height });
-
-    canvas.onmousedown = e => { if(!boardActive) return; isDrawing = true; prevPos = getRelativePos(e); };
+    const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
+    resize(); window.onresize = resize;
+    const getPos = e => ({ x: e.offsetX / canvas.width, y: e.offsetY / canvas.height });
+    canvas.onmousedown = e => { if(!wbOn) return; painting = true; lastPos = getPos(e); };
     canvas.onmousemove = e => {
-        if(!isDrawing) return;
-        const currentPos = getRelativePos(e);
-        const drawData = { type:'arc-draw', tool:activeTool, from:prevPos, to:currentPos, col:activeColor };
-        syncRemoteDrawing(drawData);
-        dispatchNexusData(drawData);
-        prevPos = currentPos;
+        if(!painting) return;
+        const cur = getPos(e);
+        const d = { type:'prv-draw', t:tool, f:lastPos, to:cur, c:color };
+        renderDraw(d); dispatch(d); lastPos = cur;
     };
-    canvas.onmouseup = () => isDrawing = false;
+    canvas.onmouseup = () => painting = false;
 }
 
-function syncRemoteDrawing(d) {
-    ctx.strokeStyle = d.col; ctx.lineWidth = d.tool==='eraser'? 50 : 5; ctx.lineCap = 'round';
-    ctx.globalCompositeOperation = d.tool==='eraser' ? 'destination-out' : 'source-over';
-    
+function renderDraw(d) {
+    ctx.strokeStyle = d.c; ctx.lineWidth = d.t==='eraser'? 45 : 4; ctx.lineCap = 'round';
+    ctx.globalCompositeOperation = d.t==='eraser' ? 'destination-out' : 'source-over';
     const w = canvas.width, h = canvas.height;
-    ctx.beginPath();
-    ctx.moveTo(d.from.x * w, d.from.y * h);
-    ctx.lineTo(d.to.x * w, d.to.y * h);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(d.f.x * w, d.f.y * h); ctx.lineTo(d.to.x * w, d.to.y * h); ctx.stroke();
 }
 
-function toggleNexusBoard() {
-    boardActive = !boardActive;
-    document.getElementById('collab-canvas').classList.toggle('active', boardActive);
-    document.getElementById('wb-commander').style.display = boardActive ? 'flex' : 'none';
-    document.getElementById('btn-wb').classList.toggle('active', boardActive);
+function toggleWB() {
+    wbOn = !wbOn;
+    document.getElementById('whiteboard').classList.toggle('active', wbOn);
+    document.getElementById('wb-toolbar').style.display = wbOn ? 'flex' : 'none';
+    document.getElementById('btn-wb').classList.toggle('active', wbOn);
 }
 
-function wipeNexusBoard() {
-    ctx.clearRect(0,0,canvas.width, canvas.height);
-    dispatchNexusData({type:'arc-clear'});
-}
+function clearClassBoard() { ctx.clearRect(0,0,canvas.width, canvas.height); dispatch({type:'prv-clear'}); }
 
-/** UI Rendering Components **/
-function createRemoteNode(id, stream) {
+/** UI & Monitoring **/
+function upsertNode(id, stream) {
+    // PRIVACY: Students only see Host or Self
+    if(role === 'student' && !id.includes('HOST')) return;
+
     if(document.getElementById(`node-${id}`)) return;
-    const grid = document.getElementById('node-grid');
-    const node = document.createElement('div');
-    node.className = 'node-card'; node.id = `node-${id}`;
-    node.onclick = () => { if(role === 'teacher') forceGlobalFocus(id); };
-    node.innerHTML = `<video id="video-${id}" autoplay playsinline></video>
-                     <div class="meta-tag">${directoryData[id]?.name || 'Participant'}</div>
-                     <div class="audio-track-bg"><div class="audio-track-fill" id="spectrum-${id}"></div></div>`;
-    grid.appendChild(node);
-    
-    const videoEl = document.getElementById(`video-${id}`);
-    videoEl.srcObject = stream;
-    // 重要: 他人のカードは常にミュート解除（音を聞くため）
-    videoEl.muted = false;
-    
-    initAudioSpectrum(stream, `spectrum-${id}`);
+    const shelf = document.getElementById('monitor-shelf');
+    const card = document.createElement('div');
+    card.className = 'card-node'; card.id = `node-${id}`;
+    card.onclick = () => { if(role === 'teacher') broadcastSpotlight(id); };
+    card.innerHTML = `<video id="vid-${id}" autoplay playsinline></video>
+                     <div class="tag">${id.includes('HOST')?'TEACHER':(pData[id]?.name || 'PARTICIPANT')}</div>
+                     <div class="vol-indicator" id="met-${id}"></div>`;
+    shelf.appendChild(card);
+    document.getElementById(`vid-${id}`).srcObject = stream;
+    initVolume(stream, `met-${id}`);
 }
 
-function updateDirectoryView() {
-    const list = document.getElementById('user-directory');
-    list.innerHTML = "";
+function updateRoster() {
+    const v = document.getElementById('roster-view');
+    v.innerHTML = "";
     Object.keys(conns).forEach(id => {
+        // PRIVACY: Students only see Host
+        if(role === 'student' && !id.includes('HOST')) return;
+
         const row = document.createElement('div');
-        row.className = 'dir-row';
+        row.className = 'p-row';
         const btns = (role === 'teacher') ? 
-            `<div class="dir-btns">
-                <button class="dir-btn btn-spotlight" onclick="forceGlobalFocus('${id}')">Spotlight</button>
-                <button class="dir-btn btn-capture" onclick="triggerForcedCapture('${id}')">Capture</button>
+            `<div class="p-actions">
+                <button class="btn-action btn-focus" onclick="broadcastSpotlight('${id}')">Focus</button>
+                <button class="btn-action btn-req" onclick="forceStudentScreen('${id}')">Get Screen</button>
             </div>` : "";
-        row.innerHTML = `<div class="dir-name-wrap"><div class="live-indicator" style="background:var(--success); animation:none;"></div><span class="dir-name">${directoryData[id]?.name || 'User'}</span></div>${btns}`;
-        list.appendChild(row);
+        row.innerHTML = `<div class="p-name">${pData[id]?.name || 'User'}</div>${btns}`;
+        v.appendChild(row);
     });
 }
 
-function initAudioSpectrum(s, bid) {
+function initVolume(s, bid) {
     try {
-        if(!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const src = audioContext.createMediaStreamSource(s);
-        const alz = audioContext.createAnalyser(); alz.fftSize = 256;
+        if(!audioCtx) audioCtx = new AudioContext();
+        const src = audioCtx.createMediaStreamSource(s);
+        const alz = audioCtx.createAnalyser(); alz.fftSize = 256;
         src.connect(alz);
-        const buffer = new Uint8Array(alz.frequencyBinCount);
-        const drawLoop = () => {
+        const buf = new Uint8Array(alz.frequencyBinCount);
+        const loop = () => {
             const el = document.getElementById(bid);
             if(!el) return;
-            alz.getByteFrequencyData(buffer);
-            const avg = buffer.reduce((a,b)=>a+b)/buffer.length;
-            el.style.width = Math.min(100, avg*3) + "%";
-            requestAnimationFrame(drawLoop);
+            alz.getByteFrequencyData(buf);
+            const a = buf.reduce((p,c)=>p+c)/buf.length;
+            el.style.width = Math.min(100, a*2.5) + "%";
+            requestAnimationFrame(loop);
         };
-        drawLoop();
+        loop();
     } catch(e){}
 }
 
-function triggerToast(title, msg) {
-    const root = document.getElementById('toast-master');
-    const toast = document.createElement('div'); toast.className = 'toast-msg';
-    toast.innerHTML = `<span style="color:var(--accent); text-transform:uppercase;">[ ${title} ]</span><br>${msg}`; root.appendChild(toast);
-    setTimeout(() => toast.remove(), 5000);
+function pushToast(t, m) {
+    const box = document.getElementById('toast-box');
+    const el = document.createElement('div'); el.className = 'toast';
+    el.innerHTML = `<span style="color:var(--accent); font-weight:900;">[ ${t} ]</span><br>${m}`;
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
 }
 
-function dispatchNexusData(data) {
+function dispatch(data) {
     Object.values(conns).forEach(c => { if(c.open) c.send(data); });
 }
 
-function refreshBroadcastDirectory() {
-    const list = Object.keys(directoryData).map(id => ({id, name:directoryData[id].name}));
-    list.push({id:peer.id, name:operatorName});
-    dispatchNexusData({type:'arc-dir', list});
+function broadcastDirectory() {
+    const list = Object.keys(pData).map(id => ({id, name:pData[id].name}));
+    list.push({id:peer.id, name:myName});
+    dispatch({type:'prv-dir', list});
 }
 
-function dispatchNexusChat() {
-    const input = document.getElementById('msg-input'); if(!input.value) return;
-    renderNexusChat(operatorName, input.value, true);
-    dispatchNexusData({type:'arc-chat', name:operatorName, msg:input.value});
-    input.value = "";
+function dispatchChat() {
+    const i = document.getElementById('chat-in'); if(!i.value) return;
+    renderChat(myName, i.value, true);
+    dispatch({type:'prv-chat', name:myName, msg:i.value});
+    i.value = "";
 }
 
-function renderNexusChat(name, msg, own) {
-    const container = document.getElementById('msg-history');
-    const el = document.createElement('div');
-    el.className = `msg-block ${own?'own':''}`;
-    el.innerHTML = `<span class="author">${name}</span>${msg}`;
-    container.appendChild(el); container.scrollTop = container.scrollHeight;
+function renderChat(name, msg, own) {
+    const win = document.getElementById('chat-window');
+    const b = document.createElement('div');
+    b.className = `chat-bubble ${own?'own':''}`;
+    b.innerHTML = `<b>${name}</b>${msg}`;
+    win.appendChild(b); win.scrollTop = win.scrollHeight;
 }
 
-function toggleOwnVideo() {
-    videoActive = !videoActive;
-    localStream.getVideoTracks().forEach(t => t.enabled = videoActive);
-    document.getElementById('cam-toggle').classList.toggle('active', videoActive);
+function toggleMic() {
+    micOn = !micOn; forceMic(micOn);
+    document.getElementById('mic-toggle').classList.toggle('active', micOn);
+}
+function forceMic(v) {
+    localStream.getAudioTracks().forEach(t => t.enabled = v);
+    micOn = v;
+}
+function toggleCam() {
+    camOn = !camOn; localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+    document.getElementById('cam-toggle').classList.toggle('active', camOn);
 }
 
-function updateClock() {
+function tickClock() {
     setInterval(() => {
-        const now = new Date();
-        document.getElementById('time-clock').innerText = now.toTimeString().split(' ')[0];
+        const d = new Date();
+        document.getElementById('clock').innerText = d.toTimeString().split(' ')[0];
     }, 1000);
 }
 
-function switchPane(p, b) {
-    document.querySelectorAll('.pane-content').forEach(el => el.classList.add('hidden'));
+function setPane(p, b) {
+    document.querySelectorAll('.pane').forEach(el => el.classList.add('hidden'));
     document.getElementById(`pane-${p}`).classList.remove('hidden');
-    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-trigger').forEach(el => el.classList.remove('active'));
     b.classList.add('active');
 }
 
-function emergencyUnlock() { 
-    if(audioContext) audioContext.resume(); 
-    document.querySelectorAll('video').forEach(v => {
-        v.muted = (v.id === 'preview-local'); // 自分以外はミュート解除
-        v.play().catch(()=>{});
-    }); 
+function audioUnlock() { if(audioCtx) audioCtx.resume(); document.querySelectorAll('video').forEach(v=>v.play().catch(()=>{})); }
+function setTool(t, el) { tool = t; document.querySelectorAll('.tool-icon').forEach(d=>d.classList.remove('selected')); el.classList.add('selected'); }
+function setCol(c, el) { color = c; document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('selected')); el.classList.add('selected'); }
+
+function sendEmoji(emoji) {
+    spawnEmoji(emoji); dispatch({type:'prv-emoji', emoji});
+}
+function spawnEmoji(e) {
+    const r = document.getElementById('fx-layer');
+    const el = document.createElement('div');
+    el.innerText = e;
+    el.style.position = 'absolute'; el.style.left = Math.random()*85+5+'vw'; el.style.bottom = '-100px';
+    el.style.fontSize = '50px'; el.style.transition = '4s';
+    r.appendChild(el);
+    setTimeout(() => { el.style.transform = 'translateY(-120vh) rotate(720deg)'; el.style.opacity = '0'; }, 100);
+    setTimeout(() => el.remove(), 4100);
 }
 
-function switchTool(t, el) { activeTool = t; document.querySelectorAll('.tool-icon').forEach(d=>d.classList.remove('selected')); el.classList.add('selected'); }
-function switchColor(c, el) { activeColor = c; document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('selected')); el.classList.add('selected'); }
+function masterMic(v) { dispatch({type:'prv-mic-cmd', val:v}); forceMic(v); }
 
-function emitNexusReaction(emoji) {
-    runVisualFX(emoji);
-    dispatchNexusData({type:'arc-fx', emoji});
-}
-function runVisualFX(e) {
-    const root = document.getElementById('fx-root');
-    const p = document.createElement('div');
-    p.innerText = e; p.className = 'fx-particle';
-    p.style.left = Math.random()*85+5+'vw';
-    root.appendChild(p);
-    setTimeout(() => p.remove(), 4000);
-}
-
-function masterMicCommand(v) { dispatchNexusData({type:'arc-mic-cmd', val:v}); applyAudioState(v); }
-
-function toggleNexusRecording() {
-    if(!sessionRecorder || sessionRecorder.state === 'inactive') {
-        const stream = document.getElementById('primary-video').srcObject; if(!stream) return;
-        sessionRecorder = new MediaRecorder(stream);
-        sessionRecorder.ondataavailable = e => sessionChunks.push(e.data);
-        sessionRecorder.onstop = () => {
-            const blob = new Blob(sessionChunks, {type:'video/webm'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `ARCHITECT-RECORD-${Date.now()}.webm`; a.click();
+function toggleRec() {
+    if(!recorder || recorder.state === 'inactive') {
+        const s = document.getElementById('main-display').srcObject; if(!s) return;
+        recorder = new MediaRecorder(s);
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+            const b = new Blob(chunks, {type:'video/webm'});
+            const u = URL.createObjectURL(b);
+            const a = document.createElement('a'); a.href = u; a.download = `LECTURE-${Date.now()}.webm`; a.click();
         };
-        sessionRecorder.start();
-        document.getElementById('rec-tag').classList.remove('hidden');
+        recorder.start();
+        document.getElementById('rec-status').classList.remove('hidden');
         document.getElementById('btn-rec').classList.add('active');
-    } else {
-        sessionRecorder.stop();
-        document.getElementById('rec-tag').classList.add('hidden');
-        document.getElementById('btn-rec').classList.remove('active');
-    }
+    } else { recorder.stop(); document.getElementById('rec-status').classList.add('hidden'); document.getElementById('btn-rec').classList.remove('active'); }
 }
 
-async function toggleOwnScreen() {
-    if(!screenActive) await executeForcedCapture();
-    else await revertToCamera();
+async function toggleScreenShare() {
+    if(!screenActive) await handleScreenCommand();
+    else await stopScreenShare();
 }
 </script>
 </body>
